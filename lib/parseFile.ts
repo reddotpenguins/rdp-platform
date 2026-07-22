@@ -16,6 +16,7 @@ type ParsedUploadResult = {
 };
 
 const aliases = {
+  studentCode: ["Student Code", "student_code", "Student ID", "Student No", "ID"],
   studentName: ["Student Name", "Name", "Student"],
   coachName: ["Current Coach", "Coach", "Coach Name"],
   q1CoachName: ["Q1 Coach", "2026 Q1 Coach", "Q1 Coach Name"],
@@ -189,6 +190,7 @@ export function parseAssessmentRows(
         return null;
       }
 
+      const studentCode = textValue(pickValue(row, aliases.studentCode));
       const originalFlagStatus = textValue(pickValue(row, aliases.flagStatus));
       const originalActionRequired = textValue(pickValue(row, aliases.actionRequired));
       const q1CoachName = textValue(
@@ -239,6 +241,7 @@ export function parseAssessmentRows(
 
       return applyAssessmentLogic({
         id: recordId(studentName, rowIndex, assessmentYear),
+        studentCode: studentCode || undefined,
         studentName,
         coachName,
         centre,

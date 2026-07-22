@@ -5,6 +5,8 @@ import { ChangeEvent, useMemo, useState } from "react";
 import { CheckCircle2, Download, FileSpreadsheet, Upload } from "lucide-react";
 import { parseUploadFile } from "@/lib/parseFile";
 import { calculateDashboardMetrics, formatPercent } from "@/lib/assessmentLogic";
+import { recordsToAssessmentImportRows } from "@/lib/supabase/assessmentImport";
+import { createClient } from "@/lib/supabase/client";
 import type { StudentAssessmentRecord } from "@/types/assessment";
 
 type UploadedDataset = {
@@ -12,8 +14,6 @@ type UploadedDataset = {
   importedAt: string;
   records: StudentAssessmentRecord[];
 };
-
-const storageKey = "rdp-lts-assessment-upload";
 
 export function FileUpload() {
   const [isParsing, setIsParsing] = useState(false);
@@ -40,8 +40,16 @@ export function FileUpload() {
         importedAt: new Date().toISOString(),
         records: parsed.records
       };
+      const importRows = recordsToAssessmentImportRows(parsed.records);
+      const supabase = createClient();
+      const { error: insertError } = await supabase
+        .from("assessment_import_rows")
+        .insert(importRows);
 
-      window.localStorage.setItem(storageKey, JSON.stringify(nextDataset));
+      if (insertError) {
+        throw new Error(insertError.message);
+      }
+
       setDataset(nextDataset);
     } catch (uploadError) {
       setDataset(null);
@@ -133,7 +141,7 @@ export function FileUpload() {
           </div>
         ) : (
           <div className="mt-5 rounded-lg border border-line bg-field p-4 text-sm text-slate-600">
-            Uploaded data is saved in this browser for the dashboard prototype.
+            Uploaded rows will be saved into Supabase after you choose a file.
           </div>
         )}
       </div>

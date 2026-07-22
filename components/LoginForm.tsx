@@ -3,11 +3,7 @@
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff, LockKeyhole, Mail } from "lucide-react";
-import {
-  getPrototypeDisplayName,
-  prototypeAuthStorageKey,
-  type PrototypeAuthSession
-} from "@/lib/prototypeAuth";
+import { createClient } from "@/lib/supabase/client";
 
 export function LoginForm() {
   const router = useRouter();
@@ -15,8 +11,9 @@ export function LoginForm() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     const trimmedEmail = email.trim();
@@ -26,14 +23,24 @@ export function LoginForm() {
       return;
     }
 
-    const session: PrototypeAuthSession = {
-      email: trimmedEmail,
-      name: getPrototypeDisplayName(trimmedEmail),
-      signedInAt: new Date().toISOString()
-    };
+    setIsSubmitting(true);
+    setError("");
 
-    window.localStorage.setItem(prototypeAuthStorageKey, JSON.stringify(session));
+    const supabase = createClient();
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email: trimmedEmail,
+      password
+    });
+
+    setIsSubmitting(false);
+
+    if (signInError) {
+      setError(signInError.message || "Unable to log in.");
+      return;
+    }
+
     router.push("/dashboard");
+    router.refresh();
   }
 
   return (
@@ -57,6 +64,7 @@ export function LoginForm() {
             className="h-11 w-full rounded-sm border border-[#fdba74] bg-[#fffaf5] pl-10 pr-3 text-sm text-[#3d2115] outline-none transition placeholder:text-[#b9825c] focus:border-[#f97316] focus:bg-paper focus:ring-2 focus:ring-[#f97316]/15"
             autoComplete="email"
             placeholder="team@reddotpenguins.com"
+            disabled={isSubmitting}
             required
           />
         </span>
@@ -80,6 +88,7 @@ export function LoginForm() {
             }}
             className="h-11 w-full rounded-sm border border-[#fdba74] bg-[#fffaf5] pl-10 pr-11 text-sm text-[#3d2115] outline-none transition focus:border-[#f97316] focus:bg-paper focus:ring-2 focus:ring-[#f97316]/15"
             autoComplete="current-password"
+            disabled={isSubmitting}
             required
           />
           <button
@@ -115,9 +124,10 @@ export function LoginForm() {
 
       <button
         type="submit"
-        className="inline-flex h-11 items-center justify-center rounded-sm bg-[#ef562d] px-4 text-sm font-semibold text-white transition hover:bg-[#d9481f] focus:outline-none focus:ring-2 focus:ring-[#f97316]/30"
+        disabled={isSubmitting}
+        className="inline-flex h-11 items-center justify-center rounded-sm bg-[#ef562d] px-4 text-sm font-semibold text-white transition hover:bg-[#d9481f] focus:outline-none focus:ring-2 focus:ring-[#f97316]/30 disabled:cursor-not-allowed disabled:opacity-70"
       >
-        Log in
+        {isSubmitting ? "Logging in..." : "Log in"}
       </button>
 
       <p className="text-sm text-[#8a5a3c]">

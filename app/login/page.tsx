@@ -1,12 +1,25 @@
 import type { Metadata } from "next";
 import Image from "next/image";
+import { redirect } from "next/navigation";
 import { LoginForm } from "@/components/LoginForm";
+import { createClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = {
   title: "Log in | RDP LTS Assessment Dashboard"
 };
 
-export default function LoginPage() {
+export const dynamic = "force-dynamic";
+
+export default async function LoginPage() {
+  const supabase = createClient();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+
+  if (user) {
+    redirect("/dashboard");
+  }
+
   return (
     <main className="flex min-h-screen items-center justify-center bg-[#fff1e6] px-4 py-6 text-[#3d2115] sm:px-6 lg:px-8">
       <section className="grid w-full max-w-4xl overflow-hidden rounded-lg border border-[#ffd6b3] bg-[#fff8f0] shadow-[0_24px_80px_rgba(180,72,22,0.18)] lg:grid-cols-[1fr_0.78fr]">

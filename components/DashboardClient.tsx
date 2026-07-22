@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { Database, FileUp, RefreshCcw } from "lucide-react";
 import { AssessmentCharts } from "@/components/AssessmentCharts";
@@ -26,49 +27,30 @@ import type {
   StudentAssessmentRecord
 } from "@/types/assessment";
 
-type StoredDataset = {
-  fileName: string;
-  importedAt: string;
-  records: StudentAssessmentRecord[];
-};
-
-const storageKey = "rdp-lts-assessment-upload";
-
 type DashboardClientProps = {
   initialRecords: StudentAssessmentRecord[];
   defaultDatasetName: string;
+  initialImportedAt?: string | null;
   view?: "coach" | "quarter";
 };
 
 export function DashboardClient({
   initialRecords,
   defaultDatasetName,
+  initialImportedAt = null,
   view = "coach"
 }: DashboardClientProps) {
+  const router = useRouter();
   const [records, setRecords] = useState(initialRecords);
   const [datasetLabel, setDatasetLabel] = useState(defaultDatasetName);
-  const [importedAt, setImportedAt] = useState<string | null>(null);
+  const [importedAt, setImportedAt] = useState<string | null>(initialImportedAt);
   const [filters, setFilters] = useState<AssessmentFilters>(emptyFilters);
 
   useEffect(() => {
-    const stored = window.localStorage.getItem(storageKey);
-
-    if (!stored) {
-      return;
-    }
-
-    try {
-      const dataset = JSON.parse(stored) as StoredDataset;
-
-      if (Array.isArray(dataset.records) && dataset.records.length > 0) {
-        setRecords(dataset.records);
-        setDatasetLabel(dataset.fileName);
-        setImportedAt(dataset.importedAt);
-      }
-    } catch {
-      window.localStorage.removeItem(storageKey);
-    }
-  }, []);
+    setRecords(initialRecords);
+    setDatasetLabel(defaultDatasetName);
+    setImportedAt(initialImportedAt);
+  }, [defaultDatasetName, initialImportedAt, initialRecords]);
 
   useEffect(() => {
     setFilters((currentFilters) => {
@@ -93,12 +75,12 @@ export function DashboardClient({
     [filters.quarter, records]
   );
 
-  function resetToDefaultDataset() {
-    window.localStorage.removeItem(storageKey);
+  function refreshDataset() {
     setRecords(initialRecords);
     setDatasetLabel(defaultDatasetName);
-    setImportedAt(null);
+    setImportedAt(initialImportedAt);
     setFilters(emptyFilters);
+    router.refresh();
   }
 
   return (
@@ -129,11 +111,11 @@ export function DashboardClient({
           </Link>
           <button
             type="button"
-            onClick={resetToDefaultDataset}
+            onClick={refreshDataset}
             className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-md border border-line bg-paper px-3 text-sm font-semibold text-slate-700 transition hover:border-teal hover:text-teal sm:flex-none"
           >
             <RefreshCcw aria-hidden="true" className="size-4" />
-            Default data
+            Refresh data
           </button>
           <SignOutButton className="flex-1 sm:flex-none" />
         </div>

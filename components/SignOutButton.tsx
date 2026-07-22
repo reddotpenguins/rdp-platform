@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { LogOut } from "lucide-react";
 import clsx from "clsx";
-import { prototypeAuthStorageKey } from "@/lib/prototypeAuth";
+import { createClient } from "@/lib/supabase/client";
 
 type SignOutButtonProps = {
   className?: string;
@@ -12,9 +12,11 @@ type SignOutButtonProps = {
 export function SignOutButton({ className }: SignOutButtonProps) {
   const router = useRouter();
 
-  function signOut() {
-    window.localStorage.removeItem(prototypeAuthStorageKey);
+  async function signOut() {
+    const supabase = createClient();
+    await supabase.auth.signOut();
     router.push("/login");
+    router.refresh();
   }
 
   return (

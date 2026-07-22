@@ -1,9 +1,22 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { FileUpload } from "@/components/FileUpload";
 import { SignOutButton } from "@/components/SignOutButton";
+import { createClient } from "@/lib/supabase/server";
 
-export default function UploadPage() {
+export const dynamic = "force-dynamic";
+
+export default async function UploadPage() {
+  const supabase = createClient();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect("/login");
+  }
+
   return (
     <main className="mx-auto flex w-full max-w-6xl flex-col gap-5 px-4 py-5 sm:px-6 lg:px-8">
       <header className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line bg-paper p-4 shadow-panel">

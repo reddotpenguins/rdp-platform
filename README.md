@@ -4,7 +4,7 @@ Temporary internal prototype for reviewing Red Dot Penguins LTS 2026 Q1 and Q2 a
 
 ## Install Dependencies
 
-Use Node.js 18.17 or newer. This prototype was installed with pnpm.
+Use Node.js 22 or newer. This prototype was installed with pnpm.
 
 ```bash
 pnpm install
@@ -19,6 +19,29 @@ pnpm dev
 ```
 
 Open `http://localhost:3000/dashboard`.
+
+## Supabase Setup
+
+Create a local `.env.local` file with:
+
+```text
+NEXT_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your-publishable-key
+```
+
+The dashboard uses Supabase Auth for login and reads uploaded assessment rows from:
+
+```text
+public.assessment_import_rows
+```
+
+For the current prototype, run this file in Supabase SQL Editor after creating the tables:
+
+```text
+supabase/rls-policies.sql
+```
+
+Then create coach/admin login users in **Authentication -> Users** inside Supabase.
 
 ## Default Dataset
 
@@ -38,11 +61,12 @@ To update the local default dataset, replace the ignored real CSV with a cleaned
 
 ## Upload CSV or XLSX Data
 
-Go to `/upload` and choose a `.csv`, `.xls`, or `.xlsx` file. The uploaded file is parsed in the browser, normalized into the dashboard model, and saved in local browser storage for this prototype.
+Go to `/upload` and choose a `.csv`, `.xls`, or `.xlsx` file. The uploaded file is parsed in the browser, normalized into the dashboard model, and saved into Supabase `assessment_import_rows`.
 
 The parser maps similar column names, including:
 
 - `Student Name`, `Name`, `Student`
+- `Student Code`, `student_code`, `Student ID`
 - `Coach`, `Coach Name`, `Current Coach`
 - `Q1 Coach`, `Q2 Coach`
 - `Centre`, `Location`, `Q1 Centre`, `Q2 Centre`

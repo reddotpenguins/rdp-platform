@@ -2,6 +2,9 @@
   "name": "rdp-lts-assessment-dashboard",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=22"
+  },
   "packageManager": "pnpm@11.7.0",
   "scripts": {
     "dev": "next dev",
@@ -11,6 +14,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@supabase/ssr": "^0.12.3",
+    "@supabase/supabase-js": "^2.110.7",
     "clsx": "^2.1.1",
     "lucide-react": "^0.468.0",
     "next": "^14.2.0",

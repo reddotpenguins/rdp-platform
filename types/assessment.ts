@@ -13,6 +13,7 @@ export type ActionRequired =
 
 export type StudentAssessmentRecord = {
   id: string;
+  studentCode?: string;
   studentName: string;
   coachName: string;
   centre?: string;
