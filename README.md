@@ -4,7 +4,7 @@ Temporary internal prototype for reviewing Red Dot Penguins LTS 2026 Q1 and Q2 a
 
 ## Install Dependencies
 
-Use Node.js 22 or newer. This prototype was installed with pnpm.
+Use Node.js 22 or newer. This prototype is pinned to pnpm 10 for Vercel deployment compatibility.
 
 ```bash
 pnpm install
@@ -42,6 +42,26 @@ supabase/rls-policies.sql
 ```
 
 Then create coach/admin login users in **Authentication -> Users** inside Supabase.
+
+## Vercel Deployment
+
+When importing `reddotpenguins/rdp-platform` as a new Vercel project:
+
+- Framework Preset: `Next.js`
+- Root Directory: leave blank, or use `.`
+- Build Command: leave default, or use `pnpm build`
+- Install Command: leave default
+- Output Directory: leave default
+
+Add these Vercel environment variables for Production, Preview, and Development:
+
+```text
+NEXT_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your-publishable-key
+ENABLE_EXPERIMENTAL_COREPACK=1
+```
+
+`ENABLE_EXPERIMENTAL_COREPACK=1` tells Vercel to use the pnpm version pinned in `package.json`.
 
 ## Default Dataset
 
