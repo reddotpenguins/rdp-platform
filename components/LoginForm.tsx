@@ -16,20 +16,24 @@ export function LoginForm() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    const trimmedEmail = email.trim();
+    const formData = new FormData(event.currentTarget);
+    const submittedEmail = String(formData.get("email") ?? "").trim();
+    const submittedPassword = String(formData.get("password") ?? "");
 
-    if (!trimmedEmail || !password.trim()) {
+    if (!submittedEmail || !submittedPassword.trim()) {
       setError("Enter both email and password.");
       return;
     }
 
+    setEmail(submittedEmail);
+    setPassword(submittedPassword);
     setIsSubmitting(true);
     setError("");
 
     const supabase = createClient();
     const { error: signInError } = await supabase.auth.signInWithPassword({
-      email: trimmedEmail,
-      password
+      email: submittedEmail,
+      password: submittedPassword
     });
 
     setIsSubmitting(false);
@@ -44,7 +48,7 @@ export function LoginForm() {
   }
 
   return (
-    <form action="/dashboard" onSubmit={handleSubmit} className="mt-6 flex flex-col gap-5">
+    <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-5">
       <label className="block">
         <span className="mb-2 block text-xs font-bold uppercase text-[#7c2d12]">
           Email <span className="text-[#f23f42]">*</span>
@@ -55,6 +59,7 @@ export function LoginForm() {
             className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[#c2410c]"
           />
           <input
+            name="email"
             type="email"
             value={email}
             onChange={(event) => {
@@ -80,6 +85,7 @@ export function LoginForm() {
             className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[#c2410c]"
           />
           <input
+            name="password"
             type={showPassword ? "text" : "password"}
             value={password}
             onChange={(event) => {
