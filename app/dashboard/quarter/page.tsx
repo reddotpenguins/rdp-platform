@@ -12,10 +12,6 @@ export default async function QuarterDashboardPage() {
   return (
     <DashboardClient
       initialRecords={dataset.records}
-      defaultDatasetName={dataset.datasetName}
-      initialImportedAt={dataset.importedAt}
-      staffName={profile.fullName}
-      staffRole={profile.role}
       canUpload={canUploadAssessmentData(profile)}
       view="quarter"
     />

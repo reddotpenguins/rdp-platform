@@ -1,9 +1,54 @@
+"use client";
+
 import clsx from "clsx";
+import { Download, Printer, Search } from "lucide-react";
+import { useMemo, useState } from "react";
+import { downloadCsv, type ExportColumn, printTable } from "@/lib/tableExport";
 import type { QuarterAssessmentRow } from "@/types/assessment";
 
 type QuarterStudentTableProps = {
   rows: QuarterAssessmentRow[];
 };
+
+type ResultFilter = "All" | "Pass" | "Fail" | "Absent" | "Not Assessed" | "Blank";
+type ConcernFilter = "All" | "Intervention Required" | "Monitor" | "No immediate concern";
+
+const resultFilters: ResultFilter[] = [
+  "All",
+  "Pass",
+  "Fail",
+  "Absent",
+  "Not Assessed",
+  "Blank"
+];
+const concernFilters: ConcernFilter[] = [
+  "All",
+  "Intervention Required",
+  "Monitor",
+  "No immediate concern"
+];
+const tableHeadings = [
+  "Student Name",
+  "Quarter",
+  "Coach",
+  "Centre",
+  "Session",
+  "Level",
+  "Result",
+  "Concern",
+  "Action Required"
+];
+const exportColumns: ExportColumn<QuarterAssessmentRow>[] = [
+  { header: "Student Name", value: (row) => row.studentName },
+  { header: "Quarter", value: (row) => row.quarter },
+  { header: "Coach", value: (row) => row.coachName },
+  { header: "Centre", value: (row) => row.centre },
+  { header: "Session", value: (row) => row.session },
+  { header: "Level", value: (row) => row.level },
+  { header: "Result", value: (row) => row.result || "Blank" },
+  { header: "Concern", value: flagLabel },
+  { header: "Action Required", value: (row) => row.actionRequired }
+];
 
 function flagLabel(row: QuarterAssessmentRow) {
   if (row.flagStatus === "Red") {
@@ -29,28 +74,108 @@ function resultBadge(result: string) {
 }
 
 export function QuarterStudentTable({ rows }: QuarterStudentTableProps) {
+  const [tableSearch, setTableSearch] = useState("");
+  const [resultFilter, setResultFilter] = useState<ResultFilter>("All");
+  const [concernFilter, setConcernFilter] = useState<ConcernFilter>("All");
+  const visibleRows = useMemo(
+    () =>
+      rows.filter(
+        (row) =>
+          matchesTableSearch(row, tableSearch) &&
+          matchesResultFilter(row, resultFilter) &&
+          matchesConcernFilter(row, concernFilter)
+      ),
+    [concernFilter, resultFilter, rows, tableSearch]
+  );
+
+  function handleDownload() {
+    downloadCsv("quarter-assessment-rows.csv", exportColumns, visibleRows);
+  }
+
+  function handlePrint() {
+    printTable("Quarter assessment rows", exportColumns, visibleRows);
+  }
+
   return (
     <section className="min-w-0 overflow-hidden rounded-lg border border-line bg-paper shadow-panel">
-      <div className="border-b border-line px-4 py-3">
-        <h2 className="text-lg font-semibold text-ink">Quarter assessment rows</h2>
-        <p className="text-sm text-slate-500">{rows.length.toLocaleString()} visible rows</p>
+      <div className="flex flex-col gap-3 border-b border-line px-4 py-3">
+        <div>
+          <h2 className="text-lg font-semibold text-ink">Quarter assessment rows</h2>
+          <p className="text-sm text-slate-500">
+            {visibleRows.length.toLocaleString()} of {rows.length.toLocaleString()} rows
+          </p>
+        </div>
+
+        <div className="flex flex-col gap-2 lg:flex-row lg:flex-wrap lg:items-center">
+          <label className="relative min-w-0 flex-1 lg:max-w-sm">
+            <Search
+              aria-hidden="true"
+              className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-coral"
+            />
+            <input
+              type="search"
+              value={tableSearch}
+              onChange={(event) => setTableSearch(event.target.value)}
+              className="h-10 w-full rounded-md border border-line bg-field pl-9 pr-3 text-sm text-ink outline-none transition placeholder:text-slate-400 focus:border-teal focus:bg-paper focus:ring-2 focus:ring-teal/15"
+              placeholder="Filter rows"
+              aria-label="Filter quarter assessment rows"
+            />
+          </label>
+
+          <select
+            value={resultFilter}
+            onChange={(event) => setResultFilter(event.target.value as ResultFilter)}
+            className="h-10 rounded-md border border-line bg-field px-3 text-sm font-medium text-slate-700 outline-none transition focus:border-teal focus:bg-paper focus:ring-2 focus:ring-teal/15"
+            aria-label="Filter by result"
+          >
+            {resultFilters.map((filter) => (
+              <option key={filter} value={filter}>
+                {filter === "All" ? "All results" : filter}
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={concernFilter}
+            onChange={(event) => setConcernFilter(event.target.value as ConcernFilter)}
+            className="h-10 rounded-md border border-line bg-field px-3 text-sm font-medium text-slate-700 outline-none transition focus:border-teal focus:bg-paper focus:ring-2 focus:ring-teal/15"
+            aria-label="Filter by concern"
+          >
+            {concernFilters.map((filter) => (
+              <option key={filter} value={filter}>
+                {filter === "All" ? "All concerns" : filter}
+              </option>
+            ))}
+          </select>
+
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={handleDownload}
+              disabled={visibleRows.length === 0}
+              className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-md border border-line bg-paper px-3 text-sm font-semibold text-slate-700 transition hover:border-teal hover:text-teal disabled:cursor-not-allowed disabled:opacity-50 sm:flex-none"
+            >
+              <Download aria-hidden="true" className="size-4" />
+              CSV
+            </button>
+            <button
+              type="button"
+              onClick={handlePrint}
+              disabled={visibleRows.length === 0}
+              className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-md border border-line bg-paper px-3 text-sm font-semibold text-slate-700 transition hover:border-teal hover:text-teal disabled:cursor-not-allowed disabled:opacity-50 sm:flex-none"
+            >
+              <Printer aria-hidden="true" className="size-4" />
+              Print
+            </button>
+          </div>
+        </div>
       </div>
 
       <div className="max-h-[620px] w-full overflow-auto">
         <table className="min-w-full border-separate border-spacing-0 text-left text-sm">
           <thead className="sticky top-0 z-10 bg-paper text-xs uppercase text-slate-500">
             <tr>
-              {[
-                "Student Name",
-                "Quarter",
-                "Coach",
-                "Centre",
-                "Session",
-                "Level",
-                "Result",
-                "Concern",
-                "Action Required"
-              ].map((heading) => (
+              {tableHeadings.map((heading) => (
                 <th key={heading} className="border-b border-line px-4 py-3 font-semibold">
                   {heading}
                 </th>
@@ -58,7 +183,7 @@ export function QuarterStudentTable({ rows }: QuarterStudentTableProps) {
             </tr>
           </thead>
           <tbody>
-            {rows.map((row) => (
+            {visibleRows.map((row) => (
               <tr
                 key={row.id}
                 className={clsx(
@@ -96,9 +221,61 @@ export function QuarterStudentTable({ rows }: QuarterStudentTableProps) {
                 </td>
               </tr>
             ))}
+            {visibleRows.length === 0 ? (
+              <tr>
+                <td
+                  colSpan={tableHeadings.length}
+                  className="border-b border-line px-4 py-8 text-center text-sm text-slate-500"
+                >
+                  No quarter assessment rows match the current filters.
+                </td>
+              </tr>
+            ) : null}
           </tbody>
         </table>
       </div>
     </section>
   );
+}
+
+function matchesTableSearch(row: QuarterAssessmentRow, search: string) {
+  const normalizedSearch = normalizeFilterValue(search);
+
+  if (!normalizedSearch) {
+    return true;
+  }
+
+  return [
+    row.studentName,
+    row.quarter,
+    row.coachName,
+    row.centre,
+    row.session,
+    row.level,
+    row.result,
+    flagLabel(row),
+    row.actionRequired
+  ]
+    .map((value) => normalizeFilterValue(value))
+    .some((value) => value.includes(normalizedSearch));
+}
+
+function matchesResultFilter(row: QuarterAssessmentRow, resultFilter: ResultFilter) {
+  if (resultFilter === "All") {
+    return true;
+  }
+
+  if (resultFilter === "Blank") {
+    return !row.result;
+  }
+
+  return row.result === resultFilter;
+}
+
+function matchesConcernFilter(row: QuarterAssessmentRow, concernFilter: ConcernFilter) {
+  return concernFilter === "All" || flagLabel(row) === concernFilter;
+}
+
+function normalizeFilterValue(value: string | undefined) {
+  return String(value ?? "").trim().toLowerCase();
 }

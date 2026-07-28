@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { Database, FileUp, RefreshCcw } from "lucide-react";
+import { FileUp, RefreshCcw } from "lucide-react";
 import { AssessmentCharts } from "@/components/AssessmentCharts";
 import { CoachSummaryTable } from "@/components/CoachSummaryTable";
 import { Filters } from "@/components/Filters";
@@ -21,7 +21,6 @@ import {
   getFilterOptions,
   toQuarterAssessmentRows
 } from "@/lib/assessmentLogic";
-import { formatStaffRole, type StaffRole } from "@/lib/staffRoles";
 import type {
   AssessmentFilters,
   AssessmentResult,
@@ -30,34 +29,22 @@ import type {
 
 type DashboardClientProps = {
   initialRecords: StudentAssessmentRecord[];
-  defaultDatasetName: string;
-  initialImportedAt?: string | null;
-  staffName: string;
-  staffRole: StaffRole;
   canUpload: boolean;
   view?: "coach" | "quarter";
 };
 
 export function DashboardClient({
   initialRecords,
-  defaultDatasetName,
-  initialImportedAt = null,
-  staffName,
-  staffRole,
   canUpload,
   view = "coach"
 }: DashboardClientProps) {
   const router = useRouter();
   const [records, setRecords] = useState(initialRecords);
-  const [datasetLabel, setDatasetLabel] = useState(defaultDatasetName);
-  const [importedAt, setImportedAt] = useState<string | null>(initialImportedAt);
   const [filters, setFilters] = useState<AssessmentFilters>(emptyFilters);
 
   useEffect(() => {
     setRecords(initialRecords);
-    setDatasetLabel(defaultDatasetName);
-    setImportedAt(initialImportedAt);
-  }, [defaultDatasetName, initialImportedAt, initialRecords]);
+  }, [initialRecords]);
 
   useEffect(() => {
     setFilters((currentFilters) => {
@@ -84,8 +71,6 @@ export function DashboardClient({
 
   function refreshDataset() {
     setRecords(initialRecords);
-    setDatasetLabel(defaultDatasetName);
-    setImportedAt(initialImportedAt);
     setFilters(emptyFilters);
     router.refresh();
   }
@@ -98,19 +83,6 @@ export function DashboardClient({
           <h1 className="mt-1 break-words text-2xl font-semibold text-ink sm:text-3xl">
             {view === "coach" ? "Coach Assessment Dashboard" : "Quarter Assessment Dashboard"}
           </h1>
-          <div className="mt-3 flex min-w-0 flex-col gap-2 text-sm text-slate-600 sm:flex-row sm:flex-wrap sm:items-center">
-            <span className="inline-flex max-w-full min-w-0 items-center gap-2 rounded-md border border-line bg-field px-2.5 py-1">
-              <Database aria-hidden="true" className="size-4 text-teal" />
-              <span className="truncate">{datasetLabel}</span>
-            </span>
-            <span>{records.length.toLocaleString()} rows loaded</span>
-            {importedAt ? <span>Imported {new Date(importedAt).toLocaleString()}</span> : null}
-            <span className="inline-flex max-w-full min-w-0 items-center gap-2 rounded-md border border-line bg-field px-2.5 py-1">
-              <span className="truncate">{staffName}</span>
-              <span className="text-slate-400">/</span>
-              <span>{formatStaffRole(staffRole)}</span>
-            </span>
-          </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2 sm:w-auto">

@@ -12,10 +12,6 @@ export default async function DashboardPage() {
   return (
     <DashboardClient
       initialRecords={dataset.records}
-      defaultDatasetName={dataset.datasetName}
-      initialImportedAt={dataset.importedAt}
-      staffName={profile.fullName}
-      staffRole={profile.role}
       canUpload={canUploadAssessmentData(profile)}
       view="coach"
     />
