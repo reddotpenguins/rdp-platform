@@ -83,9 +83,21 @@ Set Supabase **Authentication -> URL Configuration**:
 Site URL: https://your-vercel-app.vercel.app
 Redirect URLs:
 https://your-vercel-app.vercel.app/**
+https://your-vercel-app.vercel.app/auth/callback
+https://your-vercel-app.vercel.app/auth/callback?next=/auth/set-password
 http://localhost:3000/**
 http://localhost:3002/**
 ```
+
+Put the base Vercel URL in **Site URL**. Do not put `/**` in the Site URL field.
+
+If the Supabase invite modal has a **Redirect URL** field, use:
+
+```text
+https://your-vercel-app.vercel.app/auth/callback?next=/auth/set-password
+```
+
+This works with Supabase's default invite email body because the app now accepts the default callback/session link flow.
 
 For server-side auth links, update Supabase **Authentication -> Email Templates**.
 

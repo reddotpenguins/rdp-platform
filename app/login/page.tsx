@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import { redirect } from "next/navigation";
+import { AuthLinkHandler } from "@/components/AuthLinkHandler";
 import { LoginForm } from "@/components/LoginForm";
 import { createClient } from "@/lib/supabase/server";
 
@@ -30,6 +31,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
     <main className="flex min-h-screen items-center justify-center bg-[#fff1e6] px-4 py-6 text-[#3d2115] sm:px-6 lg:px-8">
       <section className="grid w-full max-w-4xl overflow-hidden rounded-lg border border-[#ffd6b3] bg-[#fff8f0] shadow-[0_24px_80px_rgba(180,72,22,0.18)] lg:grid-cols-[1fr_0.78fr]">
         <div className="min-w-0 p-6 sm:p-8 lg:p-10">
+          <AuthLinkHandler />
           <div className="text-center lg:text-left">
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#c2410c]">
               RDP LTS Assessment
