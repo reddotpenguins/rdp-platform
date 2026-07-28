@@ -1,27 +1,22 @@
-import { redirect } from "next/navigation";
 import { DashboardClient } from "@/components/DashboardClient";
+import { canUploadAssessmentData } from "@/lib/staffRoles";
 import { getInitialAssessmentDataset } from "@/lib/supabase/assessmentData";
-import { createClient } from "@/lib/supabase/server";
+import { requireActiveStaffSession } from "@/lib/supabase/staffProfile";
 
 export const dynamic = "force-dynamic";
 
 export default async function QuarterDashboardPage() {
-  const supabase = createClient();
-  const {
-    data: { user }
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    redirect("/login");
-  }
-
-  const dataset = await getInitialAssessmentDataset();
+  const { profile } = await requireActiveStaffSession();
+  const dataset = await getInitialAssessmentDataset(profile);
 
   return (
     <DashboardClient
       initialRecords={dataset.records}
       defaultDatasetName={dataset.datasetName}
       initialImportedAt={dataset.importedAt}
+      staffName={profile.fullName}
+      staffRole={profile.role}
+      canUpload={canUploadAssessmentData(profile)}
       view="quarter"
     />
   );

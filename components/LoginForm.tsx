@@ -1,16 +1,21 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff, LockKeyhole, Mail } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
-export function LoginForm() {
+type LoginFormProps = {
+  initialError?: string;
+};
+
+export function LoginForm({ initialError = "" }: LoginFormProps) {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState(initialError);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -112,12 +117,12 @@ export function LoginForm() {
         </span>
       </label>
 
-      <button
-        type="button"
+      <Link
+        href="/auth/reset-password"
         className="-mt-3 self-start text-sm font-medium text-[#c2410c] transition hover:text-[#9a3412] hover:underline"
       >
         Forgot your password?
-      </button>
+      </Link>
 
       {error ? (
         <p

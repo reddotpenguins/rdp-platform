@@ -38,10 +38,74 @@ public.assessment_import_rows
 For the current prototype, run this file in Supabase SQL Editor after creating the tables:
 
 ```text
-supabase/rls-policies.sql
+supabase/auth-and-roles.sql
 ```
 
-Then create coach/admin login users in **Authentication -> Users** inside Supabase.
+This creates `staff_profiles`, adds `admin`, `lead_coach`, and `coach` roles, and protects `assessment_import_rows` with role-aware RLS.
+
+Then create coach/admin login users in **Authentication -> Users** inside Supabase and add a matching staff profile row. Auth users hold the password; staff profiles hold the app role.
+
+Example admin profile:
+
+```sql
+insert into public.staff_profiles (id, email, full_name, role, coach_name, centre_name)
+select id, email, 'Tyrone Peh', 'admin', null, null
+from auth.users
+where email = 'tyrone@example.com'
+on conflict (id) do update set
+  full_name = excluded.full_name,
+  role = excluded.role,
+  coach_name = excluded.coach_name,
+  centre_name = excluded.centre_name,
+  active = true;
+```
+
+Example coach profile:
+
+```sql
+insert into public.staff_profiles (id, email, full_name, role, coach_name, centre_name)
+select id, email, 'Coach A', 'coach', 'Coach A', 'Tampines'
+from auth.users
+where email = 'coach.a@example.com'
+on conflict (id) do update set
+  full_name = excluded.full_name,
+  role = excluded.role,
+  coach_name = excluded.coach_name,
+  centre_name = excluded.centre_name,
+  active = true;
+```
+
+## Supabase Invite and Password Reset Setup
+
+Set Supabase **Authentication -> URL Configuration**:
+
+```text
+Site URL: https://your-vercel-app.vercel.app
+Redirect URLs:
+https://your-vercel-app.vercel.app/**
+http://localhost:3000/**
+http://localhost:3002/**
+```
+
+For server-side auth links, update Supabase **Authentication -> Email Templates**.
+
+Invite user link:
+
+```html
+<a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=invite&next=/auth/set-password">
+  Accept invitation
+</a>
+```
+
+Reset password link:
+
+```html
+<a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=recovery&next=/auth/set-password">
+  Reset password
+</a>
+```
+
+Supabase documents this token hash flow for server-side auth because default links can return sessions in URL fragments that server components cannot read.
 
 ## Vercel Deployment
 
@@ -152,11 +216,11 @@ Absent, Not Assessed, and blank results are excluded from assessed counts and pa
 
 ## Supabase and Future Dashboard Integration
 
-This prototype intentionally does not connect to Supabase. A production version can replace `lib/sampleData.ts` and the local upload storage with:
+This prototype connects to Supabase Auth and `assessment_import_rows`. A production version can extend this with:
 
 - Supabase tables for students, coaches, assessment attempts, concern highlights, and intervention notes
 - Quarter-by-quarter student assignment history for coach, centre, level, and session changes
-- Row-level access policies for management and Lead Coach roles
+- More detailed row-level access policies for admin, lead coach, and coach roles
 - Import jobs for CSV/XLSX files
 - Audit history for manual edits and intervention actions
 - Shared user identity with the full RDP Management Dashboard

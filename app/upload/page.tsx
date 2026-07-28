@@ -3,18 +3,16 @@ import { redirect } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { FileUpload } from "@/components/FileUpload";
 import { SignOutButton } from "@/components/SignOutButton";
-import { createClient } from "@/lib/supabase/server";
+import { canUploadAssessmentData } from "@/lib/staffRoles";
+import { requireActiveStaffSession } from "@/lib/supabase/staffProfile";
 
 export const dynamic = "force-dynamic";
 
 export default async function UploadPage() {
-  const supabase = createClient();
-  const {
-    data: { user }
-  } = await supabase.auth.getUser();
+  const { profile } = await requireActiveStaffSession();
 
-  if (!user) {
-    redirect("/login");
+  if (!canUploadAssessmentData(profile)) {
+    redirect("/dashboard");
   }
 
   return (

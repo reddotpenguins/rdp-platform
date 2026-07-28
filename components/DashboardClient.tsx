@@ -21,6 +21,7 @@ import {
   getFilterOptions,
   toQuarterAssessmentRows
 } from "@/lib/assessmentLogic";
+import { formatStaffRole, type StaffRole } from "@/lib/staffRoles";
 import type {
   AssessmentFilters,
   AssessmentResult,
@@ -31,6 +32,9 @@ type DashboardClientProps = {
   initialRecords: StudentAssessmentRecord[];
   defaultDatasetName: string;
   initialImportedAt?: string | null;
+  staffName: string;
+  staffRole: StaffRole;
+  canUpload: boolean;
   view?: "coach" | "quarter";
 };
 
@@ -38,6 +42,9 @@ export function DashboardClient({
   initialRecords,
   defaultDatasetName,
   initialImportedAt = null,
+  staffName,
+  staffRole,
+  canUpload,
   view = "coach"
 }: DashboardClientProps) {
   const router = useRouter();
@@ -98,17 +105,24 @@ export function DashboardClient({
             </span>
             <span>{records.length.toLocaleString()} rows loaded</span>
             {importedAt ? <span>Imported {new Date(importedAt).toLocaleString()}</span> : null}
+            <span className="inline-flex max-w-full min-w-0 items-center gap-2 rounded-md border border-line bg-field px-2.5 py-1">
+              <span className="truncate">{staffName}</span>
+              <span className="text-slate-400">/</span>
+              <span>{formatStaffRole(staffRole)}</span>
+            </span>
           </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2 sm:w-auto">
-          <Link
-            href="/upload"
-            className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-md bg-teal px-3 text-sm font-semibold text-white transition hover:bg-teal/90 sm:flex-none"
-          >
-            <FileUp aria-hidden="true" className="size-4" />
-            Upload data
-          </Link>
+          {canUpload ? (
+            <Link
+              href="/upload"
+              className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-md bg-teal px-3 text-sm font-semibold text-white transition hover:bg-teal/90 sm:flex-none"
+            >
+              <FileUp aria-hidden="true" className="size-4" />
+              Upload data
+            </Link>
+          ) : null}
           <button
             type="button"
             onClick={refreshDataset}

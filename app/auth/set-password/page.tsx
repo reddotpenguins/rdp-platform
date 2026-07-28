@@ -1,29 +1,23 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import { redirect } from "next/navigation";
-import { LoginForm } from "@/components/LoginForm";
+import { SetPasswordForm } from "@/components/SetPasswordForm";
 import { createClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = {
-  title: "Log in | RDP LTS Assessment Dashboard"
+  title: "Set password | RDP LTS Assessment Dashboard"
 };
 
 export const dynamic = "force-dynamic";
 
-type LoginPageProps = {
-  searchParams?: {
-    error?: string;
-  };
-};
-
-export default async function LoginPage({ searchParams }: LoginPageProps) {
+export default async function SetPasswordPage() {
   const supabase = createClient();
   const {
     data: { user }
   } = await supabase.auth.getUser();
 
-  if (user) {
-    redirect("/dashboard");
+  if (!user) {
+    redirect("/login?error=session-required");
   }
 
   return (
@@ -34,13 +28,15 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#c2410c]">
               RDP LTS Assessment
             </p>
-            <h1 className="mt-4 text-2xl font-bold text-[#3d2115] sm:text-3xl">Welcome back!</h1>
+            <h1 className="mt-4 text-2xl font-bold text-[#3d2115] sm:text-3xl">
+              Set your password
+            </h1>
             <p className="mt-2 text-base leading-6 text-[#8a5a3c]">
-              We are excited to see you again.
+              Choose a password for your staff account before continuing.
             </p>
           </div>
 
-          <LoginForm initialError={getLoginErrorMessage(searchParams?.error)} />
+          <SetPasswordForm />
         </div>
 
         <aside className="flex min-w-0 flex-col items-center justify-center border-t border-[#ffd6b3] bg-[#ffedd5] p-6 text-center lg:border-l lg:border-t-0 lg:p-10">
@@ -56,22 +52,10 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
           </div>
           <h2 className="mt-8 text-xl font-bold text-[#3d2115]">Red Dot Penguins</h2>
           <p className="mt-2 max-w-xs text-sm leading-6 text-[#8a5a3c]">
-            Internal access for coach and quarter assessment reviews.
+            Secure access for internal coach assessment workflows.
           </p>
         </aside>
       </section>
     </main>
   );
-}
-
-function getLoginErrorMessage(error?: string) {
-  if (error === "auth-link-invalid") {
-    return "This invite or reset link is invalid or expired. Please request a new link.";
-  }
-
-  if (error === "session-required") {
-    return "Please open your invite or reset link again before setting a password.";
-  }
-
-  return "";
 }
