@@ -13,6 +13,10 @@ type StaffProfileRow = {
   active: boolean;
 };
 
+type StaffProfileCentreRow = {
+  centre_name: string | null;
+};
+
 export type StaffSession = {
   user: User;
   profile: StaffProfile;
@@ -38,9 +42,19 @@ export async function getCurrentStaffSession() {
     return { user, profile: null };
   }
 
+  const profile = mapStaffProfile(data as StaffProfileRow);
+  const { data: centreRows } = await supabase
+    .from("staff_profile_centres")
+    .select("centre_name")
+    .eq("staff_profile_id", user.id)
+    .order("centre_name", { ascending: true });
+
   return {
     user,
-    profile: mapStaffProfile(data as StaffProfileRow)
+    profile: {
+      ...profile,
+      assignedCentres: mapCentreRows(centreRows as StaffProfileCentreRow[] | null)
+    }
   };
 }
 
@@ -69,6 +83,17 @@ function mapStaffProfile(row: StaffProfileRow): StaffProfile {
     role: row.role,
     coachName: row.coach_name,
     centreName: row.centre_name,
+    assignedCentres: [],
     active: row.active
   };
+}
+
+function mapCentreRows(rows: StaffProfileCentreRow[] | null) {
+  return Array.from(
+    new Set(
+      (rows ?? [])
+        .map((row) => row.centre_name?.trim())
+        .filter((centreName): centreName is string => Boolean(centreName))
+    )
+  );
 }

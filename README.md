@@ -41,9 +41,15 @@ For the current prototype, run this file in Supabase SQL Editor after creating t
 supabase/auth-and-roles.sql
 ```
 
-This creates `staff_profiles`, adds `admin`, `lead_coach`, and `coach` roles, and protects `assessment_import_rows` with role-aware RLS.
+This creates `staff_profiles`, `staff_profile_centres`, adds `admin`, `lead_coach`, and `coach` roles, and protects `assessment_import_rows` with role-aware RLS.
 
-Then create coach/admin login users in **Authentication -> Users** inside Supabase and add a matching staff profile row. Auth users hold the password; staff profiles hold the app role.
+How access works:
+
+- `admin`: can see and manage all assessment rows.
+- `lead_coach`: can see and upload rows only for assigned centres in `staff_profile_centres`.
+- `coach`: can see their own assessment rows by `coach_email`, or by exact `coach_name` when email is blank.
+
+Then create admin, lead coach, or coach login users in **Authentication -> Users** inside Supabase and add a matching staff profile row. Auth users hold the password; staff profiles hold the app role.
 
 Example admin profile:
 
@@ -74,6 +80,47 @@ on conflict (id) do update set
   centre_name = excluded.centre_name,
   active = true;
 ```
+
+Example lead coach profile with two centres:
+
+```sql
+insert into public.staff_profiles (id, email, full_name, role, coach_name, centre_name)
+select id, email, 'Lead Coach A', 'lead_coach', null, null
+from auth.users
+where lower(email) = lower('lead.coach@example.com')
+on conflict (id) do update set
+  full_name = excluded.full_name,
+  role = excluded.role,
+  coach_name = excluded.coach_name,
+  centre_name = excluded.centre_name,
+  active = true;
+
+insert into public.staff_profile_centres (staff_profile_id, centre_name)
+select id, 'Tampines'
+from auth.users
+where lower(email) = lower('lead.coach@example.com')
+on conflict do nothing;
+
+insert into public.staff_profile_centres (staff_profile_id, centre_name)
+select id, 'Bedok'
+from auth.users
+where lower(email) = lower('lead.coach@example.com')
+on conflict do nothing;
+```
+
+For assessment days, add the extra centre before the lead coach goes there. Remove it after the assessment day if the access should be temporary:
+
+```sql
+delete from public.staff_profile_centres
+where staff_profile_id = (
+  select id
+  from auth.users
+  where lower(email) = lower('lead.coach@example.com')
+)
+and centre_name = 'Bedok';
+```
+
+Centre names must match the `centre_name` values in `assessment_import_rows`, aside from capitalization and extra spaces.
 
 ## Supabase Invite and Password Reset Setup
 

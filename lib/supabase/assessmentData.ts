@@ -21,7 +21,7 @@ export async function getInitialAssessmentDataset(
     )
     .order("imported_at", { ascending: true });
 
-  if (!error && data && data.length > 0) {
+  if (!error && data) {
     const visibleRows = filterRowsForStaffProfile(data as AssessmentImportRow[], staffProfile);
     const records = assessmentImportRowsToRecords(visibleRows);
     const latestImport = data
@@ -30,14 +30,12 @@ export async function getInitialAssessmentDataset(
       .sort()
       .at(-1);
 
-    if (records.length > 0) {
-      return {
-        records,
-        datasetName: "Supabase assessment import rows",
-        importedAt: latestImport,
-        source: "supabase"
-      };
-    }
+    return {
+      records,
+      datasetName: "Supabase assessment import rows",
+      importedAt: latestImport,
+      source: "supabase"
+    };
   }
 
   const records = await getDefaultAssessmentRecords();
@@ -51,8 +49,18 @@ export async function getInitialAssessmentDataset(
 }
 
 function filterRowsForStaffProfile(rows: AssessmentImportRow[], staffProfile?: StaffProfile) {
-  if (!staffProfile || staffProfile.role === "admin" || staffProfile.role === "lead_coach") {
+  if (!staffProfile || staffProfile.role === "admin") {
     return rows;
+  }
+
+  if (staffProfile.role === "lead_coach") {
+    const assignedCentres = staffProfile.assignedCentres.map((centreName) =>
+      centreName.trim().toLowerCase()
+    );
+
+    return rows.filter((row) =>
+      assignedCentres.includes(row.centre_name?.trim().toLowerCase() ?? "")
+    );
   }
 
   const email = staffProfile.email.trim().toLowerCase();

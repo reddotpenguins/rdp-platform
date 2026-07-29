@@ -7,6 +7,7 @@ export type StaffProfile = {
   role: StaffRole;
   coachName: string | null;
   centreName: string | null;
+  assignedCentres: string[];
   active: boolean;
 };
 
