@@ -21,37 +21,53 @@ import {
   getFilterOptions,
   toQuarterAssessmentRows
 } from "@/lib/assessmentLogic";
+import type { CentreFilterAccess } from "@/lib/staffRoles";
 import type {
   AssessmentFilters,
   AssessmentResult,
+  FilterOptions,
   StudentAssessmentRecord
 } from "@/types/assessment";
 
 type DashboardClientProps = {
   initialRecords: StudentAssessmentRecord[];
   canUpload: boolean;
+  centreFilterAccess: CentreFilterAccess;
   view?: "coach" | "quarter";
 };
 
 export function DashboardClient({
   initialRecords,
   canUpload,
+  centreFilterAccess,
   view = "coach"
 }: DashboardClientProps) {
   const router = useRouter();
   const [records, setRecords] = useState(initialRecords);
-  const [filters, setFilters] = useState<AssessmentFilters>(emptyFilters);
+  const defaultFilters = useMemo(
+    () => createDefaultFilters(centreFilterAccess),
+    [centreFilterAccess]
+  );
+  const [filters, setFilters] = useState<AssessmentFilters>(defaultFilters);
 
   useEffect(() => {
     setRecords(initialRecords);
   }, [initialRecords]);
 
+  const filterOptions = useMemo(
+    () =>
+      applyCentreAccessToFilterOptions(
+        getFilterOptions(records, filters.quarter),
+        centreFilterAccess
+      ),
+    [centreFilterAccess, filters.quarter, records]
+  );
+
   useEffect(() => {
     setFilters((currentFilters) => {
-      const currentOptions = getFilterOptions(records, currentFilters.quarter);
-      return sanitizeFiltersForOptions(currentFilters, currentOptions);
+      return sanitizeFiltersForOptions(currentFilters, filterOptions, defaultFilters);
     });
-  }, [records, filters.quarter]);
+  }, [defaultFilters, filterOptions]);
 
   const filteredRecords = useMemo(() => filterRecords(records, filters), [filters, records]);
   const metrics = useMemo(() => calculateDashboardMetrics(filteredRecords), [filteredRecords]);
@@ -64,14 +80,10 @@ export function DashboardClient({
     [filters, records]
   );
   const quarterSummaries = useMemo(() => calculateQuarterSummaries(quarterRows), [quarterRows]);
-  const filterOptions = useMemo(
-    () => getFilterOptions(records, filters.quarter),
-    [filters.quarter, records]
-  );
 
   function refreshDataset() {
     setRecords(initialRecords);
-    setFilters(emptyFilters);
+    setFilters(defaultFilters);
     router.refresh();
   }
 
@@ -119,8 +131,9 @@ export function DashboardClient({
       <Filters
         filters={filters}
         options={filterOptions}
+        allowAllCentres={centreFilterAccess.allowAllCentres}
         onChange={setFilters}
-        onReset={() => setFilters(emptyFilters)}
+        onReset={() => setFilters(defaultFilters)}
       />
 
       {view === "coach" ? (
@@ -143,15 +156,83 @@ export function DashboardClient({
   );
 }
 
-function sanitizeFiltersForOptions(filters: AssessmentFilters, options: ReturnType<typeof getFilterOptions>) {
+function createDefaultFilters(centreFilterAccess: CentreFilterAccess): AssessmentFilters {
+  return {
+    ...emptyFilters,
+    centre: centreFilterAccess.allowAllCentres
+      ? "All"
+      : cleanCentreOptions(centreFilterAccess.centres)[0] ?? "All"
+  };
+}
+
+function applyCentreAccessToFilterOptions(
+  options: FilterOptions,
+  centreFilterAccess: CentreFilterAccess
+): FilterOptions {
+  const accessCentres = cleanCentreOptions(centreFilterAccess.centres);
+
+  if (!centreFilterAccess.allowAllCentres) {
+    const lockedCentre = accessCentres[0];
+    const matchingOption = options.centres.find((centre) =>
+      centresMatch(centre, lockedCentre ?? "")
+    );
+
+    return {
+      ...options,
+      centres: matchingOption ? [matchingOption] : lockedCentre ? [lockedCentre] : []
+    };
+  }
+
+  return {
+    ...options,
+    centres: mergeCentreOptions(options.centres, accessCentres)
+  };
+}
+
+function cleanCentreOptions(centres: string[]) {
+  return Array.from(
+    new Set(
+      centres
+        .map((centre) => centre.trim())
+        .filter((centre): centre is string => Boolean(centre))
+    )
+  );
+}
+
+function mergeCentreOptions(dataCentres: string[], accessCentres: string[]) {
+  const optionsByCentreKey = new Map<string, string>();
+
+  for (const centre of dataCentres) {
+    optionsByCentreKey.set(normalizeCentreName(centre), centre);
+  }
+
+  for (const centre of accessCentres) {
+    const key = normalizeCentreName(centre);
+
+    if (!optionsByCentreKey.has(key)) {
+      optionsByCentreKey.set(key, centre);
+    }
+  }
+
+  return Array.from(optionsByCentreKey.values()).sort((a, b) => a.localeCompare(b));
+}
+
+function sanitizeFiltersForOptions(
+  filters: AssessmentFilters,
+  options: FilterOptions,
+  defaultFilters: AssessmentFilters
+) {
   const nextFilters: AssessmentFilters = { ...filters };
 
   if (nextFilters.coach !== "All" && !options.coaches.includes(nextFilters.coach)) {
     nextFilters.coach = "All";
   }
 
-  if (nextFilters.centre !== "All" && !options.centres.includes(nextFilters.centre)) {
-    nextFilters.centre = "All";
+  if (nextFilters.centre === "All") {
+    nextFilters.centre =
+      defaultFilters.centre === "All" ? "All" : getFallbackCentre(options, defaultFilters);
+  } else if (!options.centres.some((centre) => centresMatch(centre, nextFilters.centre))) {
+    nextFilters.centre = getFallbackCentre(options, defaultFilters);
   }
 
   if (nextFilters.level !== "All" && !options.levels.includes(nextFilters.level)) {
@@ -170,6 +251,25 @@ function sanitizeFiltersForOptions(filters: AssessmentFilters, options: ReturnTy
   }
 
   return filtersAreEqual(filters, nextFilters) ? filters : nextFilters;
+}
+
+function getFallbackCentre(options: FilterOptions, defaultFilters: AssessmentFilters) {
+  if (defaultFilters.centre !== "All") {
+    const matchingOption = options.centres.find((centre) =>
+      centresMatch(centre, defaultFilters.centre)
+    );
+    return matchingOption ?? defaultFilters.centre;
+  }
+
+  return options.centres[0] ?? "All";
+}
+
+function centresMatch(first: string, second: string) {
+  return normalizeCentreName(first) === normalizeCentreName(second);
+}
+
+function normalizeCentreName(centre: string) {
+  return centre.trim().toLowerCase();
 }
 
 function filtersAreEqual(first: AssessmentFilters, second: AssessmentFilters) {

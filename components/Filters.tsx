@@ -12,6 +12,7 @@ import type {
 type FiltersProps = {
   filters: AssessmentFilters;
   options: FilterOptions;
+  allowAllCentres: boolean;
   onChange: (filters: AssessmentFilters) => void;
   onReset: () => void;
 };
@@ -36,7 +37,7 @@ function concernLabel(flag: FlagStatus | "All") {
   return "No immediate concern";
 }
 
-export function Filters({ filters, options, onChange, onReset }: FiltersProps) {
+export function Filters({ filters, options, allowAllCentres, onChange, onReset }: FiltersProps) {
   function setFilter<Key extends keyof AssessmentFilters>(
     key: Key,
     value: AssessmentFilters[Key]
@@ -68,7 +69,8 @@ export function Filters({ filters, options, onChange, onReset }: FiltersProps) {
         <SelectField
           label="Centre"
           value={filters.centre}
-          values={["All", ...options.centres]}
+          values={allowAllCentres ? ["All", ...options.centres] : options.centres}
+          labelForValue={(value) => (value === "All" ? "All centres" : value)}
           onChange={(value) => setFilter("centre", value)}
         />
 

@@ -331,14 +331,26 @@ function matchesQuarterAwareValue(
           : getQuarterSession;
 
   if (filters.quarter === "Q1" || filters.quarter === "Q2") {
-    return getter(record, filters.quarter) === selectedValue;
+    return valuesMatch(field, getter(record, filters.quarter), selectedValue);
   }
 
   return (
-    getter(record, "Q1") === selectedValue ||
-    getter(record, "Q2") === selectedValue ||
-    getCurrentValue(record, field) === selectedValue
+    valuesMatch(field, getter(record, "Q1"), selectedValue) ||
+    valuesMatch(field, getter(record, "Q2"), selectedValue) ||
+    valuesMatch(field, getCurrentValue(record, field), selectedValue)
   );
+}
+
+function valuesMatch(
+  field: "coach" | "centre" | "level" | "session",
+  currentValue: string,
+  selectedValue: string
+) {
+  if (field === "centre") {
+    return normalizeCentreName(currentValue) === normalizeCentreName(selectedValue);
+  }
+
+  return currentValue === selectedValue;
 }
 
 function matchesSelectedQuarterResult(
@@ -439,7 +451,9 @@ export function filterQuarterRows(
       row.studentName.toLowerCase().includes(search) ||
       row.coachName.toLowerCase().includes(search);
     const matchesCoach = filters.coach === "All" || row.coachName === filters.coach;
-    const matchesCentre = filters.centre === "All" || row.centre === filters.centre;
+    const matchesCentre =
+      filters.centre === "All" ||
+      normalizeCentreName(row.centre) === normalizeCentreName(filters.centre);
     const matchesLevel = filters.level === "All" || row.level === filters.level;
     const matchesSession = filters.session === "All" || row.session === filters.session;
     const matchesFlag = filters.flag === "All" || row.flagStatus === filters.flag;
@@ -517,6 +531,10 @@ function uniqueSorted(values: Array<string | undefined>) {
   return Array.from(new Set(values.map((value) => value?.trim()).filter(Boolean) as string[])).sort(
     (a, b) => a.localeCompare(b)
   );
+}
+
+function normalizeCentreName(centre: string) {
+  return centre.trim().toLowerCase();
 }
 
 function uniqueResults(values: AssessmentResult[]): AssessmentResult[] {

@@ -11,8 +11,27 @@ export type StaffProfile = {
   active: boolean;
 };
 
+export type CentreFilterAccess = {
+  allowAllCentres: boolean;
+  centres: string[];
+};
+
 export function canUploadAssessmentData(profile: StaffProfile) {
   return profile.role === "admin" || profile.role === "lead_coach";
+}
+
+export function getCentreFilterAccess(profile: StaffProfile): CentreFilterAccess {
+  if (profile.role !== "lead_coach") {
+    return {
+      allowAllCentres: true,
+      centres: []
+    };
+  }
+
+  return {
+    allowAllCentres: profile.assignedCentres.length !== 1,
+    centres: profile.assignedCentres
+  };
 }
 
 export function formatStaffRole(role: StaffRole) {
