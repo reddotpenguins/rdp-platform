@@ -620,9 +620,8 @@ function uniqueSessionDays(values: Array<string | undefined>) {
   });
 }
 
-function uniqueSessionPeriods(values: Array<string | undefined>) {
-  const present = new Set(values.map((value) => getSessionPeriod(value ?? "")).filter(Boolean));
-  return sessionPeriods.filter((period) => present.has(period));
+function uniqueSessionPeriods() {
+  return sessionPeriods;
 }
 
 function normalizeCentreName(centre: string) {
@@ -646,11 +645,14 @@ export function getSessionPeriod(session: string): SessionPeriod | "" {
     return "";
   }
 
-  if (/\b(a\.?\s?m\.?|morning)\b/i.test(cleaned)) {
+  if (/(^|[^a-z])a\.?\s?m\.?([^a-z]|$)/i.test(cleaned) || /\bmorning\b/i.test(cleaned)) {
     return "AM";
   }
 
-  if (/\b(p\.?\s?m\.?|afternoon|evening|night)\b/i.test(cleaned)) {
+  if (
+    /(^|[^a-z])p\.?\s?m\.?([^a-z]|$)/i.test(cleaned) ||
+    /\b(afternoon|evening|night)\b/i.test(cleaned)
+  ) {
     return "PM";
   }
 
@@ -692,7 +694,7 @@ export function getFilterOptions(
       levels: uniqueSorted(records.map((record) => getQuarterLevel(record, selectedQuarter))),
       sessions: uniqueSorted(sessions),
       sessionDays: uniqueSessionDays(sessions),
-      sessionPeriods: uniqueSessionPeriods(sessions),
+      sessionPeriods: uniqueSessionPeriods(),
       quarters: assessmentQuarters,
       results: uniqueResults(records.map((record) => getQuarterResult(record, selectedQuarter)))
     };
@@ -720,7 +722,7 @@ export function getFilterOptions(
     ),
     sessions: uniqueSorted(sessions),
     sessionDays: uniqueSessionDays(sessions),
-    sessionPeriods: uniqueSessionPeriods(sessions),
+    sessionPeriods: uniqueSessionPeriods(),
     quarters: assessmentQuarters,
     results: uniqueResults(records.flatMap((record) => [record.q1Result, record.q2Result]))
   };
