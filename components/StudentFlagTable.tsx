@@ -4,6 +4,7 @@ import clsx from "clsx";
 import { Download, Printer, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 import {
+  compareSessionLabels,
   getQuarterCentre,
   getQuarterCoachName,
   getQuarterLevel,
@@ -20,6 +21,7 @@ type StudentFlagTableProps = {
 
 type ResultFilter = "All" | "Pass" | "Fail" | "Absent" | "Not Assessed" | "Blank";
 type ConcernFilter = "All" | "Intervention Required" | "Monitor" | "No immediate concern";
+type SortMode = "alphabetical" | "session";
 
 const resultFilters: ResultFilter[] = [
   "All",
@@ -34,6 +36,10 @@ const concernFilters: ConcernFilter[] = [
   "Intervention Required",
   "Monitor",
   "No immediate concern"
+];
+const sortOptions: Array<{ value: SortMode; label: string }> = [
+  { value: "alphabetical", label: "Alphabetical A-Z" },
+  { value: "session", label: "Sort by session" }
 ];
 
 function flagBadge(record: StudentAssessmentRecord) {
@@ -71,6 +77,7 @@ export function StudentFlagTable({ records, selectedQuarter }: StudentFlagTableP
   const [tableSearch, setTableSearch] = useState("");
   const [resultFilter, setResultFilter] = useState<ResultFilter>("All");
   const [concernFilter, setConcernFilter] = useState<ConcernFilter>("All");
+  const [sortMode, setSortMode] = useState<SortMode>("alphabetical");
   const showAllQuarters = selectedQuarter === "All";
   const resultHeadings = showAllQuarters
     ? ["Q1 Result", "Q2 Result"]
@@ -92,8 +99,8 @@ export function StudentFlagTable({ records, selectedQuarter }: StudentFlagTableP
           matchesTableSearch(record, selectedQuarter, tableSearch) &&
           matchesResultFilter(record, selectedQuarter, resultFilter) &&
           matchesConcernFilter(record, concernFilter)
-      ),
-    [concernFilter, records, resultFilter, selectedQuarter, tableSearch]
+      ).sort((first, second) => compareStudentRecords(first, second, selectedQuarter, sortMode)),
+    [concernFilter, records, resultFilter, selectedQuarter, sortMode, tableSearch]
   );
   const exportColumns = useMemo(
     () => getExportColumns(selectedQuarter),
@@ -164,6 +171,19 @@ export function StudentFlagTable({ records, selectedQuarter }: StudentFlagTableP
             {concernFilters.map((filter) => (
               <option key={filter} value={filter}>
                 {filter === "All" ? "All concerns" : filter}
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={sortMode}
+            onChange={(event) => setSortMode(event.target.value as SortMode)}
+            className="h-10 rounded-md border border-line bg-field px-3 text-sm font-medium text-slate-700 outline-none transition focus:border-teal focus:bg-paper focus:ring-2 focus:ring-teal/15"
+            aria-label="Sort student results"
+          >
+            {sortOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
               </option>
             ))}
           </select>
@@ -373,6 +393,25 @@ function matchesResultFilter(
 
 function matchesConcernFilter(record: StudentAssessmentRecord, concernFilter: ConcernFilter) {
   return concernFilter === "All" || flagBadge(record) === concernFilter;
+}
+
+function compareStudentRecords(
+  first: StudentAssessmentRecord,
+  second: StudentAssessmentRecord,
+  selectedQuarter: "All" | AssessmentQuarter,
+  sortMode: SortMode
+) {
+  const nameCompare = first.studentName.localeCompare(second.studentName);
+  const sessionCompare = compareSessionLabels(
+    getDisplaySession(first, selectedQuarter),
+    getDisplaySession(second, selectedQuarter)
+  );
+
+  if (sortMode === "session") {
+    return sessionCompare || nameCompare;
+  }
+
+  return nameCompare || sessionCompare;
 }
 
 function normalizeFilterValue(value: string | undefined) {

@@ -3,6 +3,7 @@
 import clsx from "clsx";
 import { Download, Printer, Search } from "lucide-react";
 import { useMemo, useState } from "react";
+import { compareSessionLabels } from "@/lib/assessmentLogic";
 import { downloadCsv, type ExportColumn, printTable } from "@/lib/tableExport";
 import type { AssessmentQuarter, QuarterAssessmentRow } from "@/types/assessment";
 
@@ -12,6 +13,7 @@ type QuarterStudentTableProps = {
 
 type ResultFilter = "All" | "Pass" | "Fail" | "Absent" | "Not Assessed" | "Blank";
 type ConcernFilter = "All" | "Intervention Required" | "Monitor" | "No immediate concern";
+type SortMode = "alphabetical" | "session";
 
 const resultFilters: ResultFilter[] = [
   "All",
@@ -26,6 +28,10 @@ const concernFilters: ConcernFilter[] = [
   "Intervention Required",
   "Monitor",
   "No immediate concern"
+];
+const sortOptions: Array<{ value: SortMode; label: string }> = [
+  { value: "alphabetical", label: "Alphabetical A-Z" },
+  { value: "session", label: "Sort by session" }
 ];
 const tableHeadings = [
   "Student Name",
@@ -85,6 +91,7 @@ export function QuarterStudentTable({ rows }: QuarterStudentTableProps) {
   const [tableSearch, setTableSearch] = useState("");
   const [resultFilter, setResultFilter] = useState<ResultFilter>("All");
   const [concernFilter, setConcernFilter] = useState<ConcernFilter>("All");
+  const [sortMode, setSortMode] = useState<SortMode>("alphabetical");
   const visibleRows = useMemo(
     () =>
       rows.filter(
@@ -92,8 +99,8 @@ export function QuarterStudentTable({ rows }: QuarterStudentTableProps) {
           matchesTableSearch(row, tableSearch) &&
           matchesResultFilter(row, resultFilter) &&
           matchesConcernFilter(row, concernFilter)
-      ),
-    [concernFilter, resultFilter, rows, tableSearch]
+      ).sort((first, second) => compareQuarterRows(first, second, sortMode)),
+    [concernFilter, resultFilter, rows, sortMode, tableSearch]
   );
 
   function handleDownload() {
@@ -152,6 +159,19 @@ export function QuarterStudentTable({ rows }: QuarterStudentTableProps) {
             {concernFilters.map((filter) => (
               <option key={filter} value={filter}>
                 {filter === "All" ? "All concerns" : filter}
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={sortMode}
+            onChange={(event) => setSortMode(event.target.value as SortMode)}
+            className="h-10 rounded-md border border-line bg-field px-3 text-sm font-medium text-slate-700 outline-none transition focus:border-teal focus:bg-paper focus:ring-2 focus:ring-teal/15"
+            aria-label="Sort quarter assessment rows"
+          >
+            {sortOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
               </option>
             ))}
           </select>
@@ -285,6 +305,28 @@ function matchesResultFilter(row: QuarterAssessmentRow, resultFilter: ResultFilt
 
 function matchesConcernFilter(row: QuarterAssessmentRow, concernFilter: ConcernFilter) {
   return concernFilter === "All" || flagLabel(row) === concernFilter;
+}
+
+function compareQuarterRows(
+  first: QuarterAssessmentRow,
+  second: QuarterAssessmentRow,
+  sortMode: SortMode
+) {
+  const nameCompare = first.studentName.localeCompare(second.studentName);
+  const sessionCompare = compareSessionLabels(first.session, second.session);
+  const quarterCompare = first.quarter.localeCompare(second.quarter);
+
+  if (sortMode === "session") {
+    return (
+      sessionCompare ||
+      first.centre.localeCompare(second.centre) ||
+      first.coachName.localeCompare(second.coachName) ||
+      nameCompare ||
+      quarterCompare
+    );
+  }
+
+  return nameCompare || sessionCompare || quarterCompare;
 }
 
 function normalizeFilterValue(value: string | undefined) {

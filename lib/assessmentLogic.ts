@@ -675,6 +675,65 @@ export function getSessionPeriod(session: string): SessionPeriod | "" {
   return "";
 }
 
+export function compareSessionLabels(first: string, second: string) {
+  const firstSort = getSessionSortParts(first);
+  const secondSort = getSessionSortParts(second);
+
+  if (firstSort.dayOrder !== secondSort.dayOrder) {
+    return firstSort.dayOrder - secondSort.dayOrder;
+  }
+
+  if (firstSort.periodOrder !== secondSort.periodOrder) {
+    return firstSort.periodOrder - secondSort.periodOrder;
+  }
+
+  if (firstSort.startMinutes !== secondSort.startMinutes) {
+    return firstSort.startMinutes - secondSort.startMinutes;
+  }
+
+  return firstSort.label.localeCompare(secondSort.label);
+}
+
+function getSessionSortParts(session: string) {
+  const label = session.trim();
+  const day = getSessionDay(label);
+  const period = getSessionPeriod(label);
+  const dayIndex = sessionDayOrder.indexOf(day);
+
+  return {
+    label,
+    dayOrder: dayIndex === -1 ? Number.MAX_SAFE_INTEGER : dayIndex,
+    periodOrder: period === "AM" ? 0 : period === "PM" ? 1 : 2,
+    startMinutes: getSessionStartMinutes(label, period)
+  };
+}
+
+function getSessionStartMinutes(session: string, period: SessionPeriod | "") {
+  const timeMatch = session.match(
+    /(^|[^a-z0-9])([01]?\d|2[0-3])(?:[:.](\d{2}))?\s*([ap]\.?\s?m\.?)?/i
+  );
+
+  if (!timeMatch) {
+    return Number.MAX_SAFE_INTEGER;
+  }
+
+  let hour = Number(timeMatch[2]);
+  const minute = Number(timeMatch[3] ?? 0);
+  const meridiem = timeMatch[4]?.toLowerCase().replace(/[^apm]/g, "");
+
+  if (meridiem?.startsWith("p") && hour < 12) {
+    hour += 12;
+  } else if (meridiem?.startsWith("a") && hour === 12) {
+    hour = 0;
+  } else if (!meridiem && period === "PM" && hour < 12) {
+    hour += 12;
+  } else if (!meridiem && period === "AM" && hour === 12) {
+    hour = 0;
+  }
+
+  return hour * 60 + minute;
+}
+
 function uniqueResults(values: AssessmentResult[]): AssessmentResult[] {
   const order: AssessmentResult[] = ["Pass", "Fail", "Absent", "Not Assessed", ""];
   const present = new Set(values);
