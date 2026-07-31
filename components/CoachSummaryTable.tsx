@@ -18,9 +18,9 @@ export function CoachSummaryTable({ summaries, selectedQuarter }: CoachSummaryTa
         <p className="text-sm text-slate-500">{summaries.length.toLocaleString()} coaches</p>
       </div>
 
-      <div className="w-full overflow-x-auto">
+      <div className="max-h-[620px] w-full overflow-auto">
         <table className="min-w-full border-separate border-spacing-0 text-left text-sm">
-          <thead className="bg-paper text-xs uppercase text-slate-500">
+          <thead className="sticky top-0 z-10 bg-paper text-xs uppercase text-slate-500">
             <tr>
               {[
                 "Coach name",
