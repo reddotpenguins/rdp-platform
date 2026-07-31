@@ -215,6 +215,8 @@ The parser maps similar column names, including:
 - `Centre`, `Location`, `Q1 Centre`, `Q2 Centre`
 - `Level`, `Current Level`, `Q1 Level`, `Q2 Level`
 - `Session`, `Session Time`, `Class Time`, `Q1 Session`, `Q2 Session`
+- `Day`, `Session Day`, `Q1 Day`, `Q2 Day`
+- `AM/PM`, `Session Period`, `Q1 AM/PM`, `Q2 AM/PM`
 - `Q1 Result`, `2026 Q1`
 - `Q2 Result`, `2026 Q2`
 - `Flag Status`
@@ -222,7 +224,7 @@ The parser maps similar column names, including:
 
 Optional fields such as centre and level can be missing.
 
-Quarter-specific coach, centre, level, and session fields are kept separately so student movement across coaches, centres, and session timings can be reviewed later.
+Quarter-specific coach, centre, level, and session fields are kept separately so student movement across coaches, centres, and session timings can be reviewed later. If day or AM/PM fields are supplied separately, they are folded into the session label for filtering.
 
 A sample upload template is available at:
 

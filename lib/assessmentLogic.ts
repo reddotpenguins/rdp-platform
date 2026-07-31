@@ -10,6 +10,7 @@ import type {
   QuarterAssessmentRow,
   QuarterMetrics,
   QuarterSummary,
+  SessionPeriod,
   StudentAssessmentRecord
 } from "@/types/assessment";
 
@@ -19,6 +20,8 @@ export const emptyFilters: AssessmentFilters = {
   centre: "All",
   level: "All",
   session: "All",
+  sessionDay: "All",
+  sessionPeriod: "All",
   flag: "All",
   quarter: "All",
   result: "All"
@@ -26,6 +29,25 @@ export const emptyFilters: AssessmentFilters = {
 
 export const assessmentQuarters: AssessmentQuarter[] = ["Q1", "Q2"];
 export const missingSessionLabel = "Not provided";
+const sessionPeriods: SessionPeriod[] = ["AM", "PM"];
+const sessionDayOrder = [
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+  "Sunday"
+];
+const sessionDayPatterns = [
+  { day: "Monday", pattern: /\bmon(?:day)?\b/i },
+  { day: "Tuesday", pattern: /\btue(?:sday)?\b/i },
+  { day: "Wednesday", pattern: /\bwed(?:nesday)?\b/i },
+  { day: "Thursday", pattern: /\bthu(?:r|rs|rsday)?\b/i },
+  { day: "Friday", pattern: /\bfri(?:day)?\b/i },
+  { day: "Saturday", pattern: /\bsat(?:urday)?\b/i },
+  { day: "Sunday", pattern: /\bsun(?:day)?\b/i }
+];
 
 type QuarterFilter = "All" | AssessmentQuarter;
 
@@ -296,6 +318,18 @@ export function filterRecords(
     const matchesCentre = matchesQuarterAwareValue(record, filters, "centre", filters.centre);
     const matchesLevel = matchesQuarterAwareValue(record, filters, "level", filters.level);
     const matchesSession = matchesQuarterAwareValue(record, filters, "session", filters.session);
+    const matchesSessionDay = matchesQuarterAwareSessionDetail(
+      record,
+      filters,
+      filters.sessionDay,
+      getSessionDay
+    );
+    const matchesSessionPeriod = matchesQuarterAwareSessionDetail(
+      record,
+      filters,
+      filters.sessionPeriod,
+      getSessionPeriod
+    );
     const matchesFlag = filters.flag === "All" || record.flagStatus === filters.flag;
     const matchesQuarterResult = matchesSelectedQuarterResult(record, filters);
 
@@ -305,6 +339,8 @@ export function filterRecords(
       matchesCentre &&
       matchesLevel &&
       matchesSession &&
+      matchesSessionDay &&
+      matchesSessionPeriod &&
       matchesFlag &&
       matchesQuarterResult
     );
@@ -341,6 +377,21 @@ function matchesQuarterAwareValue(
   );
 }
 
+function matchesQuarterAwareSessionDetail(
+  record: StudentAssessmentRecord,
+  filters: AssessmentFilters,
+  selectedValue: string,
+  getDetail: (session: string) => string
+) {
+  if (selectedValue === "All") {
+    return true;
+  }
+
+  return getQuarterAwareSessionValues(record, filters.quarter).some(
+    (session) => getDetail(session) === selectedValue
+  );
+}
+
 function valuesMatch(
   field: "coach" | "centre" | "level" | "session",
   currentValue: string,
@@ -370,6 +421,21 @@ function matchesSelectedQuarterResult(
   }
 
   return record.q1Result === filters.result || record.q2Result === filters.result;
+}
+
+function getQuarterAwareSessionValues(
+  record: StudentAssessmentRecord,
+  selectedQuarter: QuarterFilter
+) {
+  if (selectedQuarter === "Q1" || selectedQuarter === "Q2") {
+    return [getQuarterSession(record, selectedQuarter)];
+  }
+
+  return uniqueSorted([
+    record.session,
+    getQuarterSession(record, "Q1"),
+    getQuarterSession(record, "Q2")
+  ]);
 }
 
 function getCurrentValue(record: StudentAssessmentRecord, field: "coach" | "centre" | "level" | "session") {
@@ -456,6 +522,10 @@ export function filterQuarterRows(
       normalizeCentreName(row.centre) === normalizeCentreName(filters.centre);
     const matchesLevel = filters.level === "All" || row.level === filters.level;
     const matchesSession = filters.session === "All" || row.session === filters.session;
+    const matchesSessionDay =
+      filters.sessionDay === "All" || getSessionDay(row.session) === filters.sessionDay;
+    const matchesSessionPeriod =
+      filters.sessionPeriod === "All" || getSessionPeriod(row.session) === filters.sessionPeriod;
     const matchesFlag = filters.flag === "All" || row.flagStatus === filters.flag;
     const matchesQuarter = filters.quarter === "All" || row.quarter === filters.quarter;
     const matchesResult = filters.result === "All" || row.result === filters.result;
@@ -466,6 +536,8 @@ export function filterQuarterRows(
       matchesCentre &&
       matchesLevel &&
       matchesSession &&
+      matchesSessionDay &&
+      matchesSessionPeriod &&
       matchesFlag &&
       matchesQuarter &&
       matchesResult
@@ -533,8 +605,72 @@ function uniqueSorted(values: Array<string | undefined>) {
   );
 }
 
+function uniqueSessionDays(values: Array<string | undefined>) {
+  return Array.from(new Set(values.map((value) => getSessionDay(value ?? "")).filter(Boolean))).sort((a, b) => {
+    const firstIndex = sessionDayOrder.indexOf(a);
+    const secondIndex = sessionDayOrder.indexOf(b);
+
+    if (firstIndex !== -1 || secondIndex !== -1) {
+      const firstOrder = firstIndex === -1 ? Number.MAX_SAFE_INTEGER : firstIndex;
+      const secondOrder = secondIndex === -1 ? Number.MAX_SAFE_INTEGER : secondIndex;
+      return firstOrder - secondOrder;
+    }
+
+    return a.localeCompare(b);
+  });
+}
+
+function uniqueSessionPeriods(values: Array<string | undefined>) {
+  const present = new Set(values.map((value) => getSessionPeriod(value ?? "")).filter(Boolean));
+  return sessionPeriods.filter((period) => present.has(period));
+}
+
 function normalizeCentreName(centre: string) {
   return centre.trim().toLowerCase();
+}
+
+export function getSessionDay(session: string) {
+  const cleaned = session.trim();
+
+  if (!cleaned || cleaned === missingSessionLabel) {
+    return "";
+  }
+
+  return sessionDayPatterns.find(({ pattern }) => pattern.test(cleaned))?.day ?? "";
+}
+
+export function getSessionPeriod(session: string): SessionPeriod | "" {
+  const cleaned = session.trim();
+
+  if (!cleaned || cleaned === missingSessionLabel) {
+    return "";
+  }
+
+  if (/\b(a\.?\s?m\.?|morning)\b/i.test(cleaned)) {
+    return "AM";
+  }
+
+  if (/\b(p\.?\s?m\.?|afternoon|evening|night)\b/i.test(cleaned)) {
+    return "PM";
+  }
+
+  const twentyFourHourMatch = cleaned.match(/\b([01]?\d|2[0-3])[:.]([0-5]\d)\b/);
+
+  if (!twentyFourHourMatch) {
+    return "";
+  }
+
+  const hour = Number(twentyFourHourMatch[1]);
+
+  if (hour >= 12) {
+    return "PM";
+  }
+
+  if (/^\d{2}[:.]/.test(twentyFourHourMatch[0]) || hour >= 6) {
+    return "AM";
+  }
+
+  return "";
 }
 
 function uniqueResults(values: AssessmentResult[]): AssessmentResult[] {
@@ -548,15 +684,25 @@ export function getFilterOptions(
   selectedQuarter: QuarterFilter = "All"
 ): FilterOptions {
   if (selectedQuarter === "Q1" || selectedQuarter === "Q2") {
+    const sessions = records.map((record) => getQuarterSession(record, selectedQuarter));
+
     return {
       coaches: uniqueSorted(records.map((record) => getQuarterCoachName(record, selectedQuarter))),
       centres: uniqueSorted(records.map((record) => getQuarterCentre(record, selectedQuarter))),
       levels: uniqueSorted(records.map((record) => getQuarterLevel(record, selectedQuarter))),
-      sessions: uniqueSorted(records.map((record) => getQuarterSession(record, selectedQuarter))),
+      sessions: uniqueSorted(sessions),
+      sessionDays: uniqueSessionDays(sessions),
+      sessionPeriods: uniqueSessionPeriods(sessions),
       quarters: assessmentQuarters,
       results: uniqueResults(records.map((record) => getQuarterResult(record, selectedQuarter)))
     };
   }
+
+  const sessions = records.flatMap((record) => [
+    record.session,
+    getQuarterSession(record, "Q1"),
+    getQuarterSession(record, "Q2")
+  ]);
 
   return {
     coaches: uniqueSorted(
@@ -572,13 +718,9 @@ export function getFilterOptions(
     levels: uniqueSorted(
       records.flatMap((record) => [record.level, getQuarterLevel(record, "Q1"), getQuarterLevel(record, "Q2")])
     ),
-    sessions: uniqueSorted(
-      records.flatMap((record) => [
-        record.session,
-        getQuarterSession(record, "Q1"),
-        getQuarterSession(record, "Q2")
-      ])
-    ),
+    sessions: uniqueSorted(sessions),
+    sessionDays: uniqueSessionDays(sessions),
+    sessionPeriods: uniqueSessionPeriods(sessions),
     quarters: assessmentQuarters,
     results: uniqueResults(records.flatMap((record) => [record.q1Result, record.q2Result]))
   };

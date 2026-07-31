@@ -6,7 +6,8 @@ import type {
   AssessmentQuarter,
   AssessmentResult,
   FilterOptions,
-  FlagStatus
+  FlagStatus,
+  SessionPeriod
 } from "@/types/assessment";
 
 type FiltersProps = {
@@ -82,18 +83,19 @@ export function Filters({ filters, options, allowAllCentres, onChange, onReset }
         />
 
         <SelectField
-          label="Concern"
-          value={filters.flag}
-          values={["All", "Red", "Yellow", "None"]}
-          labelForValue={concernLabel}
-          onChange={(value) => setFilter("flag", value as "All" | FlagStatus)}
+          label="Day"
+          value={filters.sessionDay}
+          values={["All", ...options.sessionDays]}
+          labelForValue={(value) => (value === "All" ? "All days" : value)}
+          onChange={(value) => setFilter("sessionDay", value)}
         />
 
         <SelectField
-          label="Session"
-          value={filters.session}
-          values={["All", ...options.sessions]}
-          onChange={(value) => setFilter("session", value)}
+          label="AM / PM"
+          value={filters.sessionPeriod}
+          values={["All", ...options.sessionPeriods]}
+          labelForValue={(value) => (value === "All" ? "All times" : value)}
+          onChange={(value) => setFilter("sessionPeriod", value as "All" | SessionPeriod)}
         />
 
         <SelectField
@@ -105,11 +107,27 @@ export function Filters({ filters, options, allowAllCentres, onChange, onReset }
         />
 
         <SelectField
+          label="Session"
+          value={filters.session}
+          values={["All", ...options.sessions]}
+          labelForValue={(value) => (value === "All" ? "All sessions" : value)}
+          onChange={(value) => setFilter("session", value)}
+        />
+
+        <SelectField
           label="Result"
           value={filters.result}
           values={["All", ...options.results]}
           labelForValue={resultLabel}
           onChange={(value) => setFilter("result", value as "All" | AssessmentResult)}
+        />
+
+        <SelectField
+          label="Concern"
+          value={filters.flag}
+          values={["All", "Red", "Yellow", "None"]}
+          labelForValue={concernLabel}
+          onChange={(value) => setFilter("flag", value as "All" | FlagStatus)}
         />
 
         <div className="flex items-end">

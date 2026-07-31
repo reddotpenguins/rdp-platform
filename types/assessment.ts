@@ -4,6 +4,8 @@ export type AssessmentQuarter = "Q1" | "Q2";
 
 export type AssessmentYear = string;
 
+export type SessionPeriod = "AM" | "PM";
+
 export type FlagStatus = "None" | "Yellow" | "Red";
 
 export type ActionRequired =
@@ -76,6 +78,8 @@ export type AssessmentFilters = {
   centre: string;
   level: string;
   session: string;
+  sessionDay: string;
+  sessionPeriod: "All" | SessionPeriod;
   flag: "All" | FlagStatus;
   quarter: "All" | AssessmentQuarter;
   result: "All" | AssessmentResult;
@@ -86,6 +90,8 @@ export type FilterOptions = {
   centres: string[];
   levels: string[];
   sessions: string[];
+  sessionDays: string[];
+  sessionPeriods: SessionPeriod[];
   quarters: AssessmentQuarter[];
   results: AssessmentResult[];
 };

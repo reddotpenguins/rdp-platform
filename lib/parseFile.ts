@@ -1,5 +1,10 @@
 import Papa from "papaparse";
-import { applyAssessmentLogic, normalizeAssessmentResult } from "@/lib/assessmentLogic";
+import {
+  applyAssessmentLogic,
+  getSessionDay,
+  getSessionPeriod,
+  normalizeAssessmentResult
+} from "@/lib/assessmentLogic";
 import type { StudentAssessmentRecord } from "@/types/assessment";
 
 type RawAssessmentRow = Record<string, unknown>;
@@ -46,6 +51,22 @@ const aliases = {
     "2026 Q1 Session",
     "2026 Q1 Session Time"
   ],
+  q1SessionDay: [
+    "Q1 Day",
+    "Q1 Session Day",
+    "Q1 Class Day",
+    "2026 Q1 Day",
+    "2026 Q1 Session Day"
+  ],
+  q1SessionPeriod: [
+    "Q1 AM/PM",
+    "Q1 AM PM",
+    "Q1 Period",
+    "Q1 Session Period",
+    "Q1 Time of Day",
+    "2026 Q1 AM/PM",
+    "2026 Q1 Period"
+  ],
   q2Session: [
     "Q2 Session",
     "Q2 Session Time",
@@ -55,6 +76,24 @@ const aliases = {
     "2026 Q2 Session",
     "2026 Q2 Session Time"
   ],
+  q2SessionDay: [
+    "Q2 Day",
+    "Q2 Session Day",
+    "Q2 Class Day",
+    "2026 Q2 Day",
+    "2026 Q2 Session Day"
+  ],
+  q2SessionPeriod: [
+    "Q2 AM/PM",
+    "Q2 AM PM",
+    "Q2 Period",
+    "Q2 Session Period",
+    "Q2 Time of Day",
+    "2026 Q2 AM/PM",
+    "2026 Q2 Period"
+  ],
+  sessionDay: ["Day", "Session Day", "Class Day", "Lesson Day", "Weekday"],
+  sessionPeriod: ["AM/PM", "AM PM", "Period", "Session Period", "Time of Day"],
   q1Result: ["Q1 Result", "2026 Q1", "Q1"],
   q2Result: ["Q2 Result", "2026 Q2", "Q2"],
   flagStatus: ["Flag Status", "Flag"],
@@ -150,6 +189,35 @@ function textValue(value: unknown) {
   return String(value ?? "").replace(/\uFEFF/g, "").trim();
 }
 
+function normalizeSessionDayLabel(value: string) {
+  return getSessionDay(value) || value;
+}
+
+function normalizeSessionPeriodLabel(value: string) {
+  return getSessionPeriod(value) || value.toUpperCase();
+}
+
+function combineSessionParts(session: string, day: string, period: string) {
+  const cleanedSession = textValue(session);
+  const cleanedDay = normalizeSessionDayLabel(textValue(day));
+  const cleanedPeriod = normalizeSessionPeriodLabel(textValue(period));
+  const parts: string[] = [];
+
+  if (cleanedDay && getSessionDay(cleanedSession) !== cleanedDay) {
+    parts.push(cleanedDay);
+  }
+
+  if (cleanedPeriod && getSessionPeriod(cleanedSession) !== cleanedPeriod) {
+    parts.push(cleanedPeriod);
+  }
+
+  if (cleanedSession) {
+    parts.push(cleanedSession);
+  }
+
+  return parts.join(" ").trim();
+}
+
 function recordId(studentName: string, rowIndex: number, assessmentYear: string) {
   const cleaned = studentName
     .toLowerCase()
@@ -212,6 +280,44 @@ export function parseAssessmentRows(
         pickQuarterField(row, "Q2", aliases.q2Level, ["Level", "Current Level"])
       );
       const session = textValue(pickValue(row, aliases.session));
+      const sessionDay = textValue(pickValue(row, aliases.sessionDay));
+      const sessionPeriod = textValue(pickValue(row, aliases.sessionPeriod));
+      const q1SessionDay = textValue(
+        pickQuarterField(row, "Q1", aliases.q1SessionDay, [
+          "Day",
+          "Session Day",
+          "Class Day",
+          "Lesson Day",
+          "Weekday"
+        ])
+      );
+      const q2SessionDay = textValue(
+        pickQuarterField(row, "Q2", aliases.q2SessionDay, [
+          "Day",
+          "Session Day",
+          "Class Day",
+          "Lesson Day",
+          "Weekday"
+        ])
+      );
+      const q1SessionPeriod = textValue(
+        pickQuarterField(row, "Q1", aliases.q1SessionPeriod, [
+          "AM/PM",
+          "AM PM",
+          "Period",
+          "Session Period",
+          "Time of Day"
+        ])
+      );
+      const q2SessionPeriod = textValue(
+        pickQuarterField(row, "Q2", aliases.q2SessionPeriod, [
+          "AM/PM",
+          "AM PM",
+          "Period",
+          "Session Period",
+          "Time of Day"
+        ])
+      );
       const q1Session = textValue(
         pickQuarterField(row, "Q1", aliases.q1Session, [
           "Session",
@@ -246,17 +352,27 @@ export function parseAssessmentRows(
         coachName,
         centre,
         level,
-        session: session || undefined,
+        session: combineSessionParts(session, sessionDay, sessionPeriod) || undefined,
         assessmentYear,
         q1CoachName: q1CoachName || coachName,
         q1Centre: q1Centre || centre,
         q1Level: q1Level || level,
-        q1Session: q1Session || session || undefined,
+        q1Session:
+          combineSessionParts(
+            q1Session || session,
+            q1SessionDay || sessionDay,
+            q1SessionPeriod || sessionPeriod
+          ) || undefined,
         q1Result: normalizeAssessmentResult(pickQuarterResult(row, "Q1")),
         q2CoachName: q2CoachName || coachName,
         q2Centre: q2Centre || centre,
         q2Level: q2Level || level,
-        q2Session: q2Session || session || undefined,
+        q2Session:
+          combineSessionParts(
+            q2Session || session,
+            q2SessionDay || sessionDay,
+            q2SessionPeriod || sessionPeriod
+          ) || undefined,
         q2Result: normalizeAssessmentResult(pickQuarterResult(row, "Q2")),
         sourceRow: rowIndex + 2,
         originalFlagStatus: originalFlagStatus || undefined,

@@ -243,6 +243,17 @@ function sanitizeFiltersForOptions(
     nextFilters.session = "All";
   }
 
+  if (nextFilters.sessionDay !== "All" && !options.sessionDays.includes(nextFilters.sessionDay)) {
+    nextFilters.sessionDay = "All";
+  }
+
+  if (
+    nextFilters.sessionPeriod !== "All" &&
+    !options.sessionPeriods.includes(nextFilters.sessionPeriod)
+  ) {
+    nextFilters.sessionPeriod = "All";
+  }
+
   if (
     nextFilters.result !== "All" &&
     !options.results.includes(nextFilters.result as AssessmentResult)
@@ -279,6 +290,8 @@ function filtersAreEqual(first: AssessmentFilters, second: AssessmentFilters) {
     first.centre === second.centre &&
     first.level === second.level &&
     first.session === second.session &&
+    first.sessionDay === second.sessionDay &&
+    first.sessionPeriod === second.sessionPeriod &&
     first.flag === second.flag &&
     first.quarter === second.quarter &&
     first.result === second.result
