@@ -4,7 +4,7 @@ import clsx from "clsx";
 import { Download, Printer, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 import { downloadCsv, type ExportColumn, printTable } from "@/lib/tableExport";
-import type { QuarterAssessmentRow } from "@/types/assessment";
+import type { AssessmentQuarter, QuarterAssessmentRow } from "@/types/assessment";
 
 type QuarterStudentTableProps = {
   rows: QuarterAssessmentRow[];
@@ -62,11 +62,19 @@ function flagLabel(row: QuarterAssessmentRow) {
   return "No immediate concern";
 }
 
-function resultBadge(result: string) {
+function resultBadge(result: string, quarter: AssessmentQuarter) {
+  const isQ2 = quarter === "Q2";
+
   return clsx(
     "inline-flex min-w-20 justify-center rounded-md border px-2 py-1 text-xs font-semibold",
-    result === "Pass" && "border-teal/30 bg-teal/10 text-teal",
-    result === "Fail" && "border-coral/30 bg-coral/10 text-coral",
+    result === "Pass" &&
+      (isQ2
+        ? "border-green-300 bg-green-50 text-green-700"
+        : "border-green-500/40 bg-green-100 text-green-800"),
+    result === "Fail" &&
+      (isQ2
+        ? "border-red-300 bg-red-50 text-red-700"
+        : "border-red-500/40 bg-red-100 text-red-800"),
     result === "Absent" && "border-slate-300 bg-slate-100 text-slate-600",
     result === "Not Assessed" && "border-slate-300 bg-slate-100 text-slate-600",
     !result && "border-slate-200 bg-paper text-slate-400"
@@ -189,7 +197,7 @@ export function QuarterStudentTable({ rows }: QuarterStudentTableProps) {
                 className={clsx(
                   "align-top transition hover:bg-teal/5",
                   row.flagStatus === "Yellow" && "bg-yellow-50",
-                  row.flagStatus === "Red" && "bg-red-50"
+                  row.flagStatus === "Red" && "bg-orange-50"
                 )}
               >
                 <td className="border-b border-line px-4 py-3 font-medium text-ink">
@@ -201,15 +209,18 @@ export function QuarterStudentTable({ rows }: QuarterStudentTableProps) {
                 <td className="border-b border-line px-4 py-3">{row.session}</td>
                 <td className="max-w-72 border-b border-line px-4 py-3">{row.level}</td>
                 <td className="border-b border-line px-4 py-3">
-                  <span className={resultBadge(row.result)}>{row.result || "Blank"}</span>
+                  <span className={resultBadge(row.result, row.quarter)}>
+                    {row.result || "Blank"}
+                  </span>
                 </td>
                 <td className="border-b border-line px-4 py-3">
                   <span
                     className={clsx(
                       "inline-flex rounded-md border px-2 py-1 text-xs font-semibold",
-                      row.flagStatus === "Red" && "border-red-300 bg-red-100 text-red-700",
+                      row.flagStatus === "Red" &&
+                        "border-orange-300 bg-orange-100 text-orange-700",
                       row.flagStatus === "Yellow" &&
-                        "border-amber/40 bg-amber/15 text-yellow-800",
+                        "border-yellow-300 bg-yellow-100 text-yellow-800",
                       row.flagStatus === "None" && "border-slate-200 bg-paper text-slate-600"
                     )}
                   >

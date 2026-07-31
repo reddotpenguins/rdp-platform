@@ -16,9 +16,9 @@ export function QuarterSummaryTable({ summaries }: QuarterSummaryTableProps) {
         </p>
       </div>
 
-      <div className="w-full overflow-x-auto">
+      <div className="max-h-[620px] w-full overflow-auto">
         <table className="min-w-full border-separate border-spacing-0 text-left text-sm">
-          <thead className="bg-paper text-xs uppercase text-slate-500">
+          <thead className="sticky top-0 z-10 bg-paper text-xs uppercase text-slate-500">
             <tr>
               {[
                 "Quarter",
@@ -51,15 +51,19 @@ export function QuarterSummaryTable({ summaries }: QuarterSummaryTableProps) {
                 <td className="border-b border-line px-4 py-3">{summary.coachName}</td>
                 <td className="border-b border-line px-4 py-3">{summary.totalStudents}</td>
                 <td className="border-b border-line px-4 py-3">{summary.assessedCount}</td>
-                <td className="border-b border-line px-4 py-3">{summary.passCount}</td>
-                <td className="border-b border-line px-4 py-3">{summary.failCount}</td>
+                <td className="border-b border-line px-4 py-3 font-semibold text-green-700">
+                  {summary.passCount}
+                </td>
+                <td className="border-b border-line px-4 py-3 font-semibold text-red-700">
+                  {summary.failCount}
+                </td>
                 <td className="border-b border-line px-4 py-3">
                   {formatPercent(summary.passRate)}
                 </td>
-                <td className="border-b border-line px-4 py-3 text-yellow-800">
+                <td className="border-b border-line px-4 py-3 font-semibold text-yellow-800">
                   {summary.yellowFlagCount}
                 </td>
-                <td className="border-b border-line px-4 py-3 text-red-700">
+                <td className="border-b border-line px-4 py-3 font-semibold text-orange-700">
                   {summary.redFlagCount}
                 </td>
                 <td className="border-b border-line px-4 py-3">
@@ -67,9 +71,9 @@ export function QuarterSummaryTable({ summaries }: QuarterSummaryTableProps) {
                     className={clsx(
                       "inline-flex rounded-md border px-2 py-1 text-xs font-semibold",
                       summary.suggestedAction === "Intervention Review" &&
-                        "border-red-300 bg-red-50 text-red-700",
+                        "border-orange-300 bg-orange-100 text-orange-700",
                       summary.suggestedAction === "Monitor" &&
-                        "border-amber/40 bg-amber/10 text-yellow-800",
+                        "border-yellow-300 bg-yellow-100 text-yellow-800",
                       summary.suggestedAction === "No immediate concern" &&
                         "border-slate-200 bg-paper text-slate-600"
                     )}

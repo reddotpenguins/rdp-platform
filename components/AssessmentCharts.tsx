@@ -21,14 +21,29 @@ type AssessmentChartsProps = {
   selectedQuarter: "All" | AssessmentQuarter;
 };
 
+type PassRateDatum = {
+  quarter: AssessmentQuarter;
+  passRate: number;
+};
+
+type PassFailDatum = {
+  quarter: AssessmentQuarter;
+  Pass: number;
+  Fail: number;
+};
+
 const colors = {
-  q1: "#ef562d",
-  q2: "#f59e0b",
-  pass: "#ef562d",
-  fail: "#c2410c",
-  none: "#d7bda5",
-  yellow: "#f59e0b",
-  red: "#c2410c"
+  pass: {
+    q1: "#15803d",
+    q2: "#4ade80"
+  },
+  fail: {
+    q1: "#b91c1c",
+    q2: "#f87171"
+  },
+  none: "#cbd5e1",
+  monitor: "#facc15",
+  immediate: "#f97316"
 };
 
 function percentTick(value: number) {
@@ -47,15 +62,18 @@ export function AssessmentCharts({
   const showQ1 = selectedQuarter === "All" || selectedQuarter === "Q1";
   const showQ2 = selectedQuarter === "All" || selectedQuarter === "Q2";
   const selectedQuarterLabel = selectedQuarter === "All" ? "Q1 vs Q2" : selectedQuarter;
-  const passRateData = [
-    ...(showQ1 ? [{ quarter: "Q1", passRate: Math.round(metrics.q1.passRate * 100) }] : []),
-    ...(showQ2 ? [{ quarter: "Q2", passRate: Math.round(metrics.q2.passRate * 100) }] : [])
-  ];
+  const passRateData: PassRateDatum[] = [];
+  const passFailData: PassFailDatum[] = [];
 
-  const passFailData = [
-    ...(showQ1 ? [{ quarter: "Q1", Pass: metrics.q1.passCount, Fail: metrics.q1.failCount }] : []),
-    ...(showQ2 ? [{ quarter: "Q2", Pass: metrics.q2.passCount, Fail: metrics.q2.failCount }] : [])
-  ];
+  if (showQ1) {
+    passRateData.push({ quarter: "Q1", passRate: Math.round(metrics.q1.passRate * 100) });
+    passFailData.push({ quarter: "Q1", Pass: metrics.q1.passCount, Fail: metrics.q1.failCount });
+  }
+
+  if (showQ2) {
+    passRateData.push({ quarter: "Q2", passRate: Math.round(metrics.q2.passRate * 100) });
+    passFailData.push({ quarter: "Q2", Pass: metrics.q2.passCount, Fail: metrics.q2.failCount });
+  }
 
   const flagData = [
     {
@@ -66,8 +84,8 @@ export function AssessmentCharts({
           : 0,
       color: colors.none
     },
-    { name: "Monitor", value: metrics.yellowFlagCount, color: colors.yellow },
-    { name: "Immediate concern", value: metrics.redFlagCount, color: colors.red }
+    { name: "Monitor", value: metrics.yellowFlagCount, color: colors.monitor },
+    { name: "Immediate concern", value: metrics.redFlagCount, color: colors.immediate }
   ];
 
   const coachChartData = coachSummaries
@@ -111,7 +129,7 @@ export function AssessmentCharts({
     .slice(0, 12)
     .map((summary) => ({
       coach: chartCoachName(summary.coachName),
-      Red: summary.redFlagCount
+      Immediate: summary.redFlagCount
     }));
 
   return (
@@ -123,11 +141,14 @@ export function AssessmentCharts({
             <XAxis dataKey="quarter" />
             <YAxis tickFormatter={percentTick} domain={[0, 100]} />
             <Tooltip formatter={(value) => `${value}%`} />
-            <Bar
-              dataKey="passRate"
-              fill={selectedQuarter === "Q2" ? colors.q2 : colors.q1}
-              radius={[4, 4, 0, 0]}
-            />
+            <Bar dataKey="passRate" radius={[4, 4, 0, 0]}>
+              {passRateData.map((entry) => (
+                <Cell
+                  key={`pass-rate-${entry.quarter}`}
+                  fill={getQuarterPassColor(entry.quarter)}
+                />
+              ))}
+            </Bar>
           </BarChart>
         </ResponsiveContainer>
       </ChartPanel>
@@ -140,8 +161,16 @@ export function AssessmentCharts({
             <YAxis allowDecimals={false} />
             <Tooltip />
             <Legend />
-            <Bar dataKey="Pass" fill={colors.pass} radius={[4, 4, 0, 0]} />
-            <Bar dataKey="Fail" fill={colors.fail} radius={[4, 4, 0, 0]} />
+            <Bar dataKey="Pass" radius={[4, 4, 0, 0]}>
+              {passFailData.map((entry) => (
+                <Cell key={`pass-${entry.quarter}`} fill={getQuarterPassColor(entry.quarter)} />
+              ))}
+            </Bar>
+            <Bar dataKey="Fail" radius={[4, 4, 0, 0]}>
+              {passFailData.map((entry) => (
+                <Cell key={`fail-${entry.quarter}`} fill={getQuarterFailColor(entry.quarter)} />
+              ))}
+            </Bar>
           </BarChart>
         </ResponsiveContainer>
       </ChartPanel>
@@ -169,10 +198,10 @@ export function AssessmentCharts({
             <Tooltip formatter={(value) => `${value}%`} />
             <Legend />
             {showQ1 ? (
-              <Bar dataKey="Q1 Pass Rate" fill={colors.q1} radius={[4, 4, 0, 0]} />
+              <Bar dataKey="Q1 Pass Rate" fill={colors.pass.q1} radius={[4, 4, 0, 0]} />
             ) : null}
             {showQ2 ? (
-              <Bar dataKey="Q2 Pass Rate" fill={colors.q2} radius={[4, 4, 0, 0]} />
+              <Bar dataKey="Q2 Pass Rate" fill={colors.pass.q2} radius={[4, 4, 0, 0]} />
             ) : null}
           </BarChart>
         </ResponsiveContainer>
@@ -185,7 +214,11 @@ export function AssessmentCharts({
             <XAxis dataKey="coach" angle={-25} textAnchor="end" interval={0} height={62} />
             <YAxis allowDecimals={false} />
             <Tooltip />
-            <Bar dataKey="Fail" fill={colors.fail} radius={[4, 4, 0, 0]} />
+            <Bar
+              dataKey="Fail"
+              fill={selectedQuarter === "Q2" ? colors.fail.q2 : colors.fail.q1}
+              radius={[4, 4, 0, 0]}
+            />
           </BarChart>
         </ResponsiveContainer>
       </ChartPanel>
@@ -197,12 +230,20 @@ export function AssessmentCharts({
             <XAxis dataKey="coach" angle={-25} textAnchor="end" interval={0} height={62} />
             <YAxis allowDecimals={false} />
             <Tooltip />
-            <Bar dataKey="Red" fill={colors.red} radius={[4, 4, 0, 0]} />
+            <Bar dataKey="Immediate" fill={colors.immediate} radius={[4, 4, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </ChartPanel>
     </section>
   );
+}
+
+function getQuarterPassColor(quarter: AssessmentQuarter) {
+  return quarter === "Q2" ? colors.pass.q2 : colors.pass.q1;
+}
+
+function getQuarterFailColor(quarter: AssessmentQuarter) {
+  return quarter === "Q2" ? colors.fail.q2 : colors.fail.q1;
 }
 
 function getSummaryFailCount(summary: CoachSummary, selectedQuarter: "All" | AssessmentQuarter) {
