@@ -1,4 +1,4 @@
-Student Name,Q1 Coach,Q1 Centre,Q1 Level,Q1 Session,Q1 Result,Q2 Coach,Q2 Centre,Q2 Level,Q2 Session,Q2 Result
-Demo Student 01,Coach A,Demo Centre 1,"Beginner (Br1, Br2, Br3)",3.45pm to 4.30pm,Fail,Coach A,Demo Centre 1,"Beginner (Br1, Br2, Br3)",3.45pm to 4.30pm,Fail
-Demo Student 02,Coach A,Demo Centre 1,"Beginner (Br1, Br2, Br3)",3.45pm to 4.30pm,Pass,Coach B,Demo Centre 2,"Intermediate (Br4, Br5, Br6)",4.30pm to 5.15pm,Fail
-Demo Student 03,Coach B,Demo Centre 2,"Intermediate (Br4, Br5, Br6)",4.30pm to 5.15pm,Pass,Coach B,Demo Centre 2,"Intermediate (Br4, Br5, Br6)",4.30pm to 5.15pm,Pass
+Student Name,Q1 Coach,Q1 Centre,Q1 Level,Q1 Day,Q1 AM/PM,Q1 Session,Q1 Result,Q2 Coach,Q2 Centre,Q2 Level,Q2 Day,Q2 AM/PM,Q2 Session,Q2 Result
+Demo Student 01,Coach A,Demo Centre 1,"Beginner (Br1, Br2, Br3)",Saturday,PM,3.45pm to 4.30pm,Fail,Coach A,Demo Centre 1,"Beginner (Br1, Br2, Br3)",Saturday,PM,3.45pm to 4.30pm,Fail
+Demo Student 02,Coach A,Demo Centre 1,"Beginner (Br1, Br2, Br3)",Saturday,PM,3.45pm to 4.30pm,Pass,Coach B,Demo Centre 2,"Intermediate (Br4, Br5, Br6)",Sunday,AM,9.00am to 9.45am,Fail
+Demo Student 03,Coach B,Demo Centre 2,"Intermediate (Br4, Br5, Br6)",Sunday,AM,9.00am to 9.45am,Pass,Coach B,Demo Centre 2,"Intermediate (Br4, Br5, Br6)",Sunday,AM,9.00am to 9.45am,Pass

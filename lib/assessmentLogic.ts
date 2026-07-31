@@ -606,7 +606,15 @@ function uniqueSorted(values: Array<string | undefined>) {
 }
 
 function uniqueSessionDays(values: Array<string | undefined>) {
-  return Array.from(new Set(values.map((value) => getSessionDay(value ?? "")).filter(Boolean))).sort((a, b) => {
+  const detectedDays = Array.from(
+    new Set(values.map((value) => getSessionDay(value ?? "")).filter(Boolean))
+  );
+
+  if (detectedDays.length === 0) {
+    return sessionDayOrder;
+  }
+
+  return detectedDays.sort((a, b) => {
     const firstIndex = sessionDayOrder.indexOf(a);
     const secondIndex = sessionDayOrder.indexOf(b);
 

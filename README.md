@@ -224,7 +224,7 @@ The parser maps similar column names, including:
 
 Optional fields such as centre and level can be missing.
 
-Quarter-specific coach, centre, level, and session fields are kept separately so student movement across coaches, centres, and session timings can be reviewed later. If day or AM/PM fields are supplied separately, they are folded into the session label for filtering.
+Quarter-specific coach, centre, level, and session fields are kept separately so student movement across coaches, centres, and session timings can be reviewed later. If day or AM/PM fields are supplied separately, they are folded into the session label for filtering. The dashboard shows weekday choices in the Day filter; rows will match those choices when the uploaded session information includes a day such as `Saturday`, `Sun`, or a separate `Q1 Day` / `Q2 Day` column.
 
 A sample upload template is available at:
 
