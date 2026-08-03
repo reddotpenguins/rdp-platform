@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { createOptionalSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { isStaffRole, type StaffRole } from "@/lib/staffRoles";
 import { requireActiveStaffSession } from "@/lib/supabase/staffProfile";
@@ -102,6 +103,44 @@ export async function updateStaffProfileAction(formData: FormData) {
   redirectWithSuccess("Staff profile updated.");
 }
 
+export async function deleteStaffProfileAction(formData: FormData) {
+  const { profile: currentProfile } = await requireAdminProfile();
+  const staffProfileId = getRequiredText(formData, "staffProfileId");
+
+  if (currentProfile.id === staffProfileId) {
+    redirectWithError("You cannot delete your own current admin profile.");
+  }
+
+  const adminClient = createOptionalSupabaseAdminClient();
+
+  if (adminClient) {
+    const { error: authDeleteError } = await adminClient.auth.admin.deleteUser(staffProfileId);
+
+    if (!authDeleteError) {
+      revalidateStaffPages();
+      redirectWithSuccess("User deleted.");
+    }
+
+    if (!isMissingAuthUserError(authDeleteError.message)) {
+      redirectWithError(authDeleteError.message);
+    }
+  }
+
+  const supabase = createClient();
+  const { error } = await supabase.from("staff_profiles").delete().eq("id", staffProfileId);
+
+  if (error) {
+    redirectWithError(error.message);
+  }
+
+  revalidateStaffPages();
+  redirectWithSuccess(
+    adminClient
+      ? "Staff access removed. The Supabase Auth login was already missing."
+      : "Staff access removed. Add SUPABASE_SERVICE_ROLE_KEY in Vercel to delete the Supabase Auth login too."
+  );
+}
+
 async function requireAdminProfile() {
   const session = await requireActiveStaffSession();
 
@@ -138,6 +177,14 @@ async function replaceStaffCentres(
   );
 
   return insertError?.message ?? null;
+}
+
+function revalidateStaffPages() {
+  revalidatePath("/rba");
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/quarter");
+  revalidatePath("/upload");
+  revalidatePath("/enquiries");
 }
 
 function getStaffRole(formData: FormData): StaffRole {
@@ -183,6 +230,12 @@ function getStaffProfileErrorMessage(message = "Unable to save staff profile.") 
   }
 
   return message;
+}
+
+function isMissingAuthUserError(message: string) {
+  const normalized = message.toLowerCase();
+
+  return normalized.includes("not found") || normalized.includes("does not exist");
 }
 
 function redirectWithError(message: string): never {

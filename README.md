@@ -113,7 +113,7 @@ signed_up
 closed
 ```
 
-To reduce duplicate tickets, Make.com should upsert by `google_sheet_row_id` when the row comes from Google Sheets, or by `respondio_conversation_id` when the row comes straight from respond.io. Keep the Supabase service role key only inside Make.com; do not put it in the website or Vercel public environment variables.
+To reduce duplicate tickets, Make.com should upsert by `google_sheet_row_id` when the row comes from Google Sheets, or by `respondio_conversation_id` when the row comes straight from respond.io. Keep the Supabase service role key only in trusted server-side places such as Make.com or a private Vercel environment variable; never put it in a `NEXT_PUBLIC_` variable.
 
 Then create admin, lead coach, or coach login users in **Authentication -> Users** inside Supabase and add a matching staff profile row. Auth users hold the password; staff profiles hold the app role.
 
@@ -247,10 +247,13 @@ Add these Vercel environment variables for Production, Preview, and Development:
 ```text
 NEXT_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your-publishable-key
+SUPABASE_SERVICE_ROLE_KEY=your-private-service-role-key
 ENABLE_EXPERIMENTAL_COREPACK=1
 ```
 
 `ENABLE_EXPERIMENTAL_COREPACK=1` tells Vercel to use the pnpm version pinned in `package.json`.
+
+`SUPABASE_SERVICE_ROLE_KEY` is private and optional, but recommended. It lets the admin-only RBA delete button remove the Supabase Auth login account as well as the staff profile. Without it, the button removes website access only.
 
 ## Default Dataset
 

@@ -10,11 +10,16 @@ import {
   CircleOff,
   Save,
   ShieldCheck,
+  Trash2,
   UserPlus,
   Users,
   type LucideIcon
 } from "lucide-react";
-import { createStaffProfileAction, updateStaffProfileAction } from "@/app/rba/actions";
+import {
+  createStaffProfileAction,
+  deleteStaffProfileAction,
+  updateStaffProfileAction
+} from "@/app/rba/actions";
 import { SignOutButton } from "@/components/SignOutButton";
 import { formatStaffRole, staffRoles, type StaffManagementProfile } from "@/lib/staffRoles";
 
@@ -224,7 +229,15 @@ function StaffProfileRow({
         ) : null}
       </td>
       <td className="border-b border-line px-4 py-3">
-        <SubmitButton label="Save" icon="save" form={`profile-${profile.id}`} />
+        <div className="flex w-36 flex-col gap-2">
+          <SubmitButton label="Save" icon="save" form={`profile-${profile.id}`} />
+          {!isCurrentAdmin ? (
+            <form action={deleteStaffProfileAction}>
+              <input name="staffProfileId" type="hidden" value={profile.id} />
+              <DeleteButton staffName={profile.fullName} />
+            </form>
+          ) : null}
+        </div>
       </td>
     </tr>
   );
@@ -371,6 +384,26 @@ function SubmitButton({
     >
       <Icon aria-hidden="true" className="size-4" />
       {pending ? "Saving..." : label}
+    </button>
+  );
+}
+
+function DeleteButton({ staffName }: { staffName: string }) {
+  const { pending } = useFormStatus();
+
+  return (
+    <button
+      type="submit"
+      disabled={pending}
+      onClick={(event) => {
+        if (!window.confirm(`Delete ${staffName}'s website access?`)) {
+          event.preventDefault();
+        }
+      }}
+      className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md border border-red-200 bg-red-50 px-3 text-sm font-semibold text-red-700 transition hover:border-red-300 hover:bg-red-100 disabled:cursor-wait disabled:opacity-70"
+    >
+      <Trash2 aria-hidden="true" className="size-4" />
+      {pending ? "Deleting..." : "Delete"}
     </button>
   );
 }

@@ -133,7 +133,19 @@ create policy "Admins can update staff profiles"
   using (public.current_staff_role() = 'admin')
   with check (public.current_staff_role() = 'admin');
 
-grant select, insert, update on public.staff_profiles to authenticated;
+drop policy if exists "Admins can delete staff profiles"
+  on public.staff_profiles;
+
+create policy "Admins can delete staff profiles"
+  on public.staff_profiles
+  for delete
+  to authenticated
+  using (
+    public.current_staff_role() = 'admin'
+    and id <> (select auth.uid())
+  );
+
+grant select, insert, update, delete on public.staff_profiles to authenticated;
 
 alter table public.staff_profile_centres enable row level security;
 
