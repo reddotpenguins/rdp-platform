@@ -33,6 +33,7 @@ The dashboard uses Supabase Auth for login and reads uploaded assessment rows fr
 
 ```text
 public.assessment_import_rows
+public.customer_enquiries
 ```
 
 For the current prototype, run this file in Supabase SQL Editor after creating the tables:
@@ -56,6 +57,63 @@ How access works:
 - `admin`: can see and manage all assessment rows.
 - `lead_coach`: can see and upload rows only for assigned centres in `staff_profile_centres`.
 - `coach`: can see their own assessment rows by `coach_email`, or by exact `coach_name` when email is blank.
+
+The same role rules protect the `/enquiries` page:
+
+- `admin`: can see and update all customer enquiry tickets.
+- `lead_coach`: can see and update enquiry tickets for assigned centres.
+- `coach`: cannot access enquiry tickets.
+
+## Enquiry, Trial, and Sign-Up Tickets
+
+The `/enquiries` page reads from:
+
+```text
+public.customer_enquiries
+```
+
+Use Make.com to keep your current respond.io to Google Sheets workflow, then add one more Make.com step to upsert into Supabase `customer_enquiries`.
+
+Recommended Make.com field mapping:
+
+```text
+parent_name
+phone
+email
+child_name
+child_age
+centre_name
+programme
+enquiry_type
+status
+source
+message
+assigned_to
+notes
+respondio_contact_id
+respondio_conversation_id
+google_sheet_row_id
+```
+
+Use these `enquiry_type` values:
+
+```text
+enquiry
+trial
+sign_up
+```
+
+Use these `status` values:
+
+```text
+new
+contacted
+trial_booked
+signed_up
+closed
+```
+
+To reduce duplicate tickets, Make.com should upsert by `google_sheet_row_id` when the row comes from Google Sheets, or by `respondio_conversation_id` when the row comes straight from respond.io. Keep the Supabase service role key only inside Make.com; do not put it in the website or Vercel public environment variables.
 
 Then create admin, lead coach, or coach login users in **Authentication -> Users** inside Supabase and add a matching staff profile row. Auth users hold the password; staff profiles hold the app role.
 

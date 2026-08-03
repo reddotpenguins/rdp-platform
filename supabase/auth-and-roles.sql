@@ -398,3 +398,180 @@ create policy "Admins and lead coaches can delete assessment rows"
   );
 
 grant select, insert, update, delete on public.assessment_import_rows to authenticated;
+
+create table if not exists public.customer_enquiries (
+  id uuid primary key default gen_random_uuid(),
+  parent_name text not null,
+  phone text,
+  email text,
+  child_name text,
+  child_age text,
+  centre_name text,
+  programme text,
+  enquiry_type text not null default 'enquiry',
+  status text not null default 'new',
+  source text default 'respond.io',
+  message text,
+  assigned_to text,
+  notes text,
+  respondio_contact_id text,
+  respondio_conversation_id text,
+  google_sheet_row_id text,
+  closed_at timestamptz,
+  closed_by uuid references public.staff_profiles(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table public.customer_enquiries
+  add column if not exists parent_name text,
+  add column if not exists phone text,
+  add column if not exists email text,
+  add column if not exists child_name text,
+  add column if not exists child_age text,
+  add column if not exists centre_name text,
+  add column if not exists programme text,
+  add column if not exists enquiry_type text default 'enquiry',
+  add column if not exists status text default 'new',
+  add column if not exists source text default 'respond.io',
+  add column if not exists message text,
+  add column if not exists assigned_to text,
+  add column if not exists notes text,
+  add column if not exists respondio_contact_id text,
+  add column if not exists respondio_conversation_id text,
+  add column if not exists google_sheet_row_id text,
+  add column if not exists closed_at timestamptz,
+  add column if not exists closed_by uuid references public.staff_profiles(id) on delete set null,
+  add column if not exists created_at timestamptz default now(),
+  add column if not exists updated_at timestamptz default now();
+
+update public.customer_enquiries
+set enquiry_type = 'enquiry'
+where enquiry_type is null
+  or enquiry_type not in ('enquiry', 'trial', 'sign_up');
+
+update public.customer_enquiries
+set status = 'new'
+where status is null
+  or status not in ('new', 'contacted', 'trial_booked', 'signed_up', 'closed');
+
+alter table public.customer_enquiries
+  alter column parent_name set not null,
+  alter column enquiry_type set not null,
+  alter column status set not null,
+  alter column created_at set default now(),
+  alter column created_at set not null,
+  alter column updated_at set default now(),
+  alter column updated_at set not null;
+
+alter table public.customer_enquiries
+drop constraint if exists customer_enquiries_enquiry_type_check;
+
+alter table public.customer_enquiries
+add constraint customer_enquiries_enquiry_type_check
+check (enquiry_type in ('enquiry', 'trial', 'sign_up'));
+
+alter table public.customer_enquiries
+drop constraint if exists customer_enquiries_status_check;
+
+alter table public.customer_enquiries
+add constraint customer_enquiries_status_check
+check (status in ('new', 'contacted', 'trial_booked', 'signed_up', 'closed'));
+
+create unique index if not exists customer_enquiries_google_sheet_row_id_key
+  on public.customer_enquiries (google_sheet_row_id);
+
+create unique index if not exists customer_enquiries_respondio_conversation_id_key
+  on public.customer_enquiries (respondio_conversation_id);
+
+create index if not exists customer_enquiries_status_idx
+  on public.customer_enquiries (status);
+
+create index if not exists customer_enquiries_centre_name_idx
+  on public.customer_enquiries (lower(trim(centre_name)));
+
+create index if not exists customer_enquiries_created_at_idx
+  on public.customer_enquiries (created_at desc);
+
+create or replace function public.set_customer_enquiries_updated_at()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$;
+
+drop trigger if exists set_customer_enquiries_updated_at
+  on public.customer_enquiries;
+
+create trigger set_customer_enquiries_updated_at
+before update on public.customer_enquiries
+for each row
+execute function public.set_customer_enquiries_updated_at();
+
+alter table public.customer_enquiries enable row level security;
+
+drop policy if exists "Staff can read permitted customer enquiries"
+  on public.customer_enquiries;
+
+create policy "Staff can read permitted customer enquiries"
+  on public.customer_enquiries
+  for select
+  to authenticated
+  using (
+    public.current_staff_role() = 'admin'
+    or (
+      public.current_staff_role() = 'lead_coach'
+      and public.current_staff_has_centre(centre_name)
+    )
+  );
+
+drop policy if exists "Admins and lead coaches can insert customer enquiries"
+  on public.customer_enquiries;
+
+create policy "Admins and lead coaches can insert customer enquiries"
+  on public.customer_enquiries
+  for insert
+  to authenticated
+  with check (
+    public.current_staff_role() = 'admin'
+    or (
+      public.current_staff_role() = 'lead_coach'
+      and public.current_staff_has_centre(centre_name)
+    )
+  );
+
+drop policy if exists "Admins and lead coaches can update customer enquiries"
+  on public.customer_enquiries;
+
+create policy "Admins and lead coaches can update customer enquiries"
+  on public.customer_enquiries
+  for update
+  to authenticated
+  using (
+    public.current_staff_role() = 'admin'
+    or (
+      public.current_staff_role() = 'lead_coach'
+      and public.current_staff_has_centre(centre_name)
+    )
+  )
+  with check (
+    public.current_staff_role() = 'admin'
+    or (
+      public.current_staff_role() = 'lead_coach'
+      and public.current_staff_has_centre(centre_name)
+    )
+  );
+
+drop policy if exists "Admins can delete customer enquiries"
+  on public.customer_enquiries;
+
+create policy "Admins can delete customer enquiries"
+  on public.customer_enquiries
+  for delete
+  to authenticated
+  using (public.current_staff_role() = 'admin');
+
+grant select, insert, update, delete on public.customer_enquiries to authenticated;

@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ArrowLeft, ShieldCheck } from "lucide-react";
+import { ArrowLeft, Inbox, ShieldCheck } from "lucide-react";
 import { FileUpload } from "@/components/FileUpload";
 import { SignOutButton } from "@/components/SignOutButton";
-import { canUploadAssessmentData } from "@/lib/staffRoles";
+import { canManageCustomerEnquiries, canUploadAssessmentData } from "@/lib/staffRoles";
 import { requireActiveStaffSession } from "@/lib/supabase/staffProfile";
 
 export const dynamic = "force-dynamic";
@@ -30,6 +30,15 @@ export default async function UploadPage() {
             <ArrowLeft aria-hidden="true" className="size-4" />
             Dashboard
           </Link>
+          {canManageCustomerEnquiries(profile) ? (
+            <Link
+              href="/enquiries"
+              className="inline-flex h-10 items-center gap-2 rounded-md border border-line bg-paper px-3 text-sm font-semibold text-slate-700 transition hover:border-teal hover:text-teal"
+            >
+              <Inbox aria-hidden="true" className="size-4" />
+              Enquiries
+            </Link>
+          ) : null}
           {profile.role === "admin" ? (
             <Link
               href="/rba"

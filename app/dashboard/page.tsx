@@ -1,5 +1,9 @@
 import { DashboardClient } from "@/components/DashboardClient";
-import { canUploadAssessmentData, getCentreFilterAccess } from "@/lib/staffRoles";
+import {
+  canManageCustomerEnquiries,
+  canUploadAssessmentData,
+  getCentreFilterAccess
+} from "@/lib/staffRoles";
 import { getInitialAssessmentDataset } from "@/lib/supabase/assessmentData";
 import { requireActiveStaffSession } from "@/lib/supabase/staffProfile";
 
@@ -13,6 +17,7 @@ export default async function DashboardPage() {
     <DashboardClient
       initialRecords={dataset.records}
       canUpload={canUploadAssessmentData(profile)}
+      canManageEnquiries={canManageCustomerEnquiries(profile)}
       canManageStaff={profile.role === "admin"}
       centreFilterAccess={getCentreFilterAccess(profile)}
       view="coach"

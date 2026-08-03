@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { FileUp, RefreshCcw, ShieldCheck } from "lucide-react";
+import { FileUp, Inbox, RefreshCcw, ShieldCheck } from "lucide-react";
 import { AssessmentCharts } from "@/components/AssessmentCharts";
 import { CoachSummaryTable } from "@/components/CoachSummaryTable";
 import { Filters } from "@/components/Filters";
@@ -32,6 +32,7 @@ import type {
 type DashboardClientProps = {
   initialRecords: StudentAssessmentRecord[];
   canUpload: boolean;
+  canManageEnquiries?: boolean;
   canManageStaff?: boolean;
   centreFilterAccess: CentreFilterAccess;
   view?: "coach" | "quarter";
@@ -40,6 +41,7 @@ type DashboardClientProps = {
 export function DashboardClient({
   initialRecords,
   canUpload,
+  canManageEnquiries = false,
   canManageStaff = false,
   centreFilterAccess,
   view = "coach"
@@ -107,6 +109,15 @@ export function DashboardClient({
             >
               <FileUp aria-hidden="true" className="size-4" />
               Upload data
+            </Link>
+          ) : null}
+          {canManageEnquiries ? (
+            <Link
+              href="/enquiries"
+              className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-md border border-line bg-paper px-3 text-sm font-semibold text-slate-700 transition hover:border-teal hover:text-teal sm:flex-none"
+            >
+              <Inbox aria-hidden="true" className="size-4" />
+              Enquiries
             </Link>
           ) : null}
           {canManageStaff ? (
