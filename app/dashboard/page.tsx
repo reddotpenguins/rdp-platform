@@ -13,6 +13,7 @@ export default async function DashboardPage() {
     <DashboardClient
       initialRecords={dataset.records}
       canUpload={canUploadAssessmentData(profile)}
+      canManageStaff={profile.role === "admin"}
       centreFilterAccess={getCentreFilterAccess(profile)}
       view="coach"
     />

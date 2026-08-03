@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { FileUp, RefreshCcw } from "lucide-react";
+import { FileUp, RefreshCcw, ShieldCheck } from "lucide-react";
 import { AssessmentCharts } from "@/components/AssessmentCharts";
 import { CoachSummaryTable } from "@/components/CoachSummaryTable";
 import { Filters } from "@/components/Filters";
@@ -32,6 +32,7 @@ import type {
 type DashboardClientProps = {
   initialRecords: StudentAssessmentRecord[];
   canUpload: boolean;
+  canManageStaff?: boolean;
   centreFilterAccess: CentreFilterAccess;
   view?: "coach" | "quarter";
 };
@@ -39,6 +40,7 @@ type DashboardClientProps = {
 export function DashboardClient({
   initialRecords,
   canUpload,
+  canManageStaff = false,
   centreFilterAccess,
   view = "coach"
 }: DashboardClientProps) {
@@ -105,6 +107,15 @@ export function DashboardClient({
             >
               <FileUp aria-hidden="true" className="size-4" />
               Upload data
+            </Link>
+          ) : null}
+          {canManageStaff ? (
+            <Link
+              href="/rba"
+              className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-md border border-line bg-paper px-3 text-sm font-semibold text-slate-700 transition hover:border-teal hover:text-teal sm:flex-none"
+            >
+              <ShieldCheck aria-hidden="true" className="size-4" />
+              RBA
             </Link>
           ) : null}
           <button

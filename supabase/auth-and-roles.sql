@@ -185,6 +185,92 @@ create policy "Admins can delete staff centre assignments"
 
 grant select, insert, update, delete on public.staff_profile_centres to authenticated;
 
+create or replace function public.admin_upsert_staff_profile(
+  target_email text,
+  target_full_name text,
+  target_role text default 'coach',
+  target_coach_name text default null,
+  target_centre_name text default null,
+  target_active boolean default true
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  target_user_id uuid;
+begin
+  if coalesce(public.current_staff_role(), '') <> 'admin' then
+    raise exception 'Only admins can manage staff profiles.';
+  end if;
+
+  if target_role not in ('admin', 'lead_coach', 'coach') then
+    raise exception 'Invalid staff role.';
+  end if;
+
+  select id
+  into target_user_id
+  from auth.users
+  where lower(email) = lower(trim(target_email))
+  limit 1;
+
+  if target_user_id is null then
+    raise exception 'No Supabase Auth user found for this email.';
+  end if;
+
+  if target_user_id = auth.uid() and (target_role <> 'admin' or target_active is false) then
+    raise exception 'You cannot remove admin access from your own account.';
+  end if;
+
+  insert into public.staff_profiles (
+    id,
+    email,
+    full_name,
+    role,
+    coach_name,
+    centre_name,
+    active
+  )
+  values (
+    target_user_id,
+    lower(trim(target_email)),
+    trim(target_full_name),
+    target_role,
+    nullif(trim(target_coach_name), ''),
+    nullif(trim(target_centre_name), ''),
+    target_active
+  )
+  on conflict (id) do update set
+    email = excluded.email,
+    full_name = excluded.full_name,
+    role = excluded.role,
+    coach_name = excluded.coach_name,
+    centre_name = excluded.centre_name,
+    active = excluded.active;
+
+  return target_user_id;
+end;
+$$;
+
+revoke all on function public.admin_upsert_staff_profile(
+  text,
+  text,
+  text,
+  text,
+  text,
+  boolean
+) from public;
+
+grant execute on function public.admin_upsert_staff_profile(
+  text,
+  text,
+  text,
+  text,
+  text,
+  boolean
+) to authenticated;
+
 create extension if not exists pgcrypto;
 
 create table if not exists public.assessment_import_rows (

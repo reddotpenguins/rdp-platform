@@ -43,6 +43,14 @@ supabase/auth-and-roles.sql
 
 This creates `staff_profiles`, `staff_profile_centres`, adds `admin`, `lead_coach`, and `coach` roles, and protects `assessment_import_rows` with role-aware RLS.
 
+The app also includes an admin-only RBA page at:
+
+```text
+/rba
+```
+
+Admins can update existing staff names, roles, active status, and lead coach centre assignments from that page. The **Add invited staff profile** form uses the `admin_upsert_staff_profile` helper in `supabase/auth-and-roles.sql`, so run the latest SQL file once before adding new invited users by email from the website.
+
 How access works:
 
 - `admin`: can see and manage all assessment rows.

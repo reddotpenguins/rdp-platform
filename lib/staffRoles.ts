@@ -1,5 +1,7 @@
 export type StaffRole = "admin" | "lead_coach" | "coach";
 
+export const staffRoles: StaffRole[] = ["admin", "lead_coach", "coach"];
+
 export type StaffProfile = {
   id: string;
   email: string;
@@ -9,6 +11,10 @@ export type StaffProfile = {
   centreName: string | null;
   assignedCentres: string[];
   active: boolean;
+};
+
+export type StaffManagementProfile = StaffProfile & {
+  createdAt: string;
 };
 
 export type CentreFilterAccess = {
@@ -40,4 +46,8 @@ export function formatStaffRole(role: StaffRole) {
   }
 
   return role.charAt(0).toUpperCase() + role.slice(1);
+}
+
+export function isStaffRole(value: string): value is StaffRole {
+  return staffRoles.includes(value as StaffRole);
 }
