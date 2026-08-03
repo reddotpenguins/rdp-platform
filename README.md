@@ -50,7 +50,7 @@ The app also includes an admin-only RBA page at:
 /rba
 ```
 
-Admins can update existing staff names, roles, active status, and lead coach centre assignments from that page. The **Add invited staff profile** form uses the `admin_upsert_staff_profile` helper in `supabase/auth-and-roles.sql`, so run the latest SQL file once before adding new invited users by email from the website.
+Admins can invite new staff and update existing staff names, roles, active status, and lead coach centre assignments from that page. The **Invite and add staff profile** form sends the Supabase invite email, then uses the `admin_upsert_staff_profile` helper in `supabase/auth-and-roles.sql`, so run the latest SQL file once before adding new users by email from the website.
 
 How access works:
 
@@ -254,6 +254,8 @@ ENABLE_EXPERIMENTAL_COREPACK=1
 `ENABLE_EXPERIMENTAL_COREPACK=1` tells Vercel to use the pnpm version pinned in `package.json`.
 
 `SUPABASE_SERVICE_ROLE_KEY` is private and optional, but recommended. It lets the admin-only RBA delete button remove the Supabase Auth login account as well as the staff profile. Without it, the button removes website access only.
+
+The same private key is required for the RBA page to send Supabase invite emails from the website.
 
 ## Default Dataset
 

@@ -8,6 +8,7 @@ import {
   BadgeCheck,
   CheckCircle2,
   CircleOff,
+  MailPlus,
   Save,
   ShieldCheck,
   Trash2,
@@ -91,9 +92,9 @@ export function RbaAdminClient({
             <UserPlus aria-hidden="true" className="size-5" />
           </span>
           <div>
-            <h2 className="text-lg font-semibold text-ink">Add invited staff profile</h2>
+            <h2 className="text-lg font-semibold text-ink">Invite and add staff profile</h2>
             <p className="text-sm text-slate-500">
-              Use the same email that was invited in Supabase Auth.
+              Sends the Supabase invite email, then connects the staff role.
             </p>
           </div>
         </div>
@@ -373,7 +374,7 @@ function SubmitButton({
   form?: string;
 }) {
   const { pending } = useFormStatus();
-  const Icon = icon === "add" ? UserPlus : Save;
+  const Icon = icon === "add" ? MailPlus : Save;
 
   return (
     <button

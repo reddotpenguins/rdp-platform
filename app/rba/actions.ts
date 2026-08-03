@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { createOptionalSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -21,6 +22,20 @@ export async function createStaffProfileAction(formData: FormData) {
 
   if (role === "lead_coach" && assignedCentres.length === 0) {
     redirectWithError("Lead coaches need at least one assigned centre.");
+  }
+
+  const adminClient = createOptionalSupabaseAdminClient();
+
+  if (!adminClient) {
+    redirectWithError(
+      "Add SUPABASE_SERVICE_ROLE_KEY in Vercel first so the website can send Supabase invite emails."
+    );
+  }
+
+  const inviteResult = await inviteAuthUser(adminClient, email, fullName);
+
+  if (inviteResult.status === "error") {
+    redirectWithError(inviteResult.message);
   }
 
   const { data: staffProfileId, error } = await supabase.rpc("admin_upsert_staff_profile", {
@@ -51,7 +66,11 @@ export async function createStaffProfileAction(formData: FormData) {
   }
 
   revalidatePath("/rba");
-  redirectWithSuccess("Staff profile added.");
+  redirectWithSuccess(
+    inviteResult.status === "invited"
+      ? "Invitation email sent and staff profile added."
+      : "Staff profile added. Supabase Auth user already exists for this email."
+  );
 }
 
 export async function updateStaffProfileAction(formData: FormData) {
@@ -187,6 +206,56 @@ function revalidateStaffPages() {
   revalidatePath("/enquiries");
 }
 
+async function inviteAuthUser(
+  adminClient: NonNullable<ReturnType<typeof createOptionalSupabaseAdminClient>>,
+  email: string,
+  fullName: string
+) {
+  const { error } = await adminClient.auth.admin.inviteUserByEmail(email, {
+    data: {
+      full_name: fullName
+    },
+    redirectTo: getInviteRedirectUrl()
+  });
+
+  if (!error) {
+    return { status: "invited" as const };
+  }
+
+  if (isExistingAuthUserError(error.message)) {
+    return { status: "exists" as const };
+  }
+
+  return {
+    status: "error" as const,
+    message: error.message
+  };
+}
+
+function getInviteRedirectUrl() {
+  const requestHeaders = headers();
+  const origin = requestHeaders.get("origin");
+
+  if (origin?.startsWith("http://") || origin?.startsWith("https://")) {
+    return `${origin}/auth/callback?next=/auth/set-password`;
+  }
+
+  const forwardedHost = requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host");
+  const forwardedProtocol = requestHeaders.get("x-forwarded-proto") ?? "https";
+
+  if (forwardedHost) {
+    return `${forwardedProtocol}://${forwardedHost}/auth/callback?next=/auth/set-password`;
+  }
+
+  const vercelUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL ?? process.env.VERCEL_URL;
+
+  if (vercelUrl) {
+    return `https://${vercelUrl.replace(/^https?:\/\//, "")}/auth/callback?next=/auth/set-password`;
+  }
+
+  redirectWithError("Unable to build the invite redirect URL. Check your Vercel deployment URL.");
+}
+
 function getStaffRole(formData: FormData): StaffRole {
   const role = getRequiredText(formData, "role");
 
@@ -236,6 +305,16 @@ function isMissingAuthUserError(message: string) {
   const normalized = message.toLowerCase();
 
   return normalized.includes("not found") || normalized.includes("does not exist");
+}
+
+function isExistingAuthUserError(message: string) {
+  const normalized = message.toLowerCase();
+
+  return (
+    normalized.includes("already") ||
+    normalized.includes("registered") ||
+    normalized.includes("exists")
+  );
 }
 
 function redirectWithError(message: string): never {
