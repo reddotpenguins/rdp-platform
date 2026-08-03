@@ -9,6 +9,11 @@ import { isStaffRole, type StaffRole } from "@/lib/staffRoles";
 import { requireActiveStaffSession } from "@/lib/supabase/staffProfile";
 
 type SupabaseClient = ReturnType<typeof createClient>;
+type StaffInviteResult =
+  | { status: "invited" }
+  | { status: "exists" }
+  | { status: "skipped" }
+  | { status: "error"; message: string };
 
 export async function createStaffProfileAction(formData: FormData) {
   const { profile: currentProfile } = await requireAdminProfile();
@@ -19,23 +24,28 @@ export async function createStaffProfileAction(formData: FormData) {
   const coachName = getOptionalText(formData, "coachName");
   const assignedCentres = getCentreList(formData);
   const active = formData.getAll("active").includes("true");
+  const sendInvite = formData.getAll("sendInvite").includes("true");
 
   if (role === "lead_coach" && assignedCentres.length === 0) {
     redirectWithError("Lead coaches need at least one assigned centre.");
   }
 
-  const adminClient = createOptionalSupabaseAdminClient();
+  let inviteResult: StaffInviteResult = { status: "skipped" };
 
-  if (!adminClient) {
-    redirectWithError(
-      "Add SUPABASE_SERVICE_ROLE_KEY in Vercel first so the website can send Supabase invite emails."
-    );
-  }
+  if (sendInvite) {
+    const adminClient = createOptionalSupabaseAdminClient();
 
-  const inviteResult = await inviteAuthUser(adminClient, email, fullName);
+    if (!adminClient) {
+      redirectWithError(
+        "Add SUPABASE_SERVICE_ROLE_KEY in Vercel first so the website can send Supabase invite emails."
+      );
+    }
 
-  if (inviteResult.status === "error") {
-    redirectWithError(inviteResult.message);
+    inviteResult = await inviteAuthUser(adminClient, email, fullName);
+
+    if (inviteResult.status === "error") {
+      redirectWithError(getInviteErrorMessage(inviteResult.message));
+    }
   }
 
   const { data: staffProfileId, error } = await supabase.rpc("admin_upsert_staff_profile", {
@@ -69,7 +79,9 @@ export async function createStaffProfileAction(formData: FormData) {
   redirectWithSuccess(
     inviteResult.status === "invited"
       ? "Invitation email sent and staff profile added."
-      : "Staff profile added. Supabase Auth user already exists for this email."
+      : inviteResult.status === "exists"
+        ? "Staff profile added. Supabase Auth user already exists for this email."
+        : "Staff profile added without sending an invite email."
   );
 }
 
@@ -210,7 +222,7 @@ async function inviteAuthUser(
   adminClient: NonNullable<ReturnType<typeof createOptionalSupabaseAdminClient>>,
   email: string,
   fullName: string
-) {
+): Promise<StaffInviteResult> {
   const { error } = await adminClient.auth.admin.inviteUserByEmail(email, {
     data: {
       full_name: fullName
@@ -296,6 +308,16 @@ function getOptionalText(formData: FormData, key: string) {
 function getStaffProfileErrorMessage(message = "Unable to save staff profile.") {
   if (message.toLowerCase().includes("admin_upsert_staff_profile")) {
     return "Run the latest Supabase SQL setup first, then try adding the staff profile again.";
+  }
+
+  return message;
+}
+
+function getInviteErrorMessage(message: string) {
+  const normalized = message.toLowerCase();
+
+  if (normalized.includes("rate limit")) {
+    return "Supabase email rate limit exceeded. Wait for the limit to reset, or untick Send invite email and connect an existing Auth user.";
   }
 
   return message;

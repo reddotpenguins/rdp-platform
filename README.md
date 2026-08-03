@@ -50,7 +50,7 @@ The app also includes an admin-only RBA page at:
 /rba
 ```
 
-Admins can invite new staff and update existing staff names, roles, active status, and lead coach centre assignments from that page. The **Invite and add staff profile** form sends the Supabase invite email, then uses the `admin_upsert_staff_profile` helper in `supabase/auth-and-roles.sql`, so run the latest SQL file once before adding new users by email from the website.
+Admins can invite new staff and update existing staff names, roles, active status, and lead coach centre assignments from that page. The **Invite and add staff profile** form sends the Supabase invite email by default, then uses the `admin_upsert_staff_profile` helper in `supabase/auth-and-roles.sql`, so run the latest SQL file once before adding new users by email from the website. If Supabase email rate limits are reached, untick **Send invite email** to connect an existing Supabase Auth user without sending another email.
 
 How access works:
 

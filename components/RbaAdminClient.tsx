@@ -109,8 +109,9 @@ export function RbaAdminClient({
             name="assignedCentres"
             placeholder="SJII, ACSBR"
           />
-          <div className="flex items-end gap-3">
+          <div className="flex flex-col justify-end gap-3">
             <ActiveField defaultChecked />
+            <InviteEmailField defaultChecked />
             <SubmitButton label="Add" icon="add" />
           </div>
         </form>
@@ -360,6 +361,22 @@ function ActiveField({
         value="true"
       />
       Active
+    </label>
+  );
+}
+
+function InviteEmailField({ defaultChecked }: { defaultChecked: boolean }) {
+  return (
+    <label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+      <input type="hidden" name="sendInvite" value="false" />
+      <input
+        className="size-4 rounded border-line text-teal focus:ring-teal"
+        defaultChecked={defaultChecked}
+        name="sendInvite"
+        type="checkbox"
+        value="true"
+      />
+      Send invite email
     </label>
   );
 }
