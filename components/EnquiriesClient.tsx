@@ -278,7 +278,7 @@ function EnquiryRow({ enquiry }: { enquiry: CustomerEnquiry }) {
   const centreName = getEnquiryCentre(enquiry);
 
   return (
-    <article className="bg-paper px-4 py-4 odd:bg-paper even:bg-field/40">
+    <article className="px-4 py-4 odd:bg-paper even:bg-[#fff2e6]">
       <form
         action={updateEnquiryTicketAction}
         className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.2fr)_minmax(0,1.2fr)]"
