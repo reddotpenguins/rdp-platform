@@ -53,6 +53,7 @@ export function EnquiriesClient({
   const [statusFilter, setStatusFilter] = useState<EnquiryFilterValue<EnquiryStatus>>("All");
   const [typeFilter, setTypeFilter] = useState<EnquiryFilterValue<EnquiryType>>("All");
   const [centreFilter, setCentreFilter] = useState("All");
+  const [sourceFilter, setSourceFilter] = useState("All");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
 
@@ -64,6 +65,7 @@ export function EnquiriesClient({
       ),
     [enquiries, staffProfile]
   );
+  const sourceOptions = useMemo(() => getSourceOptions(enquiries), [enquiries]);
   const visibleEnquiries = useMemo(
     () =>
       filterEnquiries(enquiries, {
@@ -71,10 +73,11 @@ export function EnquiriesClient({
         dateFrom,
         dateTo,
         search,
+        source: sourceFilter,
         status: statusFilter,
         type: typeFilter
       }),
-    [centreFilter, dateFrom, dateTo, enquiries, search, statusFilter, typeFilter]
+    [centreFilter, dateFrom, dateTo, enquiries, search, sourceFilter, statusFilter, typeFilter]
   );
   const totals = useMemo(
     () => ({
@@ -91,6 +94,7 @@ export function EnquiriesClient({
     setStatusFilter("All");
     setTypeFilter("All");
     setCentreFilter("All");
+    setSourceFilter("All");
     setDateFrom("");
     setDateTo("");
   }
@@ -136,7 +140,7 @@ export function EnquiriesClient({
       ) : null}
 
       <section className="rounded-lg border border-line bg-paper p-4 shadow-panel">
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-7">
           <label className="relative block md:col-span-2">
             <span className="mb-1 block text-sm font-medium text-slate-600">Search enquiry</span>
             <Search aria-hidden="true" className="absolute bottom-3 left-3 size-4 text-slate-400" />
@@ -170,6 +174,14 @@ export function EnquiriesClient({
             values={["All", ...centreOptions]}
             labelForValue={(value) => (value === "All" ? "All centres" : value)}
             onChange={(value) => setCentreFilter(value)}
+          />
+
+          <SelectField
+            label="Source"
+            value={sourceFilter}
+            values={["All", ...sourceOptions]}
+            labelForValue={(value) => (value === "All" ? "All sources" : value)}
+            onChange={(value) => setSourceFilter(value)}
           />
 
           <label className="block">
@@ -634,6 +646,16 @@ function getCentreOptions(enquiries: CustomerEnquiry[], assignedCentres: string[
   );
 }
 
+function getSourceOptions(enquiries: CustomerEnquiry[]) {
+  return Array.from(
+    new Set(
+      enquiries
+        .map((enquiry) => enquiry.source?.trim())
+        .filter((source): source is string => Boolean(source))
+    )
+  ).sort((a, b) => a.localeCompare(b));
+}
+
 function filterEnquiries(
   enquiries: CustomerEnquiry[],
   filters: {
@@ -641,6 +663,7 @@ function filterEnquiries(
     dateFrom: string;
     dateTo: string;
     search: string;
+    source: string;
     status: EnquiryFilterValue<EnquiryStatus>;
     type: EnquiryFilterValue<EnquiryType>;
   }
@@ -672,7 +695,8 @@ function filterEnquiries(
         enquiry.signedUpLocation,
         enquiry.signedUpCoach,
         enquiry.outcomeNotes,
-        enquiry.notes
+        enquiry.notes,
+        enquiry.source
       ]
         .filter(Boolean)
         .some((value) => value?.toLowerCase().includes(search));
@@ -685,10 +709,21 @@ function filterEnquiries(
         enquiry.trialLocation,
         enquiry.signedUpLocation
       ].some((centre) => centre?.trim().toLowerCase() === filters.centre.trim().toLowerCase());
+    const matchesSource =
+      filters.source === "All" ||
+      enquiry.source?.trim().toLowerCase() === filters.source.trim().toLowerCase();
     const matchesFrom = fromTime === null || receivedTime >= fromTime;
     const matchesTo = toTime === null || receivedTime <= toTime;
 
-    return matchesSearch && matchesStatus && matchesType && matchesCentre && matchesFrom && matchesTo;
+    return (
+      matchesSearch &&
+      matchesStatus &&
+      matchesType &&
+      matchesCentre &&
+      matchesSource &&
+      matchesFrom &&
+      matchesTo
+    );
   });
 }
 
