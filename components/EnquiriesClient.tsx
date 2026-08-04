@@ -37,6 +37,7 @@ type EnquiriesClientProps = {
 
 type EnquiryFilterValue<TValue extends string> = "All" | TValue;
 type TicketView = "open" | "closed" | "all";
+type SortOrder = "latest" | "oldest";
 
 const dateFormatter = new Intl.DateTimeFormat("en-SG", {
   dateStyle: "medium",
@@ -56,6 +57,7 @@ export function EnquiriesClient({
   const [centreFilter, setCentreFilter] = useState("All");
   const [sourceFilter, setSourceFilter] = useState("All");
   const [ticketView, setTicketView] = useState<TicketView>("open");
+  const [sortOrder, setSortOrder] = useState<SortOrder>("latest");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
 
@@ -82,8 +84,8 @@ export function EnquiriesClient({
     [centreFilter, dateFrom, dateTo, enquiries, search, sourceFilter, statusFilter, typeFilter]
   );
   const visibleEnquiries = useMemo(
-    () => filterByTicketView(baseFilteredEnquiries, ticketView),
-    [baseFilteredEnquiries, ticketView]
+    () => sortEnquiries(filterByTicketView(baseFilteredEnquiries, ticketView), sortOrder),
+    [baseFilteredEnquiries, sortOrder, ticketView]
   );
   const totals = useMemo(
     () => ({
@@ -102,6 +104,7 @@ export function EnquiriesClient({
     setCentreFilter("All");
     setSourceFilter("All");
     setTicketView("open");
+    setSortOrder("latest");
     setDateFrom("");
     setDateTo("");
   }
@@ -147,7 +150,7 @@ export function EnquiriesClient({
       ) : null}
 
       <section className="rounded-lg border border-line bg-paper p-4 shadow-panel">
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-8">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-9">
           <label className="relative block md:col-span-2">
             <span className="mb-1 block text-sm font-medium text-slate-600">Search enquiry</span>
             <Search aria-hidden="true" className="absolute bottom-3 left-3 size-4 text-slate-400" />
@@ -180,6 +183,14 @@ export function EnquiriesClient({
             values={["open", "closed", "all"]}
             labelForValue={formatTicketView}
             onChange={(value) => setTicketView(value)}
+          />
+
+          <SelectField
+            label="Sort"
+            value={sortOrder}
+            values={["latest", "oldest"]}
+            labelForValue={formatSortOrder}
+            onChange={(value) => setSortOrder(value)}
           />
 
           <SelectField
@@ -661,6 +672,10 @@ function formatTicketView(view: TicketView) {
   return "All tickets";
 }
 
+function formatSortOrder(sortOrder: SortOrder) {
+  return sortOrder === "latest" ? "Latest first" : "Oldest first";
+}
+
 function getCentreOptions(enquiries: CustomerEnquiry[], assignedCentres: string[]) {
   const centres =
     assignedCentres.length > 0
@@ -698,6 +713,15 @@ function filterByTicketView(enquiries: CustomerEnquiry[], ticketView: TicketView
   return enquiries;
 }
 
+function sortEnquiries(enquiries: CustomerEnquiry[], sortOrder: SortOrder) {
+  return [...enquiries].sort((first, second) => {
+    const firstTime = getEnquiryReceivedTime(first);
+    const secondTime = getEnquiryReceivedTime(second);
+
+    return sortOrder === "latest" ? secondTime - firstTime : firstTime - secondTime;
+  });
+}
+
 function filterEnquiries(
   enquiries: CustomerEnquiry[],
   filters: {
@@ -715,7 +739,7 @@ function filterEnquiries(
   const toTime = filters.dateTo ? new Date(`${filters.dateTo}T23:59:59+08:00`).getTime() : null;
 
   return enquiries.filter((enquiry) => {
-    const receivedTime = new Date(enquiry.enquiryReceivedAt ?? enquiry.createdAt).getTime();
+    const receivedTime = getEnquiryReceivedTime(enquiry);
     const matchesSearch =
       !search ||
       [
@@ -767,6 +791,10 @@ function filterEnquiries(
       matchesTo
     );
   });
+}
+
+function getEnquiryReceivedTime(enquiry: CustomerEnquiry) {
+  return new Date(enquiry.enquiryReceivedAt ?? enquiry.createdAt).getTime();
 }
 
 function isSignedUp(enquiry: CustomerEnquiry) {

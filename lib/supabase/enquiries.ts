@@ -81,6 +81,7 @@ export async function getCustomerEnquiries(): Promise<CustomerEnquiriesResult> {
   const { data, error } = await supabase
     .from("customer_enquiries")
     .select(enquiryColumns)
+    .order("enquiry_received_at", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false })
     .limit(500);
 
