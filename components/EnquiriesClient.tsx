@@ -36,6 +36,7 @@ type EnquiriesClientProps = {
 };
 
 type EnquiryFilterValue<TValue extends string> = "All" | TValue;
+type TicketView = "open" | "closed" | "all";
 
 const dateFormatter = new Intl.DateTimeFormat("en-SG", {
   dateStyle: "medium",
@@ -54,6 +55,7 @@ export function EnquiriesClient({
   const [typeFilter, setTypeFilter] = useState<EnquiryFilterValue<EnquiryType>>("All");
   const [centreFilter, setCentreFilter] = useState("All");
   const [sourceFilter, setSourceFilter] = useState("All");
+  const [ticketView, setTicketView] = useState<TicketView>("open");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
 
@@ -66,7 +68,7 @@ export function EnquiriesClient({
     [enquiries, staffProfile]
   );
   const sourceOptions = useMemo(() => getSourceOptions(enquiries), [enquiries]);
-  const visibleEnquiries = useMemo(
+  const baseFilteredEnquiries = useMemo(
     () =>
       filterEnquiries(enquiries, {
         centre: centreFilter,
@@ -79,14 +81,18 @@ export function EnquiriesClient({
       }),
     [centreFilter, dateFrom, dateTo, enquiries, search, sourceFilter, statusFilter, typeFilter]
   );
+  const visibleEnquiries = useMemo(
+    () => filterByTicketView(baseFilteredEnquiries, ticketView),
+    [baseFilteredEnquiries, ticketView]
+  );
   const totals = useMemo(
     () => ({
-      active: visibleEnquiries.filter((enquiry) => enquiry.status !== "closed").length,
-      closed: visibleEnquiries.filter((enquiry) => enquiry.status === "closed").length,
-      signUps: visibleEnquiries.filter(isSignedUp).length,
-      trials: visibleEnquiries.filter(hasTrialActivity).length
+      active: baseFilteredEnquiries.filter((enquiry) => enquiry.status !== "closed").length,
+      closed: baseFilteredEnquiries.filter((enquiry) => enquiry.status === "closed").length,
+      signUps: baseFilteredEnquiries.filter(isSignedUp).length,
+      trials: baseFilteredEnquiries.filter(hasTrialActivity).length
     }),
-    [visibleEnquiries]
+    [baseFilteredEnquiries]
   );
 
   function resetFilters() {
@@ -95,6 +101,7 @@ export function EnquiriesClient({
     setTypeFilter("All");
     setCentreFilter("All");
     setSourceFilter("All");
+    setTicketView("open");
     setDateFrom("");
     setDateTo("");
   }
@@ -140,7 +147,7 @@ export function EnquiriesClient({
       ) : null}
 
       <section className="rounded-lg border border-line bg-paper p-4 shadow-panel">
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-7">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-8">
           <label className="relative block md:col-span-2">
             <span className="mb-1 block text-sm font-medium text-slate-600">Search enquiry</span>
             <Search aria-hidden="true" className="absolute bottom-3 left-3 size-4 text-slate-400" />
@@ -157,7 +164,22 @@ export function EnquiriesClient({
             value={statusFilter}
             values={["All", ...enquiryStatuses]}
             labelForValue={(value) => (value === "All" ? "All statuses" : formatEnquiryStatus(value))}
-            onChange={(value) => setStatusFilter(value)}
+            onChange={(value) => {
+              setStatusFilter(value);
+              if (value === "closed") {
+                setTicketView("closed");
+              } else if (ticketView === "closed") {
+                setTicketView("open");
+              }
+            }}
+          />
+
+          <SelectField
+            label="View"
+            value={ticketView}
+            values={["open", "closed", "all"]}
+            labelForValue={formatTicketView}
+            onChange={(value) => setTicketView(value)}
           />
 
           <SelectField
@@ -229,37 +251,22 @@ export function EnquiriesClient({
           </div>
           <span className="inline-flex items-center gap-2 rounded-md border border-line bg-field px-3 py-2 text-sm font-semibold text-slate-700">
             <TicketCheck aria-hidden="true" className="size-4 text-teal" />
-            {enquiries.length.toLocaleString()} total
+            {visibleEnquiries.length.toLocaleString()} shown
           </span>
         </div>
 
-        <div className="max-h-[720px] overflow-auto">
-          <table className="min-w-[1880px] w-full border-collapse text-left text-sm">
-            <thead className="sticky top-0 z-10 bg-field text-xs uppercase text-slate-500 shadow-[0_1px_0_#ffd6b3]">
-              <tr>
-                <th className="w-[260px] px-4 py-3 font-semibold">Customer</th>
-                <th className="w-[340px] px-4 py-3 font-semibold">First Message</th>
-                <th className="w-[390px] px-4 py-3 font-semibold">Trial</th>
-                <th className="w-[390px] px-4 py-3 font-semibold">Sign Up</th>
-                <th className="w-[190px] px-4 py-3 font-semibold">Status</th>
-                <th className="w-[280px] px-4 py-3 font-semibold">Internal Notes</th>
-                <th className="w-[190px] px-4 py-3 font-semibold">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {visibleEnquiries.length > 0 ? (
-                visibleEnquiries.map((enquiry) => (
-                  <EnquiryRow enquiry={enquiry} key={enquiry.id} />
-                ))
-              ) : (
-                <tr>
-                  <td className="px-4 py-8 text-center text-sm text-slate-500" colSpan={7}>
-                    No tickets match these filters.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+        <div className="max-h-[760px] overflow-y-auto">
+          {visibleEnquiries.length > 0 ? (
+            <div className="divide-y divide-line">
+              {visibleEnquiries.map((enquiry) => (
+                <EnquiryRow enquiry={enquiry} key={enquiry.id} />
+              ))}
+            </div>
+          ) : (
+            <div className="px-4 py-8 text-center text-sm text-slate-500">
+              No tickets match these filters.
+            </div>
+          )}
         </div>
       </section>
     </main>
@@ -271,160 +278,171 @@ function EnquiryRow({ enquiry }: { enquiry: CustomerEnquiry }) {
   const centreName = getEnquiryCentre(enquiry);
 
   return (
-    <tr className="align-top odd:bg-paper even:bg-field/50">
-      <td className="border-b border-line px-4 py-3">
-        <div className="font-semibold text-ink">{enquiry.parentName}</div>
-        <div className="mt-1 text-xs text-slate-500">{enquiry.phone || enquiry.email || "-"}</div>
-        <div className="mt-2 text-xs text-slate-500">
-          {enquiry.childName || "Child not provided"}
-          {enquiry.childAge ? `, ${enquiry.childAge}` : ""}
-        </div>
-        <div className="mt-3 space-y-1 text-xs text-slate-500">
-          <ReadLine
-            label="Received"
-            value={formatDate(enquiry.enquiryReceivedAt ?? enquiry.createdAt)}
-          />
-          <ReadLine label="Source" value={enquiry.source || "respond.io"} />
-        </div>
-        <TextField
-          className="mt-3"
-          defaultValue={dateInputValue(enquiry.firstTouchDate)}
-          form={formId}
-          label="First touch"
-          name="firstTouchDate"
-          type="date"
-        />
-      </td>
+    <article className="bg-paper px-4 py-4 odd:bg-paper even:bg-field/40">
+      <form
+        action={updateEnquiryTicketAction}
+        className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.2fr)_minmax(0,1.2fr)]"
+        id={formId}
+      >
+        <input name="enquiryId" type="hidden" value={enquiry.id} />
+        <input name="centreName" type="hidden" value={enquiry.centreName ?? ""} />
 
-      <td className="border-b border-line px-4 py-3">
-        <select
-          className="h-10 w-full rounded-md border border-line bg-field px-3 text-sm outline-none transition focus:border-teal focus:bg-paper focus:ring-2 focus:ring-teal/15"
-          defaultValue={enquiry.enquiryType}
-          form={formId}
-          name="enquiryType"
-        >
-          {enquiryTypes.map((type) => (
-            <option key={type} value={type}>
-              {formatEnquiryType(type)}
-            </option>
-          ))}
-        </select>
-        <p className="mt-3 max-w-sm whitespace-pre-wrap text-sm text-slate-700">
-          {enquiry.message || "-"}
-        </p>
-      </td>
+        <section className="min-w-0">
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div className="min-w-0">
+              <h3 className="break-words text-base font-semibold text-ink">
+                {enquiry.parentName}
+              </h3>
+              <p className="mt-1 break-words text-xs text-slate-500">
+                {enquiry.phone || enquiry.email || "-"}
+              </p>
+            </div>
+            <StatusPill status={enquiry.status} />
+          </div>
 
-      <td className="border-b border-line px-4 py-3">
-        <div className="grid grid-cols-2 gap-2">
+          <div className="mt-3 text-xs text-slate-500">
+            {enquiry.childName || "Child not provided"}
+            {enquiry.childAge ? `, ${enquiry.childAge}` : ""}
+          </div>
+
+          <div className="mt-3 space-y-1 text-xs text-slate-500">
+            <ReadLine
+              label="Received"
+              value={formatDate(enquiry.enquiryReceivedAt ?? enquiry.createdAt)}
+            />
+            <ReadLine label="Source" value={enquiry.source || "respond.io"} />
+          </div>
+
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            <label className="block">
+              <span className="mb-1 block text-xs font-medium uppercase text-slate-500">Type</span>
+              <select
+                className="h-9 w-full rounded-md border border-line bg-field px-2 text-sm outline-none transition focus:border-teal focus:bg-paper focus:ring-2 focus:ring-teal/15"
+                defaultValue={enquiry.enquiryType}
+                name="enquiryType"
+              >
+                {enquiryTypes.map((type) => (
+                  <option key={type} value={type}>
+                    {formatEnquiryType(type)}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="block">
+              <span className="mb-1 block text-xs font-medium uppercase text-slate-500">Status</span>
+              <select
+                className="h-9 w-full rounded-md border border-line bg-field px-2 text-sm outline-none transition focus:border-teal focus:bg-paper focus:ring-2 focus:ring-teal/15"
+                defaultValue={enquiry.status}
+                name="status"
+              >
+                {enquiryStatuses.map((status) => (
+                  <option key={status} value={status}>
+                    {formatEnquiryStatus(status)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
           <TextField
-            defaultValue={dateInputValue(enquiry.trialDate)}
-            form={formId}
-            label="Date"
-            name="trialDate"
+            className="mt-2"
+            defaultValue={dateInputValue(enquiry.firstTouchDate)}
+            label="First touch"
+            name="firstTouchDate"
             type="date"
           />
-          <TextField
-            defaultValue={enquiry.trialTime ?? ""}
-            form={formId}
-            label="Time"
-            name="trialTime"
-            placeholder="3.45pm to 4.30pm"
+
+          <div className="mt-3">
+            <p className="mb-1 text-xs font-medium uppercase text-slate-500">First message</p>
+            <p className="max-h-32 overflow-y-auto whitespace-pre-wrap break-words rounded-md border border-line bg-field px-3 py-2 text-sm text-slate-700">
+              {enquiry.message || "-"}
+            </p>
+          </div>
+        </section>
+
+        <section className="min-w-0">
+          <h4 className="mb-2 text-sm font-semibold text-ink">Trial</h4>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <TextField
+              defaultValue={dateInputValue(enquiry.trialDate)}
+              label="Date"
+              name="trialDate"
+              type="date"
+            />
+            <TextField
+              defaultValue={enquiry.trialTime ?? ""}
+              label="Time"
+              name="trialTime"
+              placeholder="3.45pm to 4.30pm"
+            />
+            <TextField
+              defaultValue={enquiry.trialLocation ?? enquiry.centreName ?? ""}
+              label="Location"
+              name="trialLocation"
+              placeholder="SJII"
+            />
+            <TextField
+              defaultValue={enquiry.trialCoach ?? enquiry.assignedTo ?? ""}
+              label="Coach"
+              name="trialCoach"
+              placeholder="Coach name"
+            />
+          </div>
+          <TextareaField
+            className="mt-2"
+            defaultValue={enquiry.trialDetails ?? ""}
+            label="Details"
+            name="trialDetails"
+            rows={3}
           />
-        </div>
-        <div className="mt-2 grid grid-cols-2 gap-2">
+        </section>
+
+        <section className="min-w-0">
+          <h4 className="mb-2 text-sm font-semibold text-ink">Sign Up</h4>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <TextField
+              defaultValue={dateInputValue(enquiry.registrationDate)}
+              label="Registration"
+              name="registrationDate"
+              type="date"
+            />
+            <TextField
+              defaultValue={enquiry.signedUpLocation ?? ""}
+              label="Location"
+              name="signedUpLocation"
+              placeholder={centreName || "Centre"}
+            />
+          </div>
           <TextField
-            defaultValue={enquiry.trialLocation ?? enquiry.centreName ?? ""}
-            form={formId}
-            label="Location"
-            name="trialLocation"
-            placeholder="SJII"
-          />
-          <TextField
-            defaultValue={enquiry.trialCoach ?? enquiry.assignedTo ?? ""}
-            form={formId}
+            className="mt-2"
+            defaultValue={enquiry.signedUpCoach ?? ""}
             label="Coach"
-            name="trialCoach"
+            name="signedUpCoach"
             placeholder="Coach name"
           />
-        </div>
-        <TextareaField
-          className="mt-2"
-          defaultValue={enquiry.trialDetails ?? ""}
-          form={formId}
-          label="Details"
-          name="trialDetails"
-          rows={2}
-        />
-      </td>
-
-      <td className="border-b border-line px-4 py-3">
-        <div className="grid grid-cols-2 gap-2">
-          <TextField
-            defaultValue={dateInputValue(enquiry.registrationDate)}
-            form={formId}
-            label="Registration"
-            name="registrationDate"
-            type="date"
+          <TextareaField
+            className="mt-2"
+            defaultValue={enquiry.outcomeNotes ?? ""}
+            label="Outcome details"
+            name="outcomeNotes"
+            rows={3}
           />
-          <TextField
-            defaultValue={enquiry.signedUpLocation ?? ""}
-            form={formId}
-            label="Location"
-            name="signedUpLocation"
-            placeholder={centreName || "Centre"}
+        </section>
+
+        <section className="min-w-0 xl:col-span-2">
+          <TextareaField
+            defaultValue={enquiry.notes ?? ""}
+            label="Internal notes"
+            name="notes"
+            rows={4}
           />
-        </div>
-        <TextField
-          className="mt-2"
-          defaultValue={enquiry.signedUpCoach ?? ""}
-          form={formId}
-          label="Coach"
-          name="signedUpCoach"
-          placeholder="Coach name"
-        />
-        <TextareaField
-          className="mt-2"
-          defaultValue={enquiry.outcomeNotes ?? ""}
-          form={formId}
-          label="Outcome details"
-          name="outcomeNotes"
-          rows={2}
-        />
-      </td>
+          {enquiry.closedAt ? (
+            <div className="mt-2 text-xs text-slate-500">Closed {formatDate(enquiry.closedAt)}</div>
+          ) : null}
+        </section>
 
-      <td className="border-b border-line px-4 py-3">
-        <StatusPill status={enquiry.status} />
-        <select
-          className="mt-3 h-10 w-full rounded-md border border-line bg-field px-3 text-sm outline-none transition focus:border-teal focus:bg-paper focus:ring-2 focus:ring-teal/15"
-          defaultValue={enquiry.status}
-          form={formId}
-          name="status"
-        >
-          {enquiryStatuses.map((status) => (
-            <option key={status} value={status}>
-              {formatEnquiryStatus(status)}
-            </option>
-          ))}
-        </select>
-        {enquiry.closedAt ? (
-          <div className="mt-3 text-xs text-slate-500">Closed {formatDate(enquiry.closedAt)}</div>
-        ) : null}
-      </td>
-
-      <td className="border-b border-line px-4 py-3">
-        <TextareaField
-          defaultValue={enquiry.notes ?? ""}
-          form={formId}
-          label="Notes"
-          name="notes"
-          rows={7}
-        />
-      </td>
-
-      <td className="border-b border-line px-4 py-3">
-        <form action={updateEnquiryTicketAction} className="flex w-44 flex-col gap-2" id={formId}>
-          <input name="enquiryId" type="hidden" value={enquiry.id} />
-          <input name="centreName" type="hidden" value={enquiry.centreName ?? ""} />
+        <section className="flex min-w-0 flex-col justify-end gap-2 sm:flex-row xl:flex-col">
           <SubmitButton icon="save" label="Save" />
           {enquiry.status !== "closed" ? (
             <SubmitButton
@@ -435,9 +453,9 @@ function EnquiryRow({ enquiry }: { enquiry: CustomerEnquiry }) {
               variant="secondary"
             />
           ) : null}
-        </form>
-      </td>
-    </tr>
+        </section>
+      </form>
+    </article>
   );
 }
 
@@ -483,7 +501,7 @@ function TextField({
 }: {
   className?: string;
   defaultValue: string;
-  form: string;
+  form?: string;
   label: string;
   name: string;
   placeholder?: string;
@@ -514,7 +532,7 @@ function TextareaField({
 }: {
   className?: string;
   defaultValue: string;
-  form: string;
+  form?: string;
   label: string;
   name: string;
   rows: number;
@@ -631,6 +649,18 @@ function StatusPill({ status }: { status: EnquiryStatus }) {
   );
 }
 
+function formatTicketView(view: TicketView) {
+  if (view === "open") {
+    return "Open only";
+  }
+
+  if (view === "closed") {
+    return "Closed only";
+  }
+
+  return "All tickets";
+}
+
 function getCentreOptions(enquiries: CustomerEnquiry[], assignedCentres: string[]) {
   const centres =
     assignedCentres.length > 0
@@ -654,6 +684,18 @@ function getSourceOptions(enquiries: CustomerEnquiry[]) {
         .filter((source): source is string => Boolean(source))
     )
   ).sort((a, b) => a.localeCompare(b));
+}
+
+function filterByTicketView(enquiries: CustomerEnquiry[], ticketView: TicketView) {
+  if (ticketView === "open") {
+    return enquiries.filter((enquiry) => enquiry.status !== "closed");
+  }
+
+  if (ticketView === "closed") {
+    return enquiries.filter((enquiry) => enquiry.status === "closed");
+  }
+
+  return enquiries;
 }
 
 function filterEnquiries(
