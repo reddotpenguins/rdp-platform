@@ -98,6 +98,8 @@ Respond.io conversation ID             respondio_conversation_id
 Respond.io contact ID                  respondio_contact_id
 ```
 
+For `source`, use only `respond.io` or `website contact form`. Put hotline/respond.io enquiries under `respond.io`, and WordPress or website form submissions under `website contact form`.
+
 In Make.com, add an **HTTP -> Make a request** step after your Google Sheets row is created.
 
 ```text
@@ -129,7 +131,7 @@ Example JSON body:
   "signed_up_location": "{{Signed up Location}}",
   "signed_up_coach": "{{Signed up Coach}}",
   "outcome_notes": "{{If yes/no details or feedback}}",
-  "source": "{{Source}}",
+  "source": "respond.io",
   "enquiry_type": "enquiry",
   "status": "new",
   "google_sheet_row_id": "{{Google Sheets Row ID}}",

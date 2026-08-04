@@ -38,6 +38,9 @@ type EnquiriesClientProps = {
 type EnquiryFilterValue<TValue extends string> = "All" | TValue;
 type TicketView = "open" | "closed" | "all";
 type SortOrder = "latest" | "oldest";
+type SourceCategory = "respond.io" | "website contact form";
+
+const sourceCategories: SourceCategory[] = ["respond.io", "website contact form"];
 
 const dateFormatter = new Intl.DateTimeFormat("en-SG", {
   dateStyle: "medium",
@@ -55,7 +58,7 @@ export function EnquiriesClient({
   const [statusFilter, setStatusFilter] = useState<EnquiryFilterValue<EnquiryStatus>>("All");
   const [typeFilter, setTypeFilter] = useState<EnquiryFilterValue<EnquiryType>>("All");
   const [centreFilter, setCentreFilter] = useState("All");
-  const [sourceFilter, setSourceFilter] = useState("All");
+  const [sourceFilter, setSourceFilter] = useState<EnquiryFilterValue<SourceCategory>>("All");
   const [ticketView, setTicketView] = useState<TicketView>("open");
   const [sortOrder, setSortOrder] = useState<SortOrder>("latest");
   const [dateFrom, setDateFrom] = useState("");
@@ -69,7 +72,6 @@ export function EnquiriesClient({
       ),
     [enquiries, staffProfile]
   );
-  const sourceOptions = useMemo(() => getSourceOptions(enquiries), [enquiries]);
   const baseFilteredEnquiries = useMemo(
     () =>
       filterEnquiries(enquiries, {
@@ -212,8 +214,10 @@ export function EnquiriesClient({
           <SelectField
             label="Source"
             value={sourceFilter}
-            values={["All", ...sourceOptions]}
-            labelForValue={(value) => (value === "All" ? "All sources" : value)}
+            values={["All", ...sourceCategories]}
+            labelForValue={(value) =>
+              value === "All" ? "All sources" : formatSourceCategory(value)
+            }
             onChange={(value) => setSourceFilter(value)}
           />
 
@@ -321,7 +325,10 @@ function EnquiryRow({ enquiry }: { enquiry: CustomerEnquiry }) {
               label="Received"
               value={formatDate(enquiry.enquiryReceivedAt ?? enquiry.createdAt)}
             />
-            <ReadLine label="Source" value={enquiry.source || "respond.io"} />
+            <ReadLine
+              label="Source"
+              value={formatSourceCategory(getEnquirySourceCategory(enquiry))}
+            />
           </div>
 
           <div className="mt-3 grid gap-2 sm:grid-cols-2">
@@ -691,16 +698,6 @@ function getCentreOptions(enquiries: CustomerEnquiry[], assignedCentres: string[
   );
 }
 
-function getSourceOptions(enquiries: CustomerEnquiry[]) {
-  return Array.from(
-    new Set(
-      enquiries
-        .map((enquiry) => enquiry.source?.trim())
-        .filter((source): source is string => Boolean(source))
-    )
-  ).sort((a, b) => a.localeCompare(b));
-}
-
 function filterByTicketView(enquiries: CustomerEnquiry[], ticketView: TicketView) {
   if (ticketView === "open") {
     return enquiries.filter((enquiry) => enquiry.status !== "closed");
@@ -729,7 +726,7 @@ function filterEnquiries(
     dateFrom: string;
     dateTo: string;
     search: string;
-    source: string;
+    source: EnquiryFilterValue<SourceCategory>;
     status: EnquiryFilterValue<EnquiryStatus>;
     type: EnquiryFilterValue<EnquiryType>;
   }
@@ -762,7 +759,7 @@ function filterEnquiries(
         enquiry.signedUpCoach,
         enquiry.outcomeNotes,
         enquiry.notes,
-        enquiry.source
+        formatSourceCategory(getEnquirySourceCategory(enquiry))
       ]
         .filter(Boolean)
         .some((value) => value?.toLowerCase().includes(search));
@@ -776,8 +773,7 @@ function filterEnquiries(
         enquiry.signedUpLocation
       ].some((centre) => centre?.trim().toLowerCase() === filters.centre.trim().toLowerCase());
     const matchesSource =
-      filters.source === "All" ||
-      enquiry.source?.trim().toLowerCase() === filters.source.trim().toLowerCase();
+      filters.source === "All" || getEnquirySourceCategory(enquiry) === filters.source;
     const matchesFrom = fromTime === null || receivedTime >= fromTime;
     const matchesTo = toTime === null || receivedTime <= toTime;
 
@@ -813,6 +809,28 @@ function hasTrialActivity(enquiry: CustomerEnquiry) {
       enquiry.trialDate ||
       enquiry.trialTime
   );
+}
+
+function getEnquirySourceCategory(enquiry: CustomerEnquiry): SourceCategory {
+  const source = enquiry.source?.trim().toLowerCase() ?? "";
+
+  if (
+    source.includes("website") ||
+    source.includes("wordpress") ||
+    source.includes("contact form") ||
+    source.includes("email dashboard") ||
+    source === "email" ||
+    source === "website-email" ||
+    source === "website_email"
+  ) {
+    return "website contact form";
+  }
+
+  return "respond.io";
+}
+
+function formatSourceCategory(source: SourceCategory) {
+  return source === "website contact form" ? "Website contact form" : "respond.io";
 }
 
 function getEnquiryCentre(enquiry: CustomerEnquiry) {
