@@ -409,7 +409,7 @@ create policy "Admins and lead coaches can delete assessment rows"
     )
   );
 
-grant select, insert, update, delete on public.assessment_import_rows to authenticated;
+grant select, insert, update, delete on public.assessment_import_rows to authenticated, service_role;
 
 create table if not exists public.customer_enquiries (
   id uuid primary key default gen_random_uuid(),
@@ -424,6 +424,17 @@ create table if not exists public.customer_enquiries (
   status text not null default 'new',
   source text default 'respond.io',
   message text,
+  enquiry_received_at timestamptz,
+  first_touch_date date,
+  trial_time text,
+  trial_details text,
+  trial_date date,
+  trial_location text,
+  trial_coach text,
+  registration_date date,
+  signed_up_location text,
+  signed_up_coach text,
+  outcome_notes text,
   assigned_to text,
   notes text,
   respondio_contact_id text,
@@ -447,6 +458,17 @@ alter table public.customer_enquiries
   add column if not exists status text default 'new',
   add column if not exists source text default 'respond.io',
   add column if not exists message text,
+  add column if not exists enquiry_received_at timestamptz,
+  add column if not exists first_touch_date date,
+  add column if not exists trial_time text,
+  add column if not exists trial_details text,
+  add column if not exists trial_date date,
+  add column if not exists trial_location text,
+  add column if not exists trial_coach text,
+  add column if not exists registration_date date,
+  add column if not exists signed_up_location text,
+  add column if not exists signed_up_coach text,
+  add column if not exists outcome_notes text,
   add column if not exists assigned_to text,
   add column if not exists notes text,
   add column if not exists respondio_contact_id text,
@@ -466,6 +488,10 @@ update public.customer_enquiries
 set status = 'new'
 where status is null
   or status not in ('new', 'contacted', 'trial_booked', 'signed_up', 'closed');
+
+update public.customer_enquiries
+set enquiry_received_at = created_at
+where enquiry_received_at is null;
 
 alter table public.customer_enquiries
   alter column parent_name set not null,
@@ -504,6 +530,12 @@ create index if not exists customer_enquiries_centre_name_idx
 
 create index if not exists customer_enquiries_created_at_idx
   on public.customer_enquiries (created_at desc);
+
+create index if not exists customer_enquiries_enquiry_received_at_idx
+  on public.customer_enquiries (enquiry_received_at desc);
+
+create index if not exists customer_enquiries_registration_date_idx
+  on public.customer_enquiries (registration_date desc);
 
 create or replace function public.set_customer_enquiries_updated_at()
 returns trigger
@@ -586,4 +618,4 @@ create policy "Admins can delete customer enquiries"
   to authenticated
   using (public.current_staff_role() = 'admin');
 
-grant select, insert, update, delete on public.customer_enquiries to authenticated;
+grant select, insert, update, delete on public.customer_enquiries to authenticated, service_role;

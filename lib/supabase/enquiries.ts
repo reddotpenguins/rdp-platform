@@ -14,6 +14,17 @@ type CustomerEnquiryRow = {
   status: EnquiryStatus;
   source: string | null;
   message: string | null;
+  enquiry_received_at: string | null;
+  first_touch_date: string | null;
+  trial_time: string | null;
+  trial_details: string | null;
+  trial_date: string | null;
+  trial_location: string | null;
+  trial_coach: string | null;
+  registration_date: string | null;
+  signed_up_location: string | null;
+  signed_up_coach: string | null;
+  outcome_notes: string | null;
   assigned_to: string | null;
   notes: string | null;
   respondio_contact_id: string | null;
@@ -43,6 +54,17 @@ const enquiryColumns = [
   "status",
   "source",
   "message",
+  "enquiry_received_at",
+  "first_touch_date",
+  "trial_time",
+  "trial_details",
+  "trial_date",
+  "trial_location",
+  "trial_coach",
+  "registration_date",
+  "signed_up_location",
+  "signed_up_coach",
+  "outcome_notes",
   "assigned_to",
   "notes",
   "respondio_contact_id",
@@ -88,6 +110,17 @@ function mapCustomerEnquiry(row: CustomerEnquiryRow): CustomerEnquiry {
     status: row.status,
     source: row.source,
     message: row.message,
+    enquiryReceivedAt: row.enquiry_received_at,
+    firstTouchDate: row.first_touch_date,
+    trialTime: row.trial_time,
+    trialDetails: row.trial_details,
+    trialDate: row.trial_date,
+    trialLocation: row.trial_location,
+    trialCoach: row.trial_coach,
+    registrationDate: row.registration_date,
+    signedUpLocation: row.signed_up_location,
+    signedUpCoach: row.signed_up_coach,
+    outcomeNotes: row.outcome_notes,
     assignedTo: row.assigned_to,
     notes: row.notes,
     respondioContactId: row.respondio_contact_id,

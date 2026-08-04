@@ -20,6 +20,17 @@ export type CustomerEnquiry = {
   status: EnquiryStatus;
   source: string | null;
   message: string | null;
+  enquiryReceivedAt: string | null;
+  firstTouchDate: string | null;
+  trialTime: string | null;
+  trialDetails: string | null;
+  trialDate: string | null;
+  trialLocation: string | null;
+  trialCoach: string | null;
+  registrationDate: string | null;
+  signedUpLocation: string | null;
+  signedUpCoach: string | null;
+  outcomeNotes: string | null;
   assignedTo: string | null;
   notes: string | null;
   respondioContactId: string | null;
@@ -63,4 +74,8 @@ export function formatEnquiryStatus(status: EnquiryStatus) {
 
 export function isEnquiryStatus(value: string): value is EnquiryStatus {
   return enquiryStatuses.includes(value as EnquiryStatus);
+}
+
+export function isEnquiryType(value: string): value is EnquiryType {
+  return enquiryTypes.includes(value as EnquiryType);
 }

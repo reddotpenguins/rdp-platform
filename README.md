@@ -77,23 +77,68 @@ Use Make.com to keep your current respond.io to Google Sheets workflow, then add
 Recommended Make.com field mapping:
 
 ```text
-parent_name
-phone
-email
-child_name
-child_age
-centre_name
-programme
-enquiry_type
-status
-source
-message
-assigned_to
-notes
-respondio_contact_id
-respondio_conversation_id
-google_sheet_row_id
+Google Sheet column                    Supabase customer_enquiries column
+Time Stamp                             enquiry_received_at
+Name                                   parent_name
+Number                                 phone
+Trial Time                             trial_time
+First message                          message
+First Touch Date                       first_touch_date
+Trial details / Comments               trial_details
+Trial date                             trial_date
+Trial Location (filtered)              trial_location and centre_name
+Trial Coach                            trial_coach and assigned_to
+Registration Date? (or NA)             registration_date
+Signed up Location                     signed_up_location
+Signed up Coach                        signed_up_coach
+If yes/no details or feedback          outcome_notes
+Source                                 source
+Google Sheets row number or row ID      google_sheet_row_id
+Respond.io conversation ID             respondio_conversation_id
+Respond.io contact ID                  respondio_contact_id
 ```
+
+In Make.com, add an **HTTP -> Make a request** step after your Google Sheets row is created.
+
+```text
+Method: POST
+URL: https://your-project-ref.supabase.co/rest/v1/customer_enquiries?on_conflict=google_sheet_row_id
+Headers:
+apikey: your-private-supabase-secret-or-service-role-key
+Content-Type: application/json
+Prefer: resolution=merge-duplicates,return=representation
+```
+
+Example JSON body:
+
+```json
+{
+  "enquiry_received_at": "{{formatDate(now; \"YYYY-MM-DDTHH:mm:ssZ\"; \"Asia/Singapore\")}}",
+  "parent_name": "{{First Name}}",
+  "phone": "{{Phone No.}}",
+  "trial_time": "{{Trial Time}}",
+  "message": "{{86.custom_fields[9].value}}",
+  "first_touch_date": "{{formatDate(86.custom_fields[10].value; \"YYYY-MM-DD\"; \"Asia/Singapore\")}}",
+  "trial_details": "{{Trial details / Comments}}",
+  "trial_date": "{{formatDate(Trial date; \"YYYY-MM-DD\"; \"Asia/Singapore\")}}",
+  "trial_location": "{{Trial Location (filtered)}}",
+  "centre_name": "{{Trial Location (filtered)}}",
+  "trial_coach": "{{Trial Coach}}",
+  "assigned_to": "{{Trial Coach}}",
+  "registration_date": "{{formatDate(Registration Date?; \"YYYY-MM-DD\"; \"Asia/Singapore\")}}",
+  "signed_up_location": "{{Signed up Location}}",
+  "signed_up_coach": "{{Signed up Coach}}",
+  "outcome_notes": "{{If yes/no details or feedback}}",
+  "source": "{{Source}}",
+  "enquiry_type": "enquiry",
+  "status": "new",
+  "google_sheet_row_id": "{{Google Sheets Row ID}}",
+  "respondio_contact_id": "{{Respond.io Contact ID}}",
+  "respondio_conversation_id": "{{Respond.io Conversation ID}}"
+}
+```
+
+Only send date fields when a date exists. Empty text values can be sent as blank, but empty date values should be omitted or sent as `null`.
 
 Use these `enquiry_type` values:
 
@@ -114,6 +159,20 @@ closed
 ```
 
 To reduce duplicate tickets, Make.com should upsert by `google_sheet_row_id` when the row comes from Google Sheets, or by `respondio_conversation_id` when the row comes straight from respond.io. Keep the Supabase service role key only in trusted server-side places such as Make.com or a private Vercel environment variable; never put it in a `NEXT_PUBLIC_` variable.
+
+To push website edits back into Google Sheets, create a second Make.com scenario:
+
+```text
+Custom Webhook -> Google Sheets: Search Rows -> Google Sheets: Update a Row
+```
+
+Use the webhook URL as this private Vercel environment variable:
+
+```text
+MAKE_ENQUIRY_UPDATE_WEBHOOK_URL=https://hook.make.com/your-private-webhook-url
+```
+
+When a ticket is saved on `/enquiries`, the app sends Make.com the ticket ID, Google Sheet row ID, status, trial details, registration details, outcome notes, and website notes. In Make.com, use `googleSheetRowId` to find or update the matching Google Sheet row. If the Google Sheet is often sorted manually, use `respondioConversationId` as the stable lookup key instead of the row number.
 
 Then create admin, lead coach, or coach login users in **Authentication -> Users** inside Supabase and add a matching staff profile row. Auth users hold the password; staff profiles hold the app role.
 
