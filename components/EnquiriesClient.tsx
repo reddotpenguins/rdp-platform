@@ -830,7 +830,7 @@ function getEnquirySourceCategory(enquiry: CustomerEnquiry): SourceCategory {
 }
 
 function formatSourceCategory(source: SourceCategory) {
-  return source === "website contact form" ? "Website contact form" : "respond.io";
+  return source === "website contact form" ? "Website form" : "respond.io";
 }
 
 function getEnquiryCentre(enquiry: CustomerEnquiry) {
