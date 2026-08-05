@@ -32,6 +32,7 @@ import {
   formatEnquiryStatus,
   formatEnquiryType
 } from "@/types/enquiry";
+import { formatProgrammeOption, getProgrammeSelectOptions } from "@/types/programme";
 
 type EnquiriesClientProps = {
   enquiries: CustomerEnquiry[];
@@ -464,12 +465,10 @@ function EnquiryRow({
               name="firstTouchDate"
               type="date"
             />
-            <TextField
+            <ProgrammeField
               className="mt-2"
               defaultValue={enquiry.programme ?? ""}
-              label="Programme"
               name="programme"
-              placeholder="LTS, Stroke Development"
             />
 
             <div className="mt-3">
@@ -604,6 +603,36 @@ function TicketMeta({
       </p>
       <p className="mt-1 break-words text-sm text-slate-700">{value}</p>
     </div>
+  );
+}
+
+function ProgrammeField({
+  className = "",
+  defaultValue,
+  name
+}: {
+  className?: string;
+  defaultValue: string;
+  name: string;
+}) {
+  const programmeValue = defaultValue.trim();
+  const values = getProgrammeSelectOptions(programmeValue);
+
+  return (
+    <label className={`block ${className}`}>
+      <span className="mb-1 block text-xs font-medium uppercase text-slate-500">Programme</span>
+      <select
+        className="h-9 w-full rounded-md border border-line bg-field px-2 text-sm outline-none transition focus:border-teal focus:bg-paper focus:ring-2 focus:ring-teal/15"
+        defaultValue={programmeValue}
+        name={name}
+      >
+        {values.map((option) => (
+          <option key={`programme-${option || "blank"}`} value={option}>
+            {formatProgrammeOption(option)}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }
 

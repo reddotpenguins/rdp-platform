@@ -111,6 +111,15 @@ Respond.io contact ID                  respondio_contact_id
 
 For `source`, use only `respond.io` or `website contact form`. Put hotline/respond.io enquiries under `respond.io`, and WordPress or website form submissions under `website contact form`.
 
+For `programme`, use one of these values:
+
+```text
+Learn to Swim
+Race Team
+Baby Class
+Social Swim Club
+```
+
 In Make.com, add an **HTTP -> Make a request** step after your Google Sheets row is created.
 
 ```text
@@ -230,6 +239,15 @@ Use these `status` values exactly:
 active
 frozen
 withdrawn
+```
+
+Use these `programme` values exactly:
+
+```text
+Learn to Swim
+Race Team
+Baby Class
+Social Swim Club
 ```
 
 Dates should use `YYYY-MM-DD`, for example `2026-08-05`. To upload, open Supabase -> Table Editor -> `student_profiles` -> Insert -> Import data from CSV, then map the CSV columns to the matching table columns.

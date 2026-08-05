@@ -1,4 +1,4 @@
 student_name,parent_name,phone,email,centre_name,coach_name,programme,status,start_date,status_effective_date,reason,notes
-Example Active Student,Example Parent,91234567,parent@example.com,SJII,Coach Name,LTS,active,2026-01-10,2026-01-10,,
-Example Frozen Student,Example Parent,91234567,parent@example.com,SAAC,Coach Name,LTS,frozen,2026-02-14,2026-08-01,Travel freeze,Returning in September
-Example Withdrawn Student,Example Parent,91234567,parent@example.com,ACSBR,Coach Name,Stroke Development,withdrawn,2026-03-02,2026-07-31,Schedule conflict,Follow up in next school term
+Example Active Student,Example Parent,91234567,parent@example.com,SJII,Coach Name,Learn to Swim,active,2026-01-10,2026-01-10,,
+Example Frozen Student,Example Parent,91234567,parent@example.com,SAAC,Coach Name,Race Team,frozen,2026-02-14,2026-08-01,Travel freeze,Returning in September
+Example Withdrawn Student,Example Parent,91234567,parent@example.com,ACSBR,Coach Name,Social Swim Club,withdrawn,2026-03-02,2026-07-31,Schedule conflict,Follow up in next school term

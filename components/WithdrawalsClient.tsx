@@ -26,6 +26,7 @@ import {
   formatStudentLifecycleStatus,
   studentLifecycleStatuses
 } from "@/types/studentLifecycle";
+import { formatProgrammeOption, getProgrammeSelectOptions } from "@/types/programme";
 
 type WithdrawalsClientProps = {
   centreFilterAccess: CentreFilterAccess;
@@ -142,7 +143,7 @@ export function WithdrawalsClient({
             options={centreOptions}
           />
           <TextField label="Coach" name="coachName" />
-          <TextField label="Programme" name="programme" />
+          <ProgrammeField name="programme" />
           <TextField label="Start date" name="startDate" type="date" />
           <TextField label="Effective date" name="statusEffectiveDate" type="date" />
           <TextField className="xl:col-span-2" label="Reason" name="reason" />
@@ -256,6 +257,7 @@ function StudentStatusCard({
               <ReadLine label="Phone" value={student.phone || "-"} />
               <ReadLine label="Centre" value={student.centreName || "-"} />
               <ReadLine label="Coach" value={student.coachName || "-"} />
+              <ReadLine label="Programme" value={student.programme || "-"} />
               <ReadLine label="Effective" value={formatDate(student.statusEffectiveDate)} />
               <ReadLine label="Reason" value={student.reason || "-"} />
             </div>
@@ -272,7 +274,7 @@ function StudentStatusCard({
               options={centreOptions}
             />
             <TextField defaultValue={student.coachName ?? ""} label="Coach" name="coachName" />
-            <TextField defaultValue={student.programme ?? ""} label="Programme" name="programme" />
+            <ProgrammeField defaultValue={student.programme ?? ""} name="programme" />
             <TextField
               defaultValue={dateInputValue(student.startDate)}
               label="Start date"
@@ -396,6 +398,27 @@ function CentreField({
         ))}
       </datalist>
     </label>
+  );
+}
+
+function ProgrammeField({
+  defaultValue = "",
+  name
+}: {
+  defaultValue?: string;
+  name: string;
+}) {
+  const programmeValue = defaultValue.trim();
+  const values = getProgrammeSelectOptions(programmeValue);
+
+  return (
+    <SelectField
+      label="Programme"
+      labelForValue={formatProgrammeOption}
+      name={name}
+      value={programmeValue}
+      values={values}
+    />
   );
 }
 
