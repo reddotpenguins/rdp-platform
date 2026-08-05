@@ -34,6 +34,7 @@ The dashboard uses Supabase Auth for login and reads uploaded assessment rows fr
 ```text
 public.assessment_import_rows
 public.customer_enquiries
+public.student_profiles
 ```
 
 For the current prototype, run this file in Supabase SQL Editor after creating the tables:
@@ -42,7 +43,7 @@ For the current prototype, run this file in Supabase SQL Editor after creating t
 supabase/auth-and-roles.sql
 ```
 
-This creates `staff_profiles`, `staff_profile_centres`, adds `admin`, `lead_coach`, and `coach` roles, and protects `assessment_import_rows` with role-aware RLS.
+This creates `staff_profiles`, `staff_profile_centres`, adds `admin`, `lead_coach`, and `coach` roles, and protects `assessment_import_rows`, `customer_enquiries`, and `student_profiles` with role-aware RLS.
 
 The app also includes an admin-only RBA page at:
 
@@ -63,6 +64,11 @@ The same role rules protect the `/enquiries` page:
 - `admin`: can see and update all customer enquiry tickets.
 - `lead_coach`: can see and update enquiry tickets for assigned centres.
 - `coach`: cannot access enquiry tickets.
+
+The `/students` and `/withdrawals` pages use `student_profiles`:
+
+- `/students`: shows sign-ups, withdrawals, total current students, active students, and students on freeze.
+- `/withdrawals`: records active, freeze, and withdrawn student status changes.
 
 ## Enquiry, Trial, and Sign-Up Tickets
 

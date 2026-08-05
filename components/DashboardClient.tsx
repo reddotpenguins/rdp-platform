@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { FileUp, Inbox, RefreshCcw, ShieldCheck } from "lucide-react";
+import { FileUp, Inbox, RefreshCcw, ShieldCheck, UserMinus, Users } from "lucide-react";
 import { AssessmentCharts } from "@/components/AssessmentCharts";
 import { CoachSummaryTable } from "@/components/CoachSummaryTable";
 import { Filters } from "@/components/Filters";
@@ -34,6 +34,7 @@ type DashboardClientProps = {
   canUpload: boolean;
   canManageEnquiries?: boolean;
   canManageStaff?: boolean;
+  canManageStudentLifecycle?: boolean;
   centreFilterAccess: CentreFilterAccess;
   view?: "coach" | "quarter";
 };
@@ -43,6 +44,7 @@ export function DashboardClient({
   canUpload,
   canManageEnquiries = false,
   canManageStaff = false,
+  canManageStudentLifecycle = false,
   centreFilterAccess,
   view = "coach"
 }: DashboardClientProps) {
@@ -119,6 +121,24 @@ export function DashboardClient({
               <Inbox aria-hidden="true" className="size-4" />
               Enquiries
             </Link>
+          ) : null}
+          {canManageStudentLifecycle ? (
+            <>
+              <Link
+                href="/students"
+                className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-md border border-line bg-paper px-3 text-sm font-semibold text-slate-700 transition hover:border-teal hover:text-teal sm:flex-none"
+              >
+                <Users aria-hidden="true" className="size-4" />
+                Students
+              </Link>
+              <Link
+                href="/withdrawals"
+                className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-md border border-line bg-paper px-3 text-sm font-semibold text-slate-700 transition hover:border-teal hover:text-teal sm:flex-none"
+              >
+                <UserMinus aria-hidden="true" className="size-4" />
+                Withdrawals
+              </Link>
+            </>
           ) : null}
           {canManageStaff ? (
             <Link

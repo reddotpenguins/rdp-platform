@@ -1,6 +1,7 @@
 import { DashboardClient } from "@/components/DashboardClient";
 import {
   canManageCustomerEnquiries,
+  canManageStudentLifecycle,
   canUploadAssessmentData,
   getCentreFilterAccess
 } from "@/lib/staffRoles";
@@ -19,6 +20,7 @@ export default async function DashboardPage() {
       canUpload={canUploadAssessmentData(profile)}
       canManageEnquiries={canManageCustomerEnquiries(profile)}
       canManageStaff={profile.role === "admin"}
+      canManageStudentLifecycle={canManageStudentLifecycle(profile)}
       centreFilterAccess={getCentreFilterAccess(profile)}
       view="coach"
     />

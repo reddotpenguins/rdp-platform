@@ -30,6 +30,10 @@ export function canManageCustomerEnquiries(profile: StaffProfile) {
   return profile.role === "admin" || profile.role === "lead_coach";
 }
 
+export function canManageStudentLifecycle(profile: StaffProfile) {
+  return profile.role === "admin" || profile.role === "lead_coach";
+}
+
 export function getCentreFilterAccess(profile: StaffProfile): CentreFilterAccess {
   if (profile.role !== "lead_coach") {
     return {

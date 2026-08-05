@@ -10,9 +10,9 @@ const config: Config = {
     extend: {
       colors: {
         ink: "#24313a",
-        paper: "#ffffff",
-        field: "#f8fafc",
-        line: "#d9dee5",
+        paper: "#fffaf5",
+        field: "#ffffff",
+        line: "#ead8c8",
         teal: "#f26a2e",
         coral: "#d9480f",
         amber: "#f59e0b",

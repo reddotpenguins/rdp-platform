@@ -619,3 +619,165 @@ create policy "Admins can delete customer enquiries"
   using (public.current_staff_role() = 'admin');
 
 grant select, insert, update, delete on public.customer_enquiries to authenticated, service_role;
+
+create table if not exists public.student_profiles (
+  id uuid primary key default gen_random_uuid(),
+  student_name text not null,
+  parent_name text,
+  phone text,
+  email text,
+  centre_name text,
+  coach_name text,
+  programme text,
+  status text not null default 'active',
+  start_date date,
+  status_effective_date date not null default current_date,
+  reason text,
+  notes text,
+  source_enquiry_id uuid references public.customer_enquiries(id) on delete set null,
+  created_by uuid references public.staff_profiles(id) on delete set null,
+  updated_by uuid references public.staff_profiles(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table public.student_profiles
+  add column if not exists student_name text,
+  add column if not exists parent_name text,
+  add column if not exists phone text,
+  add column if not exists email text,
+  add column if not exists centre_name text,
+  add column if not exists coach_name text,
+  add column if not exists programme text,
+  add column if not exists status text default 'active',
+  add column if not exists start_date date,
+  add column if not exists status_effective_date date default current_date,
+  add column if not exists reason text,
+  add column if not exists notes text,
+  add column if not exists source_enquiry_id uuid references public.customer_enquiries(id) on delete set null,
+  add column if not exists created_by uuid references public.staff_profiles(id) on delete set null,
+  add column if not exists updated_by uuid references public.staff_profiles(id) on delete set null,
+  add column if not exists created_at timestamptz default now(),
+  add column if not exists updated_at timestamptz default now();
+
+update public.student_profiles
+set status = 'active'
+where status is null
+  or status not in ('active', 'frozen', 'withdrawn');
+
+update public.student_profiles
+set status_effective_date = coalesce(start_date, created_at::date, current_date)
+where status_effective_date is null;
+
+alter table public.student_profiles
+  alter column student_name set not null,
+  alter column status set default 'active',
+  alter column status set not null,
+  alter column status_effective_date set default current_date,
+  alter column status_effective_date set not null,
+  alter column created_at set default now(),
+  alter column created_at set not null,
+  alter column updated_at set default now(),
+  alter column updated_at set not null;
+
+alter table public.student_profiles
+drop constraint if exists student_profiles_status_check;
+
+alter table public.student_profiles
+add constraint student_profiles_status_check
+check (status in ('active', 'frozen', 'withdrawn'));
+
+create index if not exists student_profiles_status_idx
+  on public.student_profiles (status);
+
+create index if not exists student_profiles_centre_name_idx
+  on public.student_profiles (lower(trim(centre_name)));
+
+create index if not exists student_profiles_status_effective_date_idx
+  on public.student_profiles (status_effective_date desc);
+
+create index if not exists student_profiles_student_name_idx
+  on public.student_profiles (lower(trim(student_name)));
+
+create or replace function public.set_student_profiles_updated_at()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$;
+
+drop trigger if exists set_student_profiles_updated_at
+  on public.student_profiles;
+
+create trigger set_student_profiles_updated_at
+before update on public.student_profiles
+for each row
+execute function public.set_student_profiles_updated_at();
+
+alter table public.student_profiles enable row level security;
+
+drop policy if exists "Staff can read permitted student profiles"
+  on public.student_profiles;
+
+create policy "Staff can read permitted student profiles"
+  on public.student_profiles
+  for select
+  to authenticated
+  using (
+    public.current_staff_role() = 'admin'
+    or (
+      public.current_staff_role() = 'lead_coach'
+      and public.current_staff_has_centre(centre_name)
+    )
+  );
+
+drop policy if exists "Admins and lead coaches can insert student profiles"
+  on public.student_profiles;
+
+create policy "Admins and lead coaches can insert student profiles"
+  on public.student_profiles
+  for insert
+  to authenticated
+  with check (
+    public.current_staff_role() = 'admin'
+    or (
+      public.current_staff_role() = 'lead_coach'
+      and public.current_staff_has_centre(centre_name)
+    )
+  );
+
+drop policy if exists "Admins and lead coaches can update student profiles"
+  on public.student_profiles;
+
+create policy "Admins and lead coaches can update student profiles"
+  on public.student_profiles
+  for update
+  to authenticated
+  using (
+    public.current_staff_role() = 'admin'
+    or (
+      public.current_staff_role() = 'lead_coach'
+      and public.current_staff_has_centre(centre_name)
+    )
+  )
+  with check (
+    public.current_staff_role() = 'admin'
+    or (
+      public.current_staff_role() = 'lead_coach'
+      and public.current_staff_has_centre(centre_name)
+    )
+  );
+
+drop policy if exists "Admins can delete student profiles"
+  on public.student_profiles;
+
+create policy "Admins can delete student profiles"
+  on public.student_profiles
+  for delete
+  to authenticated
+  using (public.current_staff_role() = 'admin');
+
+grant select, insert, update, delete on public.student_profiles to authenticated, service_role;
