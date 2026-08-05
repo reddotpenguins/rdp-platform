@@ -559,55 +559,37 @@ alter table public.customer_enquiries enable row level security;
 
 drop policy if exists "Staff can read permitted customer enquiries"
   on public.customer_enquiries;
+drop policy if exists "Admins can read customer enquiries"
+  on public.customer_enquiries;
 
-create policy "Staff can read permitted customer enquiries"
+create policy "Admins can read customer enquiries"
   on public.customer_enquiries
   for select
   to authenticated
-  using (
-    public.current_staff_role() = 'admin'
-    or (
-      public.current_staff_role() = 'lead_coach'
-      and public.current_staff_has_centre(centre_name)
-    )
-  );
+  using (public.current_staff_role() = 'admin');
 
 drop policy if exists "Admins and lead coaches can insert customer enquiries"
   on public.customer_enquiries;
+drop policy if exists "Admins can insert customer enquiries"
+  on public.customer_enquiries;
 
-create policy "Admins and lead coaches can insert customer enquiries"
+create policy "Admins can insert customer enquiries"
   on public.customer_enquiries
   for insert
   to authenticated
-  with check (
-    public.current_staff_role() = 'admin'
-    or (
-      public.current_staff_role() = 'lead_coach'
-      and public.current_staff_has_centre(centre_name)
-    )
-  );
+  with check (public.current_staff_role() = 'admin');
 
 drop policy if exists "Admins and lead coaches can update customer enquiries"
   on public.customer_enquiries;
+drop policy if exists "Admins can update customer enquiries"
+  on public.customer_enquiries;
 
-create policy "Admins and lead coaches can update customer enquiries"
+create policy "Admins can update customer enquiries"
   on public.customer_enquiries
   for update
   to authenticated
-  using (
-    public.current_staff_role() = 'admin'
-    or (
-      public.current_staff_role() = 'lead_coach'
-      and public.current_staff_has_centre(centre_name)
-    )
-  )
-  with check (
-    public.current_staff_role() = 'admin'
-    or (
-      public.current_staff_role() = 'lead_coach'
-      and public.current_staff_has_centre(centre_name)
-    )
-  );
+  using (public.current_staff_role() = 'admin')
+  with check (public.current_staff_role() = 'admin');
 
 drop policy if exists "Admins can delete customer enquiries"
   on public.customer_enquiries;
@@ -732,44 +714,36 @@ create policy "Staff can read permitted student profiles"
       public.current_staff_role() = 'lead_coach'
       and public.current_staff_has_centre(centre_name)
     )
+    or (
+      public.current_staff_role() = 'coach'
+      and public.current_staff_coach_name() is not null
+      and coach_name is not null
+      and lower(trim(coach_name)) = lower(trim(public.current_staff_coach_name()))
+    )
   );
 
 drop policy if exists "Admins and lead coaches can insert student profiles"
   on public.student_profiles;
+drop policy if exists "Admins can insert student profiles"
+  on public.student_profiles;
 
-create policy "Admins and lead coaches can insert student profiles"
+create policy "Admins can insert student profiles"
   on public.student_profiles
   for insert
   to authenticated
-  with check (
-    public.current_staff_role() = 'admin'
-    or (
-      public.current_staff_role() = 'lead_coach'
-      and public.current_staff_has_centre(centre_name)
-    )
-  );
+  with check (public.current_staff_role() = 'admin');
 
 drop policy if exists "Admins and lead coaches can update student profiles"
   on public.student_profiles;
+drop policy if exists "Admins can update student profiles"
+  on public.student_profiles;
 
-create policy "Admins and lead coaches can update student profiles"
+create policy "Admins can update student profiles"
   on public.student_profiles
   for update
   to authenticated
-  using (
-    public.current_staff_role() = 'admin'
-    or (
-      public.current_staff_role() = 'lead_coach'
-      and public.current_staff_has_centre(centre_name)
-    )
-  )
-  with check (
-    public.current_staff_role() = 'admin'
-    or (
-      public.current_staff_role() = 'lead_coach'
-      and public.current_staff_has_centre(centre_name)
-    )
-  );
+  using (public.current_staff_role() = 'admin')
+  with check (public.current_staff_role() = 'admin');
 
 drop policy if exists "Admins can delete student profiles"
   on public.student_profiles;

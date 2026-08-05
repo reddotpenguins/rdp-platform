@@ -59,16 +59,20 @@ How access works:
 - `lead_coach`: can see and upload rows only for assigned centres in `staff_profile_centres`.
 - `coach`: can see their own assessment rows by `coach_email`, or by exact `coach_name` when email is blank.
 
-The same role rules protect the `/enquiries` page:
+Admin operations pages:
 
-- `admin`: can see and update all customer enquiry tickets.
-- `lead_coach`: can see and update enquiry tickets for assigned centres.
-- `coach`: cannot access enquiry tickets.
+- `/enquiries`: admin only.
+- `/withdrawals`: admin only.
+- `/rba`: admin only.
 
-The `/students` and `/withdrawals` pages use `student_profiles`:
+The `/students` page uses `student_profiles`:
 
 - `/students`: shows sign-ups, withdrawals, total current students, active students, and students on freeze.
-- `/withdrawals`: records active, freeze, and withdrawn student status changes.
+- `admin`: can see all students.
+- `lead_coach`: can see students for assigned centres in `staff_profile_centres`.
+- `coach`: can see students whose `coach_name` matches their staff profile `coach_name`.
+
+The `/withdrawals` page records active, freeze, and withdrawn student status changes into `student_profiles`; only admins can access it.
 
 ## Enquiry, Trial, and Sign-Up Tickets
 

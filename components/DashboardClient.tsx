@@ -35,6 +35,7 @@ type DashboardClientProps = {
   canManageEnquiries?: boolean;
   canManageStaff?: boolean;
   canManageStudentLifecycle?: boolean;
+  canViewStudentLifecycle?: boolean;
   centreFilterAccess: CentreFilterAccess;
   view?: "coach" | "quarter";
 };
@@ -45,6 +46,7 @@ export function DashboardClient({
   canManageEnquiries = false,
   canManageStaff = false,
   canManageStudentLifecycle = false,
+  canViewStudentLifecycle = false,
   centreFilterAccess,
   view = "coach"
 }: DashboardClientProps) {
@@ -122,23 +124,23 @@ export function DashboardClient({
               Enquiries
             </Link>
           ) : null}
+          {canViewStudentLifecycle ? (
+            <Link
+              href="/students"
+              className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-md border border-line bg-paper px-3 text-sm font-semibold text-slate-700 transition hover:border-teal hover:text-teal sm:flex-none"
+            >
+              <Users aria-hidden="true" className="size-4" />
+              Students
+            </Link>
+          ) : null}
           {canManageStudentLifecycle ? (
-            <>
-              <Link
-                href="/students"
-                className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-md border border-line bg-paper px-3 text-sm font-semibold text-slate-700 transition hover:border-teal hover:text-teal sm:flex-none"
-              >
-                <Users aria-hidden="true" className="size-4" />
-                Students
-              </Link>
-              <Link
-                href="/withdrawals"
-                className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-md border border-line bg-paper px-3 text-sm font-semibold text-slate-700 transition hover:border-teal hover:text-teal sm:flex-none"
-              >
-                <UserMinus aria-hidden="true" className="size-4" />
-                Withdrawals
-              </Link>
-            </>
+            <Link
+              href="/withdrawals"
+              className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-md border border-line bg-paper px-3 text-sm font-semibold text-slate-700 transition hover:border-teal hover:text-teal sm:flex-none"
+            >
+              <UserMinus aria-hidden="true" className="size-4" />
+              Withdrawals
+            </Link>
           ) : null}
           {canManageStaff ? (
             <Link

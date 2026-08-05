@@ -27,11 +27,15 @@ export function canUploadAssessmentData(profile: StaffProfile) {
 }
 
 export function canManageCustomerEnquiries(profile: StaffProfile) {
-  return profile.role === "admin" || profile.role === "lead_coach";
+  return profile.role === "admin";
 }
 
 export function canManageStudentLifecycle(profile: StaffProfile) {
-  return profile.role === "admin" || profile.role === "lead_coach";
+  return profile.role === "admin";
+}
+
+export function canViewStudentLifecycle(profile: StaffProfile) {
+  return profile.role === "admin" || profile.role === "lead_coach" || profile.role === "coach";
 }
 
 export function getCentreFilterAccess(profile: StaffProfile): CentreFilterAccess {

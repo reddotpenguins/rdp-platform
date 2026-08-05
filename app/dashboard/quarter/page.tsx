@@ -2,6 +2,7 @@ import { DashboardClient } from "@/components/DashboardClient";
 import {
   canManageCustomerEnquiries,
   canManageStudentLifecycle,
+  canViewStudentLifecycle,
   canUploadAssessmentData,
   getCentreFilterAccess
 } from "@/lib/staffRoles";
@@ -21,6 +22,7 @@ export default async function QuarterDashboardPage() {
       canManageEnquiries={canManageCustomerEnquiries(profile)}
       canManageStaff={profile.role === "admin"}
       canManageStudentLifecycle={canManageStudentLifecycle(profile)}
+      canViewStudentLifecycle={canViewStudentLifecycle(profile)}
       centreFilterAccess={getCentreFilterAccess(profile)}
       view="quarter"
     />

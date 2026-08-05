@@ -22,6 +22,8 @@ import type { StudentProfile } from "@/types/studentLifecycle";
 import { formatStudentLifecycleStatus } from "@/types/studentLifecycle";
 
 type StudentDashboardClientProps = {
+  canManageEnquiries?: boolean;
+  canManageStudentLifecycle?: boolean;
   centreFilterAccess: CentreFilterAccess;
   enquiries: CustomerEnquiry[];
   enquiriesError?: string;
@@ -34,6 +36,8 @@ const dateFormatter = new Intl.DateTimeFormat("en-SG", {
 });
 
 export function StudentDashboardClient({
+  canManageEnquiries = false,
+  canManageStudentLifecycle = false,
   centreFilterAccess,
   enquiries,
   enquiriesError,
@@ -103,8 +107,12 @@ export function StudentDashboardClient({
 
         <div className="flex flex-wrap items-center gap-2 sm:w-auto">
           <HeaderLink href="/dashboard" icon={ArrowLeft} label="Dashboard" />
-          <HeaderLink href="/withdrawals" icon={UserMinus} label="Withdrawals" />
-          <HeaderLink href="/enquiries" icon={Inbox} label="Enquiries" />
+          {canManageStudentLifecycle ? (
+            <HeaderLink href="/withdrawals" icon={UserMinus} label="Withdrawals" />
+          ) : null}
+          {canManageEnquiries ? (
+            <HeaderLink href="/enquiries" icon={Inbox} label="Enquiries" />
+          ) : null}
           <SignOutButton className="flex-1 sm:flex-none" />
         </div>
       </header>
