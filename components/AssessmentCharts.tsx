@@ -5,7 +5,6 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
-  LabelList,
   Legend,
   Pie,
   PieChart,
@@ -40,11 +39,6 @@ type FailCoachDatum = {
   failedStudents: number;
   totalStudents: number;
   rateLabel: string;
-};
-
-type FailRateTooltipProps = {
-  active?: boolean;
-  payload?: Array<{ payload?: FailCoachDatum }>;
 };
 
 const colors = {
@@ -231,25 +225,7 @@ export function AssessmentCharts({
       </ChartPanel>
 
       <ChartPanel title={`${selectedQuarterLabel} fail rate by coach (failed / total)`}>
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart
-            data={failCoachData}
-            layout="vertical"
-            margin={{ left: 0, right: 72, top: 10, bottom: 0 }}
-          >
-            <CartesianGrid horizontal={false} strokeDasharray="3 3" />
-            <XAxis domain={[0, 100]} tickFormatter={percentTick} type="number" />
-            <YAxis dataKey="coach" interval={0} type="category" width={96} />
-            <Tooltip content={<FailRateTooltip />} />
-            <Bar
-              dataKey="Fail Rate"
-              fill={getSummaryFailColor(selectedQuarter)}
-              radius={[4, 4, 0, 0]}
-            >
-              <LabelList dataKey="rateLabel" fill="#334155" fontSize={12} position="right" />
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
+        <FailRateCoachList data={failCoachData} selectedQuarter={selectedQuarter} />
       </ChartPanel>
 
       <ChartPanel title="Immediate concerns by coach">
@@ -332,19 +308,54 @@ function getSummaryFailColor(selectedQuarter: "All" | AssessmentQuarter) {
   return "#ef4444";
 }
 
-function FailRateTooltip({ active, payload }: FailRateTooltipProps) {
-  const datum = payload?.[0]?.payload;
-
-  if (!active || !datum) {
-    return null;
+function FailRateCoachList({
+  data,
+  selectedQuarter
+}: {
+  data: FailCoachDatum[];
+  selectedQuarter: "All" | AssessmentQuarter;
+}) {
+  if (data.length === 0) {
+    return (
+      <div className="flex h-full items-center justify-center rounded-lg border border-dashed border-line bg-field px-4 text-center text-sm text-slate-500">
+        No failed students for this filter.
+      </div>
+    );
   }
 
   return (
-    <div className="rounded-md border border-line bg-paper px-3 py-2 text-sm shadow-panel">
-      <p className="font-semibold text-ink">{datum.fullCoachName}</p>
-      <p className="mt-1 text-slate-600">
-        Fail rate: {datum.rateLabel}
-      </p>
+    <div className="h-full overflow-y-auto pr-1">
+      <div className="grid grid-cols-[9rem_minmax(0,1fr)_6.75rem] gap-3 border-b border-line pb-2 text-xs font-semibold uppercase text-slate-500">
+        <span>Coach</span>
+        <span>Fail rate</span>
+        <span className="text-right">Rate / count</span>
+      </div>
+      <div className="mt-2 space-y-2.5">
+        {data.map((item) => (
+          <div
+            className="grid grid-cols-[9rem_minmax(0,1fr)_6.75rem] items-center gap-3 text-sm"
+            key={item.fullCoachName}
+          >
+            <span className="truncate font-medium text-ink" title={item.fullCoachName}>
+              {item.fullCoachName}
+            </span>
+            <div
+              aria-label={`${item.fullCoachName} fail rate ${item.rateLabel}`}
+              className="h-4 overflow-hidden rounded-full bg-slate-100"
+              role="img"
+            >
+              <div
+                className="h-full rounded-full"
+                style={{
+                  backgroundColor: getSummaryFailColor(selectedQuarter),
+                  width: `${Math.max(item["Fail Rate"], 3)}%`
+                }}
+              />
+            </div>
+            <span className="text-right font-semibold text-slate-700">{item.rateLabel}</span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

@@ -139,7 +139,7 @@ export function RbaAdminClient({
                 <th className="px-4 py-3 font-semibold">Role</th>
                 <th className="px-4 py-3 font-semibold">Coach name</th>
                 <th className="px-4 py-3 font-semibold">Lead coach centres</th>
-                <th className="px-4 py-3 font-semibold">Active</th>
+                <th className="px-4 py-3 font-semibold">Status</th>
                 <th className="px-4 py-3 font-semibold">Action</th>
               </tr>
             </thead>
@@ -348,19 +348,21 @@ function ActiveField({
   disabled?: boolean;
   form?: string;
 }) {
+  const defaultValue = defaultChecked ? "true" : "false";
+
   return (
-    <label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
-      {disabled ? null : <input type="hidden" name="active" value="false" form={form} />}
-      <input
-        className="size-4 rounded border-line text-teal focus:ring-teal"
-        defaultChecked={defaultChecked}
+    <label className="block">
+      <span className="mb-1 block text-sm font-medium text-slate-600">Status</span>
+      <select
+        className="h-10 w-full rounded-md border border-line bg-field px-3 text-sm font-semibold text-slate-700 outline-none transition focus:border-teal focus:bg-paper focus:ring-2 focus:ring-teal/15 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500"
+        defaultValue={defaultValue}
         disabled={disabled}
         form={form}
         name="active"
-        type="checkbox"
-        value="true"
-      />
-      Active
+      >
+        <option value="true">Active</option>
+        <option value="false">Inactive</option>
+      </select>
     </label>
   );
 }
