@@ -271,9 +271,10 @@ export function EnquiriesClient({
         <div className="max-h-[760px] overflow-y-auto bg-field p-3">
           {visibleEnquiries.length > 0 ? (
             <div className="space-y-3">
-              {visibleEnquiries.map((enquiry) => (
+              {visibleEnquiries.map((enquiry, index) => (
                 <EnquiryRow
                   enquiry={enquiry}
+                  isAlternate={index % 2 === 1}
                   isExpanded={expandedTicketId === enquiry.id}
                   key={enquiry.id}
                   onToggle={() =>
@@ -335,10 +336,12 @@ function TicketTabs({
 
 function EnquiryRow({
   enquiry,
+  isAlternate,
   isExpanded,
   onToggle
 }: {
   enquiry: CustomerEnquiry;
+  isAlternate: boolean;
   isExpanded: boolean;
   onToggle: () => void;
 }) {
@@ -347,10 +350,12 @@ function EnquiryRow({
   const formId = `enquiry-${enquiry.id}`;
   const trialSummary = getTrialSummary(enquiry);
   const messagePreview = getMessagePreview(enquiry.message);
+  const cardSurfaceClass = isAlternate ? "bg-slate-100" : "bg-paper";
+  const expandedSurfaceClass = isAlternate ? "bg-slate-50" : "bg-white";
 
   return (
     <article
-      className={`overflow-hidden rounded-lg border bg-paper shadow-sm transition ${
+      className={`overflow-hidden rounded-lg border ${cardSurfaceClass} shadow-sm transition ${
         isExpanded ? "border-teal ring-2 ring-teal/10" : "border-line hover:border-slate-300"
       }`}
     >
@@ -412,7 +417,7 @@ function EnquiryRow({
       {isExpanded ? (
         <form
           action={updateEnquiryTicketAction}
-          className="grid min-w-0 gap-5 border-t border-line bg-white p-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)]"
+          className={`grid min-w-0 gap-5 border-t border-line ${expandedSurfaceClass} p-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)]`}
           id={formId}
         >
           <input name="enquiryId" type="hidden" value={enquiry.id} />
