@@ -459,6 +459,13 @@ function EnquiryRow({
               name="firstTouchDate"
               type="date"
             />
+            <TextField
+              className="mt-2"
+              defaultValue={enquiry.programme ?? ""}
+              label="Programme"
+              name="programme"
+              placeholder="LTS, Stroke Development"
+            />
 
             <div className="mt-3">
               <p className="mb-1 text-xs font-medium uppercase text-slate-500">First message</p>

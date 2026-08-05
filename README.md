@@ -94,6 +94,7 @@ Trial details / Comments               trial_details
 Trial date                             trial_date
 Trial Location (filtered)              trial_location and centre_name
 Trial Coach                            trial_coach and assigned_to
+Programme                              programme
 Registration Date? (or NA)             registration_date
 Signed up Location                     signed_up_location
 Signed up Coach                        signed_up_coach
@@ -133,6 +134,7 @@ Example JSON body:
   "centre_name": "{{Trial Location (filtered)}}",
   "trial_coach": "{{Trial Coach}}",
   "assigned_to": "{{Trial Coach}}",
+  "programme": "{{Programme}}",
   "registration_date": "{{formatDate(Registration Date?; \"YYYY-MM-DD\"; \"Asia/Singapore\")}}",
   "signed_up_location": "{{Signed up Location}}",
   "signed_up_coach": "{{Signed up Coach}}",
@@ -181,6 +183,52 @@ MAKE_ENQUIRY_UPDATE_WEBHOOK_URL=https://hook.make.com/your-private-webhook-url
 ```
 
 When a ticket is saved on `/enquiries`, the app sends Make.com the ticket ID, Google Sheet row ID, status, trial details, registration details, outcome notes, and website notes. In Make.com, use `googleSheetRowId` to find or update the matching Google Sheet row. If the Google Sheet is often sorted manually, use `respondioConversationId` as the stable lookup key instead of the row number.
+
+## Student Lifecycle Uploads
+
+The `/students` and `/withdrawals` pages read from:
+
+```text
+public.student_profiles
+```
+
+For old withdrawal or freeze records, prepare a CSV using this template:
+
+```text
+public/sample-student-lifecycle-template.csv
+```
+
+Required columns:
+
+```text
+student_name
+status
+status_effective_date
+```
+
+Recommended columns:
+
+```text
+parent_name
+phone
+email
+centre_name
+coach_name
+programme
+start_date
+reason
+notes
+```
+
+Use these `status` values exactly:
+
+```text
+active
+frozen
+withdrawn
+```
+
+Dates should use `YYYY-MM-DD`, for example `2026-08-05`. To upload, open Supabase -> Table Editor -> `student_profiles` -> Insert -> Import data from CSV, then map the CSV columns to the matching table columns.
 
 Then create admin, lead coach, or coach login users in **Authentication -> Users** inside Supabase and add a matching staff profile row. Auth users hold the password; staff profiles hold the app role.
 

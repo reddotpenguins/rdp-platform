@@ -165,7 +165,7 @@ export function StudentDashboardClient({
           rows={filteredSignUps.slice(0, 12).map((enquiry) => ({
             centre: getEnquiryCentre(enquiry) || "-",
             date: formatDate(getSignUpDate(enquiry)),
-            detail: enquiry.signedUpCoach || enquiry.trialCoach || enquiry.assignedTo || "-",
+            detail: getSignUpDetail(enquiry),
             id: enquiry.id,
             name: enquiry.childName || enquiry.parentName,
             status: "Sign up"
@@ -470,6 +470,16 @@ function isSignUp(enquiry: CustomerEnquiry) {
 
 function getSignUpDate(enquiry: CustomerEnquiry) {
   return enquiry.registrationDate ?? enquiry.enquiryReceivedAt ?? enquiry.createdAt;
+}
+
+function getSignUpDetail(enquiry: CustomerEnquiry) {
+  const coach = enquiry.signedUpCoach || enquiry.trialCoach || enquiry.assignedTo;
+  const details = [
+    `Programme: ${enquiry.programme?.trim() || "Not set"}`,
+    coach ? `Coach: ${coach}` : null
+  ].filter(Boolean);
+
+  return details.join(" | ");
 }
 
 function getEnquiryCentre(enquiry: CustomerEnquiry) {
