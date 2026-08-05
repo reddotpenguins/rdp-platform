@@ -41,6 +41,7 @@ export type StudentAssessmentRecord = {
 };
 
 export type QuarterMetrics = {
+  totalCount: number;
   assessedCount: number;
   passCount: number;
   failCount: number;
@@ -59,13 +60,17 @@ export type DashboardMetrics = {
 export type CoachSummary = {
   coachName: string;
   totalStudents: number;
+  q1TotalCount: number;
   q1AssessedCount: number;
   q1PassCount: number;
   q1FailCount: number;
+  q1FailRate: number;
   q1PassRate: number;
+  q2TotalCount: number;
   q2AssessedCount: number;
   q2PassCount: number;
   q2FailCount: number;
+  q2FailRate: number;
   q2PassRate: number;
   yellowFlagCount: number;
   redFlagCount: number;

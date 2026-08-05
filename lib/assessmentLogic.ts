@@ -161,8 +161,10 @@ function calculateQuarterMetrics(
   const passCount = records.filter((record) => record[`${quarter}Result`] === "Pass").length;
   const failCount = records.filter((record) => record[`${quarter}Result`] === "Fail").length;
   const assessedCount = passCount + failCount;
+  const totalCount = records.length;
 
   return {
+    totalCount,
     assessedCount,
     passCount,
     failCount,
@@ -273,13 +275,17 @@ export function calculateCoachSummaries(
       return {
         coachName,
         totalStudents: coachGroup.studentKeys.size,
+        q1TotalCount: q1.totalCount,
         q1AssessedCount: q1.assessedCount,
         q1PassCount: q1.passCount,
         q1FailCount: q1.failCount,
+        q1FailRate: q1.totalCount > 0 ? q1.failCount / q1.totalCount : 0,
         q1PassRate: q1.passRate,
+        q2TotalCount: q2.totalCount,
         q2AssessedCount: q2.assessedCount,
         q2PassCount: q2.passCount,
         q2FailCount: q2.failCount,
+        q2FailRate: q2.totalCount > 0 ? q2.failCount / q2.totalCount : 0,
         q2PassRate: q2.passRate,
         yellowFlagCount,
         redFlagCount,

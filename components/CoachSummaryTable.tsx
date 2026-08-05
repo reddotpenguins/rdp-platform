@@ -25,8 +25,12 @@ export function CoachSummaryTable({ summaries, selectedQuarter }: CoachSummaryTa
               {[
                 "Coach name",
                 "Total students",
-                ...(showQ1 ? ["Q1 assessed", "Q1 pass", "Q1 fail", "Q1 pass rate"] : []),
-                ...(showQ2 ? ["Q2 assessed", "Q2 pass", "Q2 fail", "Q2 pass rate"] : []),
+                ...(showQ1
+                  ? ["Q1 total", "Q1 assessed", "Q1 pass", "Q1 fail / total", "Q1 fail %", "Q1 pass rate"]
+                  : []),
+                ...(showQ2
+                  ? ["Q2 total", "Q2 assessed", "Q2 pass", "Q2 fail / total", "Q2 fail %", "Q2 pass rate"]
+                  : []),
                 "Monitor",
                 "Immediate concern",
                 "Suggested action"
@@ -46,12 +50,16 @@ export function CoachSummaryTable({ summaries, selectedQuarter }: CoachSummaryTa
                 <td className="border-b border-line px-4 py-3">{summary.totalStudents}</td>
                 {showQ1 ? (
                   <>
+                    <td className="border-b border-line px-4 py-3">{summary.q1TotalCount}</td>
                     <td className="border-b border-line px-4 py-3">{summary.q1AssessedCount}</td>
                     <td className="border-b border-line px-4 py-3 font-semibold text-green-800">
                       {summary.q1PassCount}
                     </td>
                     <td className="border-b border-line px-4 py-3 font-semibold text-red-800">
-                      {summary.q1FailCount}
+                      {summary.q1FailCount} / {summary.q1TotalCount}
+                    </td>
+                    <td className="border-b border-line px-4 py-3 font-semibold text-red-800">
+                      {formatPercent(summary.q1FailRate)}
                     </td>
                     <td className="border-b border-line px-4 py-3">
                       {formatPercent(summary.q1PassRate)}
@@ -60,12 +68,16 @@ export function CoachSummaryTable({ summaries, selectedQuarter }: CoachSummaryTa
                 ) : null}
                 {showQ2 ? (
                   <>
+                    <td className="border-b border-line px-4 py-3">{summary.q2TotalCount}</td>
                     <td className="border-b border-line px-4 py-3">{summary.q2AssessedCount}</td>
                     <td className="border-b border-line px-4 py-3 font-semibold text-green-600">
                       {summary.q2PassCount}
                     </td>
                     <td className="border-b border-line px-4 py-3 font-semibold text-red-600">
-                      {summary.q2FailCount}
+                      {summary.q2FailCount} / {summary.q2TotalCount}
+                    </td>
+                    <td className="border-b border-line px-4 py-3 font-semibold text-red-600">
+                      {formatPercent(summary.q2FailRate)}
                     </td>
                     <td className="border-b border-line px-4 py-3">
                       {formatPercent(summary.q2PassRate)}

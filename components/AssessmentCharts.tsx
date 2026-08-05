@@ -5,6 +5,7 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  LabelList,
   Legend,
   Pie,
   PieChart,
@@ -30,6 +31,20 @@ type PassFailDatum = {
   quarter: AssessmentQuarter;
   Pass: number;
   Fail: number;
+};
+
+type FailCoachDatum = {
+  coach: string;
+  fullCoachName: string;
+  "Fail Rate": number;
+  failedStudents: number;
+  totalStudents: number;
+  rateLabel: string;
+};
+
+type FailRateTooltipProps = {
+  active?: boolean;
+  payload?: Array<{ payload?: FailCoachDatum }>;
 };
 
 const colors = {
@@ -110,17 +125,25 @@ export function AssessmentCharts({
     });
 
   const failCoachData = coachSummaries
-    .filter((summary) => getSummaryFailCount(summary, selectedQuarter) > 0)
+    .map((summary) => {
+      const stats = getSummaryFailStats(summary, selectedQuarter);
+
+      return {
+        coach: chartCoachName(summary.coachName),
+        fullCoachName: summary.coachName,
+        "Fail Rate": Math.round(stats.failRate * 100),
+        failedStudents: stats.failCount,
+        totalStudents: stats.totalCount,
+        rateLabel: formatFailRateLabel(stats.failCount, stats.totalCount)
+      };
+    })
+    .filter((summary) => summary.failedStudents > 0)
     .slice()
     .sort(
       (a, b) =>
-        getSummaryFailCount(b, selectedQuarter) - getSummaryFailCount(a, selectedQuarter)
+        b["Fail Rate"] - a["Fail Rate"] || b.failedStudents - a.failedStudents
     )
-    .slice(0, 12)
-    .map((summary) => ({
-      coach: chartCoachName(summary.coachName),
-      Fail: getSummaryFailCount(summary, selectedQuarter)
-    }));
+    .slice(0, 12);
 
   const redFlagCoachData = coachSummaries
     .filter((summary) => summary.redFlagCount > 0)
@@ -207,18 +230,24 @@ export function AssessmentCharts({
         </ResponsiveContainer>
       </ChartPanel>
 
-      <ChartPanel title={`${selectedQuarterLabel} fail count by coach`}>
+      <ChartPanel title={`${selectedQuarterLabel} fail rate by coach (failed / total)`}>
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={failCoachData} margin={{ left: 0, right: 8, top: 10, bottom: 20 }}>
-            <CartesianGrid strokeDasharray="3 3" vertical={false} />
-            <XAxis dataKey="coach" angle={-25} textAnchor="end" interval={0} height={62} />
-            <YAxis allowDecimals={false} />
-            <Tooltip />
+          <BarChart
+            data={failCoachData}
+            layout="vertical"
+            margin={{ left: 0, right: 72, top: 10, bottom: 0 }}
+          >
+            <CartesianGrid horizontal={false} strokeDasharray="3 3" />
+            <XAxis domain={[0, 100]} tickFormatter={percentTick} type="number" />
+            <YAxis dataKey="coach" interval={0} type="category" width={96} />
+            <Tooltip content={<FailRateTooltip />} />
             <Bar
-              dataKey="Fail"
-              fill={selectedQuarter === "Q2" ? colors.fail.q2 : colors.fail.q1}
+              dataKey="Fail Rate"
+              fill={getSummaryFailColor(selectedQuarter)}
               radius={[4, 4, 0, 0]}
-            />
+            >
+              <LabelList dataKey="rateLabel" fill="#334155" fontSize={12} position="right" />
+            </Bar>
           </BarChart>
         </ResponsiveContainer>
       </ChartPanel>
@@ -256,6 +285,68 @@ function getSummaryFailCount(summary: CoachSummary, selectedQuarter: "All" | Ass
   }
 
   return summary.q1FailCount + summary.q2FailCount;
+}
+
+function getSummaryFailStats(summary: CoachSummary, selectedQuarter: "All" | AssessmentQuarter) {
+  if (selectedQuarter === "Q1") {
+    return {
+      failCount: summary.q1FailCount,
+      failRate: summary.q1FailRate,
+      totalCount: summary.q1TotalCount
+    };
+  }
+
+  if (selectedQuarter === "Q2") {
+    return {
+      failCount: summary.q2FailCount,
+      failRate: summary.q2FailRate,
+      totalCount: summary.q2TotalCount
+    };
+  }
+
+  const failCount = summary.q1FailCount + summary.q2FailCount;
+  const totalCount = summary.q1TotalCount + summary.q2TotalCount;
+
+  return {
+    failCount,
+    failRate: totalCount > 0 ? failCount / totalCount : 0,
+    totalCount
+  };
+}
+
+function formatFailRateLabel(failCount: number, totalCount: number) {
+  const failRate = totalCount > 0 ? failCount / totalCount : 0;
+
+  return `${Math.round(failRate * 100)}% (${failCount}/${totalCount})`;
+}
+
+function getSummaryFailColor(selectedQuarter: "All" | AssessmentQuarter) {
+  if (selectedQuarter === "Q2") {
+    return colors.fail.q2;
+  }
+
+  if (selectedQuarter === "Q1") {
+    return colors.fail.q1;
+  }
+
+  return "#ef4444";
+}
+
+function FailRateTooltip({ active, payload }: FailRateTooltipProps) {
+  const datum = payload?.[0]?.payload;
+
+  if (!active || !datum) {
+    return null;
+  }
+
+  return (
+    <div className="rounded-md border border-line bg-paper px-3 py-2 text-sm shadow-panel">
+      <p className="font-semibold text-ink">{datum.fullCoachName}</p>
+      <p className="mt-1 text-slate-600">
+        Fail rate: {datum.rateLabel}
+      </p>
+    </div>
+  );
 }
 
 function ChartPanel({ title, children }: { title: string; children: React.ReactNode }) {
