@@ -29,7 +29,8 @@ export type CustomerEnquiryRow = {
   notes: string | null;
   respondio_contact_id: string | null;
   respondio_conversation_id: string | null;
-  google_sheet_row_id: string | null;
+  external_ticket_id?: string | null;
+  google_sheet_row_id?: string | null;
   created_at: string;
   updated_at: string;
   closed_at: string | null;
@@ -41,40 +42,7 @@ export type CustomerEnquiriesResult = {
   error?: string;
 };
 
-export const enquiryColumns = [
-  "id",
-  "parent_name",
-  "phone",
-  "email",
-  "child_name",
-  "child_age",
-  "centre_name",
-  "programme",
-  "enquiry_type",
-  "status",
-  "source",
-  "message",
-  "enquiry_received_at",
-  "first_touch_date",
-  "trial_time",
-  "trial_details",
-  "trial_date",
-  "trial_location",
-  "trial_coach",
-  "registration_date",
-  "signed_up_location",
-  "signed_up_coach",
-  "outcome_notes",
-  "assigned_to",
-  "notes",
-  "respondio_contact_id",
-  "respondio_conversation_id",
-  "google_sheet_row_id",
-  "created_at",
-  "updated_at",
-  "closed_at",
-  "closed_by"
-].join(", ");
+export const enquiryColumns = "*";
 
 export async function getCustomerEnquiries(): Promise<CustomerEnquiriesResult> {
   const supabase = createClient();
@@ -126,7 +94,7 @@ export function mapCustomerEnquiry(row: CustomerEnquiryRow): CustomerEnquiry {
     notes: row.notes,
     respondioContactId: row.respondio_contact_id,
     respondioConversationId: row.respondio_conversation_id,
-    googleSheetRowId: row.google_sheet_row_id,
+    externalTicketId: row.external_ticket_id ?? row.google_sheet_row_id ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     closedAt: row.closed_at,

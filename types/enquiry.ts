@@ -35,7 +35,7 @@ export type CustomerEnquiry = {
   notes: string | null;
   respondioContactId: string | null;
   respondioConversationId: string | null;
-  googleSheetRowId: string | null;
+  externalTicketId: string | null;
   createdAt: string;
   updatedAt: string;
   closedAt: string | null;

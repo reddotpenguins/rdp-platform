@@ -97,12 +97,12 @@ The `/enquiries` page reads from:
 public.customer_enquiries
 ```
 
-Use Make.com to keep your current respond.io to Google Sheets workflow, then add one more Make.com step to upsert into Supabase `customer_enquiries`.
+Use Make.com to send respond.io and website form enquiries directly into Supabase `customer_enquiries`.
 
 Recommended Make.com field mapping:
 
 ```text
-Google Sheet column                    Supabase customer_enquiries column
+Incoming field                         Supabase customer_enquiries column
 Time Stamp                             enquiry_received_at
 Name                                   parent_name
 Number                                 phone
@@ -119,7 +119,7 @@ Signed up Location                     signed_up_location
 Signed up Coach                        signed_up_coach
 If yes/no details or feedback          outcome_notes
 Source                                 source
-Google Sheets row number or row ID      google_sheet_row_id
+Website form entry/submission ID       external_ticket_id
 Respond.io conversation ID             respondio_conversation_id
 Respond.io contact ID                  respondio_contact_id
 ```
@@ -135,16 +135,27 @@ Baby Class
 Social Swim Club
 ```
 
-In Make.com, add an **HTTP -> Make a request** step after your Google Sheets row is created.
+In Make.com, use the Supabase **Upsert a record** module when it lets you choose the unique/conflict field.
+
+For the respond.io scenario, upsert by:
 
 ```text
-Method: POST
-URL: https://your-project-ref.supabase.co/rest/v1/customer_enquiries?on_conflict=google_sheet_row_id
-Headers:
-apikey: your-private-supabase-secret-or-service-role-key
-Content-Type: application/json
-Prefer: resolution=merge-duplicates,return=representation
+respondio_conversation_id
 ```
+
+For the website or WordPress contact form scenario, upsert by:
+
+```text
+external_ticket_id
+```
+
+If Make's Supabase module does not let you choose the unique/conflict field, use this scenario shape instead:
+
+```text
+Search rows in customer_enquiries -> Router -> Update existing row by id OR Create new row
+```
+
+For respond.io, search by `respondio_conversation_id`. For website forms, search by `external_ticket_id`.
 
 Example JSON body:
 
@@ -170,7 +181,7 @@ Example JSON body:
   "source": "respond.io",
   "enquiry_type": "enquiry",
   "status": "new",
-  "google_sheet_row_id": "{{Google Sheets Row ID}}",
+  "external_ticket_id": "{{Website Form Entry ID}}",
   "respondio_contact_id": "{{Respond.io Contact ID}}",
   "respondio_conversation_id": "{{Respond.io Conversation ID}}"
 }
@@ -196,21 +207,17 @@ signed_up
 closed
 ```
 
-To reduce duplicate tickets, Make.com should upsert by `google_sheet_row_id` when the row comes from Google Sheets, or by `respondio_conversation_id` when the row comes straight from respond.io. Keep the Supabase service role key only in trusted server-side places such as Make.com or a private Vercel environment variable; never put it in a `NEXT_PUBLIC_` variable.
+To reduce duplicate tickets, Make.com must send a stable identifier for each source. Use `respondio_conversation_id` for respond.io and `external_ticket_id` for website forms. Do not use a Make run ID if it changes on retry; the value must stay the same for the original customer enquiry. Empty identifier values should be omitted or sent as `null`, not as an empty string.
 
-To push website edits back into Google Sheets, create a second Make.com scenario:
+Keep the Supabase service role key only in trusted server-side places such as Make.com or a private Vercel environment variable; never put it in a `NEXT_PUBLIC_` variable.
 
-```text
-Custom Webhook -> Google Sheets: Search Rows -> Google Sheets: Update a Row
-```
-
-Use the webhook URL as this private Vercel environment variable:
+If you later want ticket edits from the website to trigger another Make.com workflow, use the webhook URL as this private Vercel environment variable:
 
 ```text
 MAKE_ENQUIRY_UPDATE_WEBHOOK_URL=https://hook.make.com/your-private-webhook-url
 ```
 
-When a ticket is saved on `/enquiries`, the app sends Make.com the ticket ID, Google Sheet row ID, status, trial details, registration details, outcome notes, and website notes. In Make.com, use `googleSheetRowId` to find or update the matching Google Sheet row. If the Google Sheet is often sorted manually, use `respondioConversationId` as the stable lookup key instead of the row number.
+When a ticket is saved on `/enquiries`, the app sends Make.com the ticket ID, external ticket ID, respond.io IDs, status, trial details, registration details, outcome notes, and website notes.
 
 ## Student Lifecycle Uploads
 

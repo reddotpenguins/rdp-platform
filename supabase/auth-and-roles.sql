@@ -439,7 +439,7 @@ create table if not exists public.customer_enquiries (
   notes text,
   respondio_contact_id text,
   respondio_conversation_id text,
-  google_sheet_row_id text,
+  external_ticket_id text,
   closed_at timestamptz,
   closed_by uuid references public.staff_profiles(id) on delete set null,
   created_at timestamptz not null default now(),
@@ -473,7 +473,7 @@ alter table public.customer_enquiries
   add column if not exists notes text,
   add column if not exists respondio_contact_id text,
   add column if not exists respondio_conversation_id text,
-  add column if not exists google_sheet_row_id text,
+  add column if not exists external_ticket_id text,
   add column if not exists closed_at timestamptz,
   add column if not exists closed_by uuid references public.staff_profiles(id) on delete set null,
   add column if not exists created_at timestamptz default now(),
@@ -492,6 +492,32 @@ where status is null
 update public.customer_enquiries
 set enquiry_received_at = created_at
 where enquiry_received_at is null;
+
+update public.customer_enquiries
+set external_ticket_id = null
+where trim(coalesce(external_ticket_id, '')) = '';
+
+update public.customer_enquiries
+set respondio_conversation_id = null
+where trim(coalesce(respondio_conversation_id, '')) = '';
+
+do $$
+begin
+  if exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'customer_enquiries'
+      and column_name = 'google_sheet_row_id'
+  ) then
+    execute '
+      update public.customer_enquiries
+      set external_ticket_id = google_sheet_row_id
+      where nullif(trim(coalesce(external_ticket_id, '''')), '''') is null
+        and nullif(trim(coalesce(google_sheet_row_id, '''')), '''') is not null
+    ';
+  end if;
+end $$;
 
 alter table public.customer_enquiries
   alter column parent_name set not null,
@@ -516,11 +542,30 @@ alter table public.customer_enquiries
 add constraint customer_enquiries_status_check
 check (status in ('new', 'contacted', 'trial_booked', 'signed_up', 'closed'));
 
-create unique index if not exists customer_enquiries_google_sheet_row_id_key
-  on public.customer_enquiries (google_sheet_row_id);
+drop index if exists customer_enquiries_google_sheet_row_id_key;
+drop index if exists customer_enquiries_external_ticket_id_key;
+drop index if exists customer_enquiries_respondio_conversation_id_key;
 
-create unique index if not exists customer_enquiries_respondio_conversation_id_key
-  on public.customer_enquiries (respondio_conversation_id);
+create unique index customer_enquiries_external_ticket_id_key
+  on public.customer_enquiries (external_ticket_id)
+  where nullif(trim(external_ticket_id), '') is not null;
+
+create unique index customer_enquiries_respondio_conversation_id_key
+  on public.customer_enquiries (respondio_conversation_id)
+  where nullif(trim(respondio_conversation_id), '') is not null;
+
+do $$
+begin
+  if exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'customer_enquiries'
+      and column_name = 'google_sheet_row_id'
+  ) then
+    alter table public.customer_enquiries drop column google_sheet_row_id;
+  end if;
+end $$;
 
 create index if not exists customer_enquiries_status_idx
   on public.customer_enquiries (status);

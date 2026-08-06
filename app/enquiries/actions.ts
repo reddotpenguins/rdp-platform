@@ -136,7 +136,7 @@ async function syncEnquiryUpdateToMake(row: CustomerEnquiryRow | null) {
       },
       body: JSON.stringify({
         ticketId: row.id,
-        googleSheetRowId: row.google_sheet_row_id,
+        externalTicketId: row.external_ticket_id ?? row.google_sheet_row_id ?? null,
         respondioConversationId: row.respondio_conversation_id,
         respondioContactId: row.respondio_contact_id,
         timeStamp: row.enquiry_received_at ?? row.created_at,
@@ -167,10 +167,10 @@ async function syncEnquiryUpdateToMake(row: CustomerEnquiryRow | null) {
     });
 
     if (!response.ok) {
-      return " Google Sheet sync failed; check the Make webhook run history.";
+      return " External sync failed; check the Make webhook run history.";
     }
   } catch {
-    return " Google Sheet sync failed; check the Make webhook run history.";
+    return " External sync failed; check the Make webhook run history.";
   }
 
   return null;
