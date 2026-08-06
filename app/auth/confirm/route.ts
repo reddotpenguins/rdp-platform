@@ -41,5 +41,5 @@ function getSafeNextPath(next: string | null, type: EmailOtpType | null) {
     return "/auth/set-password";
   }
 
-  return "/dashboard";
+  return "/home";
 }

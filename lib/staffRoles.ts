@@ -23,7 +23,7 @@ export type CentreFilterAccess = {
 };
 
 export function canUploadAssessmentData(profile: StaffProfile) {
-  return profile.role === "admin" || profile.role === "lead_coach";
+  return profile.role === "admin";
 }
 
 export function canManageCustomerEnquiries(profile: StaffProfile) {
@@ -35,7 +35,7 @@ export function canManageStudentLifecycle(profile: StaffProfile) {
 }
 
 export function canViewStudentLifecycle(profile: StaffProfile) {
-  return profile.role === "admin" || profile.role === "lead_coach" || profile.role === "coach";
+  return profile.role === "admin";
 }
 
 export function getCentreFilterAccess(profile: StaffProfile): CentreFilterAccess {

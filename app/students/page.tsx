@@ -27,7 +27,6 @@ export default async function StudentsPage() {
 
   return (
     <StudentDashboardClient
-      canManageEnquiries={canManageEnquiries}
       canManageStudentLifecycle={canManageStudentLifecycle(profile)}
       centreFilterAccess={getCentreFilterAccess(profile)}
       enquiries={enquiriesResult.enquiries}

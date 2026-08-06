@@ -6,7 +6,6 @@ import { useFormStatus } from "react-dom";
 import {
   ArrowLeft,
   CheckCircle2,
-  Inbox,
   PauseCircle,
   RotateCcw,
   Save,
@@ -95,9 +94,8 @@ export function WithdrawalsClient({
         </div>
 
         <div className="flex flex-wrap items-center gap-2 sm:w-auto">
-          <HeaderLink href="/dashboard" icon={ArrowLeft} label="Dashboard" />
+          <HeaderLink href="/admin" icon={ArrowLeft} label="Admin home" />
           <HeaderLink href="/students" icon={Users} label="Students" />
-          <HeaderLink href="/enquiries" icon={Inbox} label="Enquiries" />
           <SignOutButton className="flex-1 sm:flex-none" />
         </div>
       </header>

@@ -106,10 +106,10 @@ export function FileUpload() {
             Sample template
           </a>
           <Link
-            href="/dashboard"
+            href="/admin"
             className="inline-flex h-10 items-center gap-2 rounded-md bg-teal px-3 text-sm font-semibold text-white transition hover:bg-teal/90"
           >
-            Dashboard
+            Admin home
           </Link>
         </div>
       </div>

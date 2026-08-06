@@ -48,7 +48,7 @@ export function LoginForm({ initialError = "" }: LoginFormProps) {
       return;
     }
 
-    router.push("/dashboard");
+    router.push("/home");
     router.refresh();
   }
 

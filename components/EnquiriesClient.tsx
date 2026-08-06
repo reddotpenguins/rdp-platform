@@ -225,11 +225,11 @@ export function EnquiriesClient({
 
         <div className="flex flex-wrap items-center gap-2 sm:w-auto">
           <Link
-            href="/dashboard"
+            href="/admin"
             className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-md border border-line bg-paper px-3 text-sm font-semibold text-slate-700 transition hover:border-teal hover:text-teal sm:flex-none"
           >
             <ArrowLeft aria-hidden="true" className="size-4" />
-            Dashboard
+            Admin home
           </Link>
           <SignOutButton className="flex-1 sm:flex-none" />
         </div>

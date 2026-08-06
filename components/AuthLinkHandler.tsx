@@ -20,7 +20,7 @@ export function AuthLinkHandler({ fallbackPath }: AuthLinkHandlerProps) {
       const type = hashParams.get("type") || currentUrl.searchParams.get("type");
       const nextPath = getSafeNextPath(
         currentUrl.searchParams.get("next"),
-        type === "invite" || type === "recovery" ? "/auth/set-password" : "/dashboard"
+        type === "invite" || type === "recovery" ? "/auth/set-password" : "/home"
       );
       const authError = hashParams.get("error") || currentUrl.searchParams.get("error");
 

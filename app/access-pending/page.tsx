@@ -18,7 +18,7 @@ export default async function AccessPendingPage() {
   }
 
   if (profile?.active) {
-    redirect("/dashboard");
+    redirect("/home");
   }
 
   return (

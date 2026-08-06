@@ -628,7 +628,7 @@ export function ClaimsClient({ staffProfile }: ClaimsClientProps) {
         </div>
 
         <div className="flex flex-wrap items-center gap-2 sm:w-auto">
-          <HeaderLink href="/dashboard" icon={ArrowLeft} label="Dashboard" />
+          <HeaderLink href="/admin" icon={ArrowLeft} label="Admin home" />
           <SignOutButton className="flex-1 sm:flex-none" />
         </div>
       </header>

@@ -3,7 +3,19 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { FileUp, Inbox, Receipt, RefreshCcw, ShieldCheck, UserMinus, Users } from "lucide-react";
+import {
+  BarChart3,
+  ChevronDown,
+  ClipboardList,
+  FileUp,
+  Inbox,
+  Receipt,
+  RefreshCcw,
+  ShieldCheck,
+  UserMinus,
+  Users,
+  type LucideIcon
+} from "lucide-react";
 import { AssessmentCharts } from "@/components/AssessmentCharts";
 import { CoachSummaryTable } from "@/components/CoachSummaryTable";
 import { Filters } from "@/components/Filters";
@@ -106,57 +118,14 @@ export function DashboardClient({
         </div>
 
         <div className="flex flex-wrap items-center gap-2 sm:w-auto">
-          {canUpload ? (
-            <Link
-              href="/upload"
-              className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-md bg-teal px-3 text-sm font-semibold text-white transition hover:bg-teal/90 sm:flex-none"
-            >
-              <FileUp aria-hidden="true" className="size-4" />
-              Upload data
-            </Link>
-          ) : null}
-          {canManageEnquiries ? (
-            <Link
-              href="/enquiries"
-              className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-md border border-line bg-paper px-3 text-sm font-semibold text-slate-700 transition hover:border-teal hover:text-teal sm:flex-none"
-            >
-              <Inbox aria-hidden="true" className="size-4" />
-              Enquiries
-            </Link>
-          ) : null}
-          {canViewStudentLifecycle ? (
-            <Link
-              href="/students"
-              className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-md border border-line bg-paper px-3 text-sm font-semibold text-slate-700 transition hover:border-teal hover:text-teal sm:flex-none"
-            >
-              <Users aria-hidden="true" className="size-4" />
-              Students
-            </Link>
-          ) : null}
-          {canManageStudentLifecycle ? (
-            <Link
-              href="/withdrawals"
-              className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-md border border-line bg-paper px-3 text-sm font-semibold text-slate-700 transition hover:border-teal hover:text-teal sm:flex-none"
-            >
-              <UserMinus aria-hidden="true" className="size-4" />
-              Withdrawals
-            </Link>
-          ) : null}
-          <Link
-            href="/claims"
-            className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-md border border-line bg-paper px-3 text-sm font-semibold text-slate-700 transition hover:border-teal hover:text-teal sm:flex-none"
-          >
-            <Receipt aria-hidden="true" className="size-4" />
-            Claims
-          </Link>
           {canManageStaff ? (
-            <Link
-              href="/rba"
-              className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-md border border-line bg-paper px-3 text-sm font-semibold text-slate-700 transition hover:border-teal hover:text-teal sm:flex-none"
-            >
-              <ShieldCheck aria-hidden="true" className="size-4" />
-              RBA
-            </Link>
+            <AdminToolsMenu
+              canManageEnquiries={canManageEnquiries}
+              canManageStaff={canManageStaff}
+              canManageStudentLifecycle={canManageStudentLifecycle}
+              canUpload={canUpload}
+              canViewStudentLifecycle={canViewStudentLifecycle}
+            />
           ) : null}
           <button
             type="button"
@@ -204,6 +173,69 @@ export function DashboardClient({
         </>
       )}
     </main>
+  );
+}
+
+function AdminToolsMenu({
+  canManageEnquiries,
+  canManageStaff,
+  canManageStudentLifecycle,
+  canUpload,
+  canViewStudentLifecycle
+}: {
+  canManageEnquiries: boolean;
+  canManageStaff: boolean;
+  canManageStudentLifecycle: boolean;
+  canUpload: boolean;
+  canViewStudentLifecycle: boolean;
+}) {
+  return (
+    <details className="group relative flex-1 sm:flex-none">
+      <summary className="inline-flex h-10 w-full cursor-pointer list-none items-center justify-center gap-2 rounded-md border border-line bg-paper px-3 text-sm font-semibold text-slate-700 transition hover:border-teal hover:text-teal sm:w-auto [&::-webkit-details-marker]:hidden">
+        <BarChart3 aria-hidden="true" className="size-4" />
+        Admin tools
+        <ChevronDown
+          aria-hidden="true"
+          className="size-4 transition group-open:rotate-180"
+        />
+      </summary>
+      <div className="absolute right-0 z-30 mt-2 w-64 overflow-hidden rounded-lg border border-line bg-paper p-2 shadow-panel">
+        <AdminToolLink href="/admin" icon={BarChart3} label="Admin home" />
+        <AdminToolLink href="/dashboard/quarter" icon={ClipboardList} label="Quarter assessment" />
+        {canUpload ? <AdminToolLink href="/upload" icon={FileUp} label="Upload data" /> : null}
+        {canManageEnquiries ? (
+          <AdminToolLink href="/enquiries" icon={Inbox} label="Enquiries" />
+        ) : null}
+        {canViewStudentLifecycle ? (
+          <AdminToolLink href="/students" icon={Users} label="Students" />
+        ) : null}
+        {canManageStudentLifecycle ? (
+          <AdminToolLink href="/withdrawals" icon={UserMinus} label="Withdrawals" />
+        ) : null}
+        <AdminToolLink href="/claims" icon={Receipt} label="Claims" />
+        {canManageStaff ? <AdminToolLink href="/rba" icon={ShieldCheck} label="RBA" /> : null}
+      </div>
+    </details>
+  );
+}
+
+function AdminToolLink({
+  href,
+  icon: Icon,
+  label
+}: {
+  href: string;
+  icon: LucideIcon;
+  label: string;
+}) {
+  return (
+    <Link
+      href={href}
+      className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-teal/10 hover:text-teal"
+    >
+      <Icon aria-hidden="true" className="size-4" />
+      {label}
+    </Link>
   );
 }
 

@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ArrowLeft, Inbox, ShieldCheck } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { FileUpload } from "@/components/FileUpload";
 import { SignOutButton } from "@/components/SignOutButton";
-import { canManageCustomerEnquiries, canUploadAssessmentData } from "@/lib/staffRoles";
+import { canUploadAssessmentData } from "@/lib/staffRoles";
 import { requireActiveStaffSession } from "@/lib/supabase/staffProfile";
 
 export const dynamic = "force-dynamic";
@@ -24,30 +24,12 @@ export default async function UploadPage() {
         </div>
         <div className="flex flex-wrap gap-2">
           <Link
-            href="/dashboard"
+            href="/admin"
             className="inline-flex h-10 items-center gap-2 rounded-md border border-line bg-paper px-3 text-sm font-semibold text-slate-700 transition hover:border-teal hover:text-teal"
           >
             <ArrowLeft aria-hidden="true" className="size-4" />
-            Dashboard
+            Admin home
           </Link>
-          {canManageCustomerEnquiries(profile) ? (
-            <Link
-              href="/enquiries"
-              className="inline-flex h-10 items-center gap-2 rounded-md border border-line bg-paper px-3 text-sm font-semibold text-slate-700 transition hover:border-teal hover:text-teal"
-            >
-              <Inbox aria-hidden="true" className="size-4" />
-              Enquiries
-            </Link>
-          ) : null}
-          {profile.role === "admin" ? (
-            <Link
-              href="/rba"
-              className="inline-flex h-10 items-center gap-2 rounded-md border border-line bg-paper px-3 text-sm font-semibold text-slate-700 transition hover:border-teal hover:text-teal"
-            >
-              <ShieldCheck aria-hidden="true" className="size-4" />
-              RBA
-            </Link>
-          ) : null}
           <SignOutButton />
         </div>
       </header>
