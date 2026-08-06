@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { FileUp, Inbox, RefreshCcw, ShieldCheck, UserMinus, Users } from "lucide-react";
+import { FileUp, Inbox, Receipt, RefreshCcw, ShieldCheck, UserMinus, Users } from "lucide-react";
 import { AssessmentCharts } from "@/components/AssessmentCharts";
 import { CoachSummaryTable } from "@/components/CoachSummaryTable";
 import { Filters } from "@/components/Filters";
@@ -142,6 +142,13 @@ export function DashboardClient({
               Withdrawals
             </Link>
           ) : null}
+          <Link
+            href="/claims"
+            className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-md border border-line bg-paper px-3 text-sm font-semibold text-slate-700 transition hover:border-teal hover:text-teal sm:flex-none"
+          >
+            <Receipt aria-hidden="true" className="size-4" />
+            Claims
+          </Link>
           {canManageStaff ? (
             <Link
               href="/rba"

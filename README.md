@@ -1,6 +1,6 @@
 # RDP LTS Assessment Dashboard
 
-Temporary internal prototype for reviewing Red Dot Penguins LTS 2026 Q1 and Q2 assessment results while the full RDP Management Dashboard is not ready.
+Temporary internal prototype for reviewing Red Dot Penguins LTS 2026 Q1 and Q2 assessment results while the full RDP Management Dashboard is being built.
 
 ## Install Dependencies
 
@@ -37,6 +37,20 @@ public.customer_enquiries
 public.student_profiles
 ```
 
+The merged claims module is available at:
+
+```text
+/claims
+```
+
+In the current prototype, `/claims` is behind the same staff login and stores claim workflow data in browser storage so the team can review the process quickly. The production database foundation is in:
+
+```text
+supabase/claims-foundation.sql
+```
+
+Run `supabase/auth-and-roles.sql` first, then `supabase/claims-foundation.sql` when you are ready to connect claims to Supabase tables and private `claim-receipts` storage.
+
 For the current prototype, run this file in Supabase SQL Editor after creating the tables:
 
 ```text
@@ -64,6 +78,7 @@ Admin operations pages:
 - `/enquiries`: admin only.
 - `/withdrawals`: admin only.
 - `/rba`: admin only.
+- `/claims`: all active staff can submit claims; admin and lead coach accounts can review claims; admin accounts can manage claims setup.
 
 The `/students` page uses `student_profiles`:
 
