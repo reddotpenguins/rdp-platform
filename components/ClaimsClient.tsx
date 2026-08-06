@@ -36,7 +36,6 @@ import {
   defaultClaimSettings,
   detectPossibleDuplicates,
   formatMoneyCents,
-  getClaimPermissions,
   getNextClaimReference,
   initialClaimGroups,
   initialExpenseCategories,
@@ -56,7 +55,7 @@ import {
   type ClaimStatus,
   type ExpenseCategory
 } from "@/lib/claimsLogic";
-import type { StaffProfile } from "@/lib/staffRoles";
+import { getClaimPermissions, type StaffProfile } from "@/lib/staffRoles";
 
 type ClaimsClientProps = {
   staffProfile: StaffProfile;

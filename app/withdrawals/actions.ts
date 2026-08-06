@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { canManageStudentLifecycle } from "@/lib/staffRoles";
+import { canManageStudentLifecycle, getCentreFilterAccess } from "@/lib/staffRoles";
 import type { StaffProfile } from "@/lib/staffRoles";
 import { createClient } from "@/lib/supabase/server";
 import { requireActiveStaffSession } from "@/lib/supabase/staffProfile";
@@ -85,11 +85,13 @@ function getStudentLifecycleValues(formData: FormData, profile: StaffProfile) {
 }
 
 function assertCanUseCentre(profile: StaffProfile, centreName: string) {
-  if (profile.role !== "lead_coach") {
+  const access = getCentreFilterAccess(profile);
+
+  if (access.allowAllCentres) {
     return;
   }
 
-  const allowed = profile.assignedCentres.some(
+  const allowed = access.centres.some(
     (centre) => centre.trim().toLowerCase() === centreName.trim().toLowerCase()
   );
 

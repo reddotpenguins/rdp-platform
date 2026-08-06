@@ -395,6 +395,8 @@ Supabase documents this token hash flow for server-side auth because default lin
 
 ## Vercel Deployment
 
+Architecture and security guardrails for future platform work are documented in `AGENTS.md` and `docs/architecture-security.md`.
+
 When importing `reddotpenguins/rdp-platform` as a new Vercel project:
 
 - Framework Preset: `Next.js`

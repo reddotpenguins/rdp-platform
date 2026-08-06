@@ -1,7 +1,12 @@
 import { getDefaultAssessmentRecords } from "@/lib/sampleData";
 import { assessmentImportRowsToRecords, type AssessmentImportRow } from "@/lib/supabase/assessmentImport";
 import { createClient } from "@/lib/supabase/server";
-import type { StaffProfile } from "@/lib/staffRoles";
+import {
+  canViewAllAssessments,
+  canViewTeamAssessments,
+  hasStaffPermission,
+  type StaffProfile
+} from "@/lib/staffRoles";
 
 export type AssessmentDataset = {
   records: Awaited<ReturnType<typeof getDefaultAssessmentRecords>>;
@@ -49,11 +54,11 @@ export async function getInitialAssessmentDataset(
 }
 
 function filterRowsForStaffProfile(rows: AssessmentImportRow[], staffProfile?: StaffProfile) {
-  if (!staffProfile || staffProfile.role === "admin") {
+  if (!staffProfile || canViewAllAssessments(staffProfile)) {
     return rows;
   }
 
-  if (staffProfile.role === "lead_coach") {
+  if (canViewTeamAssessments(staffProfile)) {
     const assignedCentres = staffProfile.assignedCentres.map((centreName) =>
       centreName.trim().toLowerCase()
     );
@@ -61,6 +66,10 @@ function filterRowsForStaffProfile(rows: AssessmentImportRow[], staffProfile?: S
     return rows.filter((row) =>
       assignedCentres.includes(row.centre_name?.trim().toLowerCase() ?? "")
     );
+  }
+
+  if (!hasStaffPermission(staffProfile, "assessments.viewOwn")) {
+    return [];
   }
 
   const email = staffProfile.email.trim().toLowerCase();

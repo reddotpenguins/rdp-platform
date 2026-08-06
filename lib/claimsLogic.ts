@@ -100,12 +100,6 @@ export type ClaimRecord = {
   history: ClaimHistoryEntry[];
 };
 
-export type ClaimPermissions = {
-  canReview: boolean;
-  canManageSettings: boolean;
-  canMarkPaid: boolean;
-};
-
 export const defaultClaimSettings: ClaimSettings = {
   gstTrackingEnabled: true,
   defaultGstRate: 0.09,
@@ -163,14 +157,6 @@ export const allowedReceiptMimeTypes = [
   "image/heif",
   "application/pdf"
 ];
-
-export function getClaimPermissions(role: "admin" | "lead_coach" | "coach"): ClaimPermissions {
-  return {
-    canReview: role === "admin" || role === "lead_coach",
-    canManageSettings: role === "admin",
-    canMarkPaid: role === "admin"
-  };
-}
 
 export function sortClaimConfigItems<TItem extends ClaimConfigItem>(items: TItem[]) {
   return [...items].sort((first, second) => {

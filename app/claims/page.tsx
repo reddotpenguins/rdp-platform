@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { ClaimsClient } from "@/components/ClaimsClient";
+import { canAccessClaims } from "@/lib/staffRoles";
 import { requireActiveStaffSession } from "@/lib/supabase/staffProfile";
 
 export const dynamic = "force-dynamic";
@@ -7,7 +8,7 @@ export const dynamic = "force-dynamic";
 export default async function ClaimsPage() {
   const { profile } = await requireActiveStaffSession();
 
-  if (profile.role !== "admin") {
+  if (!canAccessClaims(profile)) {
     redirect("/dashboard");
   }
 

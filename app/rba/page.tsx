@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { RbaAdminClient } from "@/components/RbaAdminClient";
+import { canManageStaffAccess } from "@/lib/staffRoles";
 import { getStaffManagementProfiles } from "@/lib/supabase/staffAdmin";
 import { requireActiveStaffSession } from "@/lib/supabase/staffProfile";
 
@@ -12,7 +13,7 @@ type RbaPageProps = {
 export default async function RbaPage({ searchParams }: RbaPageProps) {
   const { profile } = await requireActiveStaffSession();
 
-  if (profile.role !== "admin") {
+  if (!canManageStaffAccess(profile)) {
     redirect("/dashboard");
   }
 

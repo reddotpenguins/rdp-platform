@@ -5,7 +5,13 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { createOptionalSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
-import { isStaffRole, type StaffRole } from "@/lib/staffRoles";
+import {
+  canManageStaffAccess,
+  isStaffRole,
+  roleCanManageStaffAccess,
+  roleUsesAssignedCentres,
+  type StaffRole
+} from "@/lib/staffRoles";
 import { requireActiveStaffSession } from "@/lib/supabase/staffProfile";
 
 type SupabaseClient = ReturnType<typeof createClient>;
@@ -26,7 +32,7 @@ export async function createStaffProfileAction(formData: FormData) {
   const active = formData.getAll("active").includes("true");
   const sendInvite = formData.getAll("sendInvite").includes("true");
 
-  if (role === "lead_coach" && assignedCentres.length === 0) {
+  if (roleUsesAssignedCentres(role) && assignedCentres.length === 0) {
     redirectWithError("Lead coaches need at least one assigned centre.");
   }
 
@@ -50,7 +56,7 @@ export async function createStaffProfileAction(formData: FormData) {
 
   const { data: staffProfileId, error } = await supabase.rpc("admin_upsert_staff_profile", {
     target_active: active,
-    target_centre_name: role === "lead_coach" ? assignedCentres[0] ?? null : null,
+    target_centre_name: roleUsesAssignedCentres(role) ? assignedCentres[0] ?? null : null,
     target_coach_name: coachName || null,
     target_email: email,
     target_full_name: fullName,
@@ -61,14 +67,14 @@ export async function createStaffProfileAction(formData: FormData) {
     redirectWithError(getStaffProfileErrorMessage(error?.message));
   }
 
-  if (staffProfileId === currentProfile.id && (!active || role !== "admin")) {
+  if (staffProfileId === currentProfile.id && (!active || !roleCanManageStaffAccess(role))) {
     redirectWithError("You cannot remove admin access from your own account.");
   }
 
   const centreError = await replaceStaffCentres(
     supabase,
     String(staffProfileId),
-    role === "lead_coach" ? assignedCentres : []
+    roleUsesAssignedCentres(role) ? assignedCentres : []
   );
 
   if (centreError) {
@@ -95,11 +101,11 @@ export async function updateStaffProfileAction(formData: FormData) {
   const assignedCentres = getCentreList(formData);
   const active = formData.getAll("active").includes("true");
 
-  if (currentProfile.id === staffProfileId && (!active || role !== "admin")) {
+  if (currentProfile.id === staffProfileId && (!active || !roleCanManageStaffAccess(role))) {
     redirectWithError("You cannot remove admin access from your own account.");
   }
 
-  if (role === "lead_coach" && assignedCentres.length === 0) {
+  if (roleUsesAssignedCentres(role) && assignedCentres.length === 0) {
     redirectWithError("Lead coaches need at least one assigned centre.");
   }
 
@@ -107,7 +113,7 @@ export async function updateStaffProfileAction(formData: FormData) {
     .from("staff_profiles")
     .update({
       active,
-      centre_name: role === "lead_coach" ? assignedCentres[0] ?? null : null,
+      centre_name: roleUsesAssignedCentres(role) ? assignedCentres[0] ?? null : null,
       coach_name: coachName || null,
       full_name: fullName,
       role
@@ -121,7 +127,7 @@ export async function updateStaffProfileAction(formData: FormData) {
   const centreError = await replaceStaffCentres(
     supabase,
     staffProfileId,
-    role === "lead_coach" ? assignedCentres : []
+    roleUsesAssignedCentres(role) ? assignedCentres : []
   );
 
   if (centreError) {
@@ -175,7 +181,7 @@ export async function deleteStaffProfileAction(formData: FormData) {
 async function requireAdminProfile() {
   const session = await requireActiveStaffSession();
 
-  if (session.profile.role !== "admin") {
+  if (!canManageStaffAccess(session.profile)) {
     redirect("/dashboard");
   }
 

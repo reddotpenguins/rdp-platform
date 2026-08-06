@@ -13,6 +13,7 @@ import {
   type LucideIcon
 } from "lucide-react";
 import { SignOutButton } from "@/components/SignOutButton";
+import { canViewAdminHome } from "@/lib/staffRoles";
 import { requireActiveStaffSession } from "@/lib/supabase/staffProfile";
 
 export const dynamic = "force-dynamic";
@@ -20,7 +21,7 @@ export const dynamic = "force-dynamic";
 export default async function AdminPage() {
   const { profile } = await requireActiveStaffSession();
 
-  if (profile.role !== "admin") {
+  if (!canViewAdminHome(profile)) {
     redirect("/dashboard");
   }
 

@@ -23,7 +23,7 @@ import {
 } from "lucide-react";
 import { updateEnquiryTicketAction } from "@/app/enquiries/actions";
 import { SignOutButton } from "@/components/SignOutButton";
-import type { StaffProfile } from "@/lib/staffRoles";
+import { getCentreFilterAccess, type StaffProfile } from "@/lib/staffRoles";
 import type { CustomerEnquiry, EnquiryStatus, EnquiryType } from "@/types/enquiry";
 import {
   enquiryStatuses,
@@ -138,11 +138,11 @@ export function EnquiriesClient({
   }, [enquiries]);
 
   const centreOptions = useMemo(
-    () =>
-      getCentreOptions(
-        records,
-        staffProfile.role === "lead_coach" ? staffProfile.assignedCentres : []
-      ),
+    () => {
+      const centreAccess = getCentreFilterAccess(staffProfile);
+
+      return getCentreOptions(records, centreAccess.centres);
+    },
     [records, staffProfile]
   );
   const baseFilteredEnquiries = useMemo(
