@@ -19,6 +19,10 @@ type ReceiptExtraction = {
   warnings: string[];
 };
 
+type ReceiptInput =
+  | { type: "input_file"; filename: string; file_data: string }
+  | { type: "input_image"; image_url: string; detail: "high" };
+
 const receiptExtractionSchema = {
   type: "object",
   additionalProperties: false,
@@ -53,7 +57,7 @@ const receiptExtractionSchema = {
       description: "Usually the same as gstShown when GST is visible."
     },
     paymentMethod: { type: ["string", "null"] },
-    confidence: { type: "number", minimum: 0, maximum: 1 },
+    confidence: { type: "number" },
     warnings: { type: "array", items: { type: "string" } }
   }
 } as const;
@@ -81,12 +85,18 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Upload a receipt photo or PDF first." }, { status: 400 });
   }
 
-  const mimeType = receiptFile.type || "application/octet-stream";
-  const canExtract = mimeType.startsWith("image/") || mimeType === "application/pdf";
+  const mimeType = receiptFile.type || getMimeTypeFromFilename(receiptFile.name);
+  const canExtract =
+    mimeType === "image/jpeg" ||
+    mimeType === "image/png" ||
+    mimeType === "application/pdf";
 
   if (!canExtract) {
     return NextResponse.json(
-      { error: "Automatic extraction supports receipt photos and PDFs only." },
+      {
+        error:
+          "Receipt auto-fill supports JPG, PNG, or PDF. If this was taken on an iPhone as HEIC/HEIF, please upload it as JPG or try taking the photo again."
+      },
       { status: 400 }
     );
   }
@@ -97,7 +107,7 @@ export async function POST(request: NextRequest) {
 
   const arrayBuffer = await receiptFile.arrayBuffer();
   const fileDataUrl = `data:${mimeType};base64,${Buffer.from(arrayBuffer).toString("base64")}`;
-  const receiptInput =
+  const receiptInput: ReceiptInput =
     mimeType === "application/pdf"
       ? {
           type: "input_file",
@@ -110,14 +120,74 @@ export async function POST(request: NextRequest) {
           detail: "high"
         };
 
-  const response = await fetch("https://api.openai.com/v1/responses", {
+  const preferredModel = process.env.OPENAI_RECEIPT_MODEL?.trim() || "gpt-4o-mini";
+  const response = await fetchOpenAiReceiptExtraction({
+    apiKey,
+    model: preferredModel,
+    receiptInput
+  });
+  const fallbackModel = "gpt-4o-mini";
+  const finalResponse =
+    !response.ok &&
+    preferredModel !== fallbackModel &&
+    shouldRetryWithFallback(response.status, await response.clone().text())
+      ? await fetchOpenAiReceiptExtraction({
+          apiKey,
+          model: fallbackModel,
+          receiptInput
+        })
+      : response;
+
+  if (!finalResponse.ok) {
+    const errorText = await finalResponse.text();
+    const errorMessage = getOpenAiErrorMessage(finalResponse.status, errorText);
+    console.error("Receipt extraction failed", {
+      message: getOpenAiRawErrorMessage(errorText),
+      status: finalResponse.status
+    });
+    return NextResponse.json({ error: errorMessage }, { status: 502 });
+  }
+
+  const openAiResult = await finalResponse.json();
+  const outputText = getResponseOutputText(openAiResult);
+
+  if (!outputText) {
+    return NextResponse.json(
+      { error: "Receipt details could not be read from the extraction response." },
+      { status: 502 }
+    );
+  }
+
+  try {
+    const parsed = JSON.parse(outputText) as ReceiptExtraction;
+
+    return NextResponse.json(normalizeReceiptExtraction(parsed));
+  } catch (error) {
+    console.error("Receipt extraction parse failed", error);
+    return NextResponse.json(
+      { error: "Receipt details came back in an unreadable format. Please try again." },
+      { status: 502 }
+    );
+  }
+}
+
+function fetchOpenAiReceiptExtraction({
+  apiKey,
+  model,
+  receiptInput
+}: {
+  apiKey: string;
+  model: string;
+  receiptInput: ReceiptInput;
+}) {
+  return fetch("https://api.openai.com/v1/responses", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json"
     },
     body: JSON.stringify({
-      model: process.env.OPENAI_RECEIPT_MODEL?.trim() || "gpt-5-mini",
+      model,
       input: [
         {
           role: "user",
@@ -144,37 +214,6 @@ export async function POST(request: NextRequest) {
       }
     })
   });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error("Receipt extraction failed", errorText);
-    return NextResponse.json(
-      { error: "Receipt details could not be extracted. Please try another photo or key in the details." },
-      { status: 502 }
-    );
-  }
-
-  const openAiResult = await response.json();
-  const outputText = getResponseOutputText(openAiResult);
-
-  if (!outputText) {
-    return NextResponse.json(
-      { error: "Receipt details could not be read from the extraction response." },
-      { status: 502 }
-    );
-  }
-
-  try {
-    const parsed = JSON.parse(outputText) as ReceiptExtraction;
-
-    return NextResponse.json(normalizeReceiptExtraction(parsed));
-  } catch (error) {
-    console.error("Receipt extraction parse failed", error);
-    return NextResponse.json(
-      { error: "Receipt details came back in an unreadable format. Please try again." },
-      { status: 502 }
-    );
-  }
 }
 
 function getResponseOutputText(result: unknown) {
@@ -254,6 +293,80 @@ function normalizeMoney(value: string | null) {
 
 function clampConfidence(value: number) {
   return Math.max(0, Math.min(1, Number.isFinite(value) ? value : 0));
+}
+
+function getMimeTypeFromFilename(filename: string) {
+  const extension = filename.split(".").pop()?.toLowerCase();
+
+  if (extension === "jpg" || extension === "jpeg") return "image/jpeg";
+  if (extension === "png") return "image/png";
+  if (extension === "pdf") return "application/pdf";
+  if (extension === "heic") return "image/heic";
+  if (extension === "heif") return "image/heif";
+
+  return "application/octet-stream";
+}
+
+function shouldRetryWithFallback(status: number, errorText: string) {
+  const message = getOpenAiRawErrorMessage(errorText).toLowerCase();
+
+  return (
+    status === 400 &&
+    (message.includes("model") ||
+      message.includes("does not exist") ||
+      message.includes("not found") ||
+      message.includes("unsupported"))
+  );
+}
+
+function getOpenAiErrorMessage(status: number, errorText: string) {
+  const message = getOpenAiRawErrorMessage(errorText);
+  const lowerMessage = message.toLowerCase();
+
+  if (status === 401 || lowerMessage.includes("api key")) {
+    return "The OpenAI API key is invalid. Please create a new service account key and update OPENAI_API_KEY in Vercel.";
+  }
+
+  if (status === 403 || lowerMessage.includes("permission")) {
+    return "The OpenAI key does not have permission for receipt extraction. Check the project key permissions and model access.";
+  }
+
+  if (
+    status === 429 ||
+    lowerMessage.includes("billing") ||
+    lowerMessage.includes("quota") ||
+    lowerMessage.includes("rate limit")
+  ) {
+    return "OpenAI billing, quota, or rate limit blocked receipt extraction. Check Platform billing and project limits.";
+  }
+
+  if (lowerMessage.includes("model") || lowerMessage.includes("does not exist")) {
+    return "The selected OpenAI receipt model is not available to this project. Try setting OPENAI_RECEIPT_MODEL to gpt-4o-mini in Vercel.";
+  }
+
+  if (lowerMessage.includes("image") || lowerMessage.includes("file")) {
+    return "OpenAI could not read this receipt file. Try a clearer JPG, PNG, or PDF receipt.";
+  }
+
+  if (lowerMessage.includes("schema")) {
+    return "Receipt extraction format was rejected. The app needs a small extractor update before trying again.";
+  }
+
+  return "OpenAI could not extract this receipt yet. Please try a clearer photo or check the OpenAI project setup.";
+}
+
+function getOpenAiRawErrorMessage(errorText: string) {
+  try {
+    const parsed = JSON.parse(errorText) as {
+      error?: {
+        message?: string;
+      };
+    };
+
+    return parsed.error?.message || errorText;
+  } catch {
+    return errorText;
+  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -468,23 +468,28 @@ export function ClaimsClient({ staffProfile }: ClaimsClientProps) {
       message: "Extracting receipt details...",
       status: "extracting"
     });
+    updateDraftField("receipt", receipt);
 
     if (receipt.type.startsWith("image/") && !receipt.type.includes("heic") && !receipt.type.includes("heif")) {
       const reader = new FileReader();
       reader.onload = () => {
-        updateDraftField("receipt", {
-          ...receipt,
-          dataUrl: typeof reader.result === "string" ? reader.result : undefined
-        });
-        setReceiptProgress(100);
+        setDraft((currentDraft) =>
+          currentDraft.receipt?.id === receipt.id
+            ? {
+                ...currentDraft,
+                receipt: {
+                  ...currentDraft.receipt,
+                  dataUrl: typeof reader.result === "string" ? reader.result : undefined
+                }
+              }
+            : currentDraft
+        );
+        setReceiptProgress((currentProgress) => Math.max(currentProgress, 45));
       };
       reader.onerror = () => {
-        updateDraftField("receipt", receipt);
-        setReceiptProgress(100);
+        setReceiptProgress((currentProgress) => Math.max(currentProgress, 45));
       };
       reader.readAsDataURL(file);
-    } else {
-      updateDraftField("receipt", receipt);
     }
 
     void extractReceiptDetails(file, receipt.id);
@@ -494,8 +499,9 @@ export function ClaimsClient({ staffProfile }: ClaimsClientProps) {
     setReceiptProgress(65);
 
     try {
+      const extractionFile = await prepareReceiptFileForExtraction(file);
       const formData = new FormData();
-      formData.append("receipt", file);
+      formData.append("receipt", extractionFile);
 
       const response = await fetch("/api/claims/extract-receipt", {
         method: "POST",
@@ -2308,6 +2314,74 @@ function getMimeTypeFromExtension(extension: string) {
   if (extension === "heic") return "image/heic";
   if (extension === "heif") return "image/heif";
   return "image/jpeg";
+}
+
+async function prepareReceiptFileForExtraction(file: File) {
+  if (file.type === "application/pdf" || file.type === "image/jpeg" || file.type === "image/png") {
+    return file;
+  }
+
+  if (!file.type.startsWith("image/")) {
+    return file;
+  }
+
+  return convertImageToJpeg(file);
+}
+
+function convertImageToJpeg(file: File) {
+  return new Promise<File>((resolve, reject) => {
+    const image = new Image();
+    const objectUrl = URL.createObjectURL(file);
+
+    image.onload = () => {
+      try {
+        const canvas = document.createElement("canvas");
+        canvas.width = image.naturalWidth || image.width;
+        canvas.height = image.naturalHeight || image.height;
+        const context = canvas.getContext("2d");
+
+        if (!context || !canvas.width || !canvas.height) {
+          throw new Error("Receipt image could not be prepared for extraction.");
+        }
+
+        context.drawImage(image, 0, 0);
+        canvas.toBlob(
+          (blob) => {
+            URL.revokeObjectURL(objectUrl);
+
+            if (!blob) {
+              reject(new Error("Receipt image could not be prepared for extraction."));
+              return;
+            }
+
+            resolve(
+              new File([blob], replaceFileExtension(file.name, "jpg"), {
+                type: "image/jpeg"
+              })
+            );
+          },
+          "image/jpeg",
+          0.92
+        );
+      } catch (error) {
+        URL.revokeObjectURL(objectUrl);
+        reject(error);
+      }
+    };
+
+    image.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error("Receipt image could not be prepared for extraction. Try uploading JPG, PNG, or PDF."));
+    };
+
+    image.src = objectUrl;
+  });
+}
+
+function replaceFileExtension(filename: string, extension: string) {
+  const base = filename.replace(/\.[^.]+$/, "");
+
+  return `${base || "receipt"}.${extension}`;
 }
 
 function createClientId() {
