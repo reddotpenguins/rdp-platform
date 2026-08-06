@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import type { CustomerEnquiry, EnquiryStatus, EnquiryType } from "@/types/enquiry";
 
-type CustomerEnquiryRow = {
+export type CustomerEnquiryRow = {
   id: string;
   parent_name: string;
   phone: string | null;
@@ -41,7 +41,7 @@ export type CustomerEnquiriesResult = {
   error?: string;
 };
 
-const enquiryColumns = [
+export const enquiryColumns = [
   "id",
   "parent_name",
   "phone",
@@ -97,7 +97,7 @@ export async function getCustomerEnquiries(): Promise<CustomerEnquiriesResult> {
   };
 }
 
-function mapCustomerEnquiry(row: CustomerEnquiryRow): CustomerEnquiry {
+export function mapCustomerEnquiry(row: CustomerEnquiryRow): CustomerEnquiry {
   return {
     id: row.id,
     parentName: row.parent_name,

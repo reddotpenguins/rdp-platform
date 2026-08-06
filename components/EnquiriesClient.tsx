@@ -1,8 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
-import { useFormStatus } from "react-dom";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import {
   ArrowLeft,
   CalendarDays,
@@ -105,6 +104,21 @@ export function EnquiriesClient({
   dataError
 }: EnquiriesClientProps) {
   const initialFilterValues = normalizeInitialFilters(initialFilters);
+  const [records, setRecords] = useState(enquiries);
+  const [toastMessage, setToastMessage] = useState<{
+    tone: "success" | "error";
+    text: string;
+  } | null>(null);
+  const [pageMessage, setPageMessage] = useState<{
+    tone: "success" | "error";
+    text: string;
+  } | null>(() =>
+    savedMessage
+      ? { text: savedMessage, tone: "success" }
+      : errorMessage
+        ? { text: errorMessage, tone: "error" }
+        : null
+  );
   const [search, setSearch] = useState(initialFilterValues.search);
   const [typeFilter, setTypeFilter] = useState<EnquiryFilterValue<EnquiryType>>(
     initialFilterValues.typeFilter
@@ -119,17 +133,21 @@ export function EnquiriesClient({
   const [dateTo, setDateTo] = useState(initialFilterValues.dateTo);
   const [expandedTicketId, setExpandedTicketId] = useState<string | null>(null);
 
+  useEffect(() => {
+    setRecords(enquiries);
+  }, [enquiries]);
+
   const centreOptions = useMemo(
     () =>
       getCentreOptions(
-        enquiries,
+        records,
         staffProfile.role === "lead_coach" ? staffProfile.assignedCentres : []
       ),
-    [enquiries, staffProfile]
+    [records, staffProfile]
   );
   const baseFilteredEnquiries = useMemo(
     () =>
-      filterEnquiries(enquiries, {
+      filterEnquiries(records, {
         centre: centreFilter,
         dateFrom,
         dateTo,
@@ -137,7 +155,7 @@ export function EnquiriesClient({
         source: sourceFilter,
         type: typeFilter
       }),
-    [centreFilter, dateFrom, dateTo, enquiries, search, sourceFilter, typeFilter]
+    [centreFilter, dateFrom, dateTo, records, search, sourceFilter, typeFilter]
   );
   const visibleEnquiries = useMemo(
     () => sortEnquiries(filterByTicketTab(baseFilteredEnquiries, ticketTab), sortOrder),
@@ -180,6 +198,21 @@ export function EnquiriesClient({
     setExpandedTicketId(null);
   }
 
+  function updateTicket(updatedEnquiry: CustomerEnquiry, message: string) {
+    setRecords((currentRecords) =>
+      currentRecords.map((enquiry) =>
+        enquiry.id === updatedEnquiry.id ? updatedEnquiry : enquiry
+      )
+    );
+    setPageMessage(null);
+    setToastMessage({ text: message, tone: "success" });
+  }
+
+  function showTicketError(message: string) {
+    setPageMessage(null);
+    setToastMessage({ text: message, tone: "error" });
+  }
+
   return (
     <main className="mx-auto flex min-w-0 w-full max-w-[1600px] flex-col gap-5 px-4 py-5 sm:px-6 lg:px-8">
       <header className="flex min-w-0 flex-col gap-4 rounded-lg border border-line bg-paper p-4 shadow-panel lg:flex-row lg:items-center lg:justify-between">
@@ -209,10 +242,8 @@ export function EnquiriesClient({
         <MetricCard icon={CheckCircle2} label="Closed" value={totals.closed} />
       </section>
 
-      {savedMessage ? (
-        <StatusMessage tone="success" message={savedMessage} />
-      ) : errorMessage ? (
-        <StatusMessage tone="error" message={errorMessage} />
+      {pageMessage ? (
+        <StatusMessage tone={pageMessage.tone} message={pageMessage.text} />
       ) : dataError ? (
         <StatusMessage
           tone="error"
@@ -335,6 +366,8 @@ export function EnquiriesClient({
                     setExpandedTicketId(expandedTicketId === enquiry.id ? null : enquiry.id)
                   }
                   returnQuery={returnQuery}
+                  onTicketError={showTicketError}
+                  onTicketUpdated={updateTicket}
                 />
               ))}
             </div>
@@ -345,6 +378,18 @@ export function EnquiriesClient({
           )}
         </div>
       </section>
+      {toastMessage ? (
+        <div
+          className={`fixed bottom-4 right-4 z-50 max-w-sm rounded-lg border px-4 py-3 text-sm font-semibold shadow-panel ${
+            toastMessage.tone === "success"
+              ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+              : "border-red-200 bg-red-50 text-red-700"
+          }`}
+          role="status"
+        >
+          {toastMessage.text}
+        </div>
+      ) : null}
     </main>
   );
 }
@@ -393,15 +438,20 @@ function EnquiryRow({
   enquiry,
   isAlternate,
   isExpanded,
+  onTicketError,
+  onTicketUpdated,
   onToggle,
   returnQuery
 }: {
   enquiry: CustomerEnquiry;
   isAlternate: boolean;
   isExpanded: boolean;
+  onTicketError: (message: string) => void;
+  onTicketUpdated: (enquiry: CustomerEnquiry, message: string) => void;
   onToggle: () => void;
   returnQuery: string;
 }) {
+  const [pending, setPending] = useState(false);
   const centreName = getEnquiryCentre(enquiry);
   const contact = enquiry.phone || enquiry.email || "-";
   const formId = `enquiry-${enquiry.id}`;
@@ -409,6 +459,33 @@ function EnquiryRow({
   const messagePreview = getMessagePreview(enquiry.message);
   const cardSurfaceClass = isAlternate ? "bg-slate-100" : "bg-paper";
   const expandedSurfaceClass = isAlternate ? "bg-slate-50" : "bg-white";
+
+  async function updateTicket(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const formData = new FormData(event.currentTarget);
+    const submitter = (event.nativeEvent as SubmitEvent).submitter;
+
+    if (submitter instanceof HTMLButtonElement && submitter.name) {
+      formData.set(submitter.name, submitter.value);
+    }
+
+    setPending(true);
+
+    try {
+      const result = await updateEnquiryTicketAction(formData);
+
+      if (result.ok) {
+        onTicketUpdated(result.enquiry, result.message);
+      } else {
+        onTicketError(result.error);
+      }
+    } catch (error) {
+      onTicketError(getActionErrorMessage(error));
+    } finally {
+      setPending(false);
+    }
+  }
 
   return (
     <article
@@ -473,9 +550,10 @@ function EnquiryRow({
 
       {isExpanded ? (
         <form
-          action={updateEnquiryTicketAction}
           className={`grid min-w-0 gap-5 border-t border-line ${expandedSurfaceClass} p-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)]`}
           id={formId}
+          key={enquiry.updatedAt}
+          onSubmit={updateTicket}
         >
           <input name="enquiryId" type="hidden" value={enquiry.id} />
           <input name="centreName" type="hidden" value={enquiry.centreName ?? ""} />
@@ -618,12 +696,23 @@ function EnquiryRow({
           </section>
 
           <section className="flex min-w-0 flex-col justify-end gap-2 sm:flex-row xl:flex-col">
-            <SubmitButton icon="save" label="Save" />
+            <SubmitButton icon="save" label="Save" pending={pending} />
+            {enquiry.status !== "signed_up" ? (
+              <SubmitButton
+                icon="signup"
+                label="Mark signed up"
+                name="statusOverride"
+                pending={pending}
+                value="signed_up"
+                variant="secondary"
+              />
+            ) : null}
             {enquiry.status !== "closed" ? (
               <SubmitButton
                 icon="close"
                 label="Close ticket"
                 name="statusOverride"
+                pending={pending}
                 value="closed"
                 variant="secondary"
               />
@@ -789,17 +878,18 @@ function SubmitButton({
   icon,
   label,
   name,
+  pending,
   variant = "primary",
   value
 }: {
-  icon: "save" | "close";
+  icon: "save" | "close" | "signup";
   label: string;
   name?: string;
+  pending: boolean;
   variant?: "primary" | "secondary";
   value?: string;
 }) {
-  const { pending } = useFormStatus();
-  const Icon = icon === "save" ? Save : TicketCheck;
+  const Icon = icon === "save" ? Save : icon === "signup" ? UserCheck : TicketCheck;
 
   return (
     <button
@@ -1114,6 +1204,10 @@ function getMessagePreview(message: string | null) {
 
 function getEnquiryReceivedTime(enquiry: CustomerEnquiry) {
   return new Date(enquiry.enquiryReceivedAt ?? enquiry.createdAt).getTime();
+}
+
+function getActionErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "Ticket could not be updated.";
 }
 
 function isSignedUp(enquiry: CustomerEnquiry) {
