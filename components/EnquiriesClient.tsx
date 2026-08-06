@@ -1090,6 +1090,10 @@ function getTicketTabCounts(enquiries: CustomerEnquiry[]): Record<TicketTab, num
     }
 
     counts[enquiry.status] += 1;
+
+    if (enquiry.status !== "signed_up" && isSignedUp(enquiry)) {
+      counts.signed_up += 1;
+    }
   });
 
   return counts;
@@ -1102,6 +1106,10 @@ function filterByTicketTab(enquiries: CustomerEnquiry[], ticketTab: TicketTab) {
 
   if (ticketTab === "all") {
     return enquiries;
+  }
+
+  if (ticketTab === "signed_up") {
+    return enquiries.filter(isSignedUp);
   }
 
   return enquiries.filter((enquiry) => enquiry.status === ticketTab);
