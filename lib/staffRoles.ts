@@ -57,15 +57,8 @@ export type ClaimPermissions = {
 
 const rolePermissionMap: Record<StaffRole, readonly StaffPermission[]> = {
   admin: staffPermissions,
-  lead_coach: [
-    "assessments.viewOwn",
-    "assessments.viewTeam",
-    "claims.create",
-    "claims.viewOwn",
-    "claims.review",
-    "claims.approve"
-  ],
-  coach: ["assessments.viewOwn", "claims.create", "claims.viewOwn"]
+  lead_coach: ["assessments.viewOwn", "assessments.viewTeam"],
+  coach: ["assessments.viewOwn"]
 };
 
 export function hasRolePermission(role: StaffRole, permission: StaffPermission) {
@@ -116,6 +109,10 @@ export function canManageStaffAccess(profile: StaffProfile) {
 
 export function canAccessClaims(profile: StaffProfile) {
   return hasAnyStaffPermission(profile, ["claims.create", "claims.viewOwn", "claims.review"]);
+}
+
+export function canViewQuarterAssessmentDashboard(profile: StaffProfile) {
+  return canViewAllAssessments(profile);
 }
 
 export function getClaimPermissions(role: StaffRole): ClaimPermissions {

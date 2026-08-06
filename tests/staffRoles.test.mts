@@ -5,6 +5,7 @@ import {
   canManageStaffAccess,
   canUploadAssessmentData,
   canViewAllAssessments,
+  canViewQuarterAssessmentDashboard,
   canViewTeamAssessments,
   getCentreFilterAccess,
   hasStaffPermission,
@@ -21,6 +22,7 @@ describe("staff permission model", () => {
     assert.equal(roleCanManageStaffAccess("admin"), true);
     assert.equal(canUploadAssessmentData(admin), true);
     assert.equal(canViewAllAssessments(admin), true);
+    assert.equal(canViewQuarterAssessmentDashboard(admin), true);
   });
 
   it("lets lead coaches view team assessments without staff-management access", () => {
@@ -30,7 +32,9 @@ describe("staff permission model", () => {
     });
 
     assert.equal(canManageStaffAccess(leadCoach), false);
+    assert.equal(canAccessClaims(leadCoach), false);
     assert.equal(canViewTeamAssessments(leadCoach), true);
+    assert.equal(canViewQuarterAssessmentDashboard(leadCoach), false);
     assert.equal(roleUsesAssignedCentres("lead_coach"), true);
     assert.deepEqual(getCentreFilterAccess(leadCoach), {
       allowAllCentres: true,
@@ -38,14 +42,15 @@ describe("staff permission model", () => {
     });
   });
 
-  it("keeps coaches to own assessment and claim creation permissions", () => {
+  it("keeps coaches to the coach assessment dashboard only", () => {
     const coach = buildProfile({ role: "coach" });
 
     assert.equal(hasStaffPermission(coach, "assessments.viewOwn"), true);
-    assert.equal(hasStaffPermission(coach, "claims.create"), true);
+    assert.equal(hasStaffPermission(coach, "claims.create"), false);
     assert.equal(hasStaffPermission(coach, "claims.approve"), false);
-    assert.equal(canAccessClaims(coach), true);
+    assert.equal(canAccessClaims(coach), false);
     assert.equal(canViewAllAssessments(coach), false);
+    assert.equal(canViewQuarterAssessmentDashboard(coach), false);
   });
 
   it("rejects permissions for inactive staff", () => {

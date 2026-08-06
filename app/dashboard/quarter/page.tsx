@@ -1,9 +1,11 @@
+import { redirect } from "next/navigation";
 import { DashboardClient } from "@/components/DashboardClient";
 import {
   canManageCustomerEnquiries,
   canManageStudentLifecycle,
   canManageStaffAccess,
   canViewStudentLifecycle,
+  canViewQuarterAssessmentDashboard,
   canUploadAssessmentData,
   getCentreFilterAccess
 } from "@/lib/staffRoles";
@@ -14,6 +16,11 @@ export const dynamic = "force-dynamic";
 
 export default async function QuarterDashboardPage() {
   const { profile } = await requireActiveStaffSession();
+
+  if (!canViewQuarterAssessmentDashboard(profile)) {
+    redirect("/dashboard");
+  }
+
   const dataset = await getInitialAssessmentDataset(profile);
 
   return (

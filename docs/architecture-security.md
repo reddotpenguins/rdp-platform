@@ -41,6 +41,13 @@ The initial permission catalogue lives in `lib/staffRoles.ts` and includes:
 
 The current Supabase database still stores compact role names: `admin`, `lead_coach`, and `coach`. That is acceptable for now, but feature code should ask for permissions through helpers such as `hasStaffPermission`, `canManageStaffAccess`, `canManageCustomerEnquiries`, and `canViewTeamAssessments`.
 
+Current rollout posture:
+
+- Admin can access the full operations platform.
+- Lead coaches can access the coach assessment dashboard for assigned centres only.
+- Coaches can access the coach assessment dashboard for their own records only.
+- Claims, enquiries, student lifecycle, withdrawals, RBA, data upload, and quarter assessment views remain admin-only until those modules are ready for wider operational rollout.
+
 ## Security Defaults
 
 - Protected pages must call `requireActiveStaffSession`.
