@@ -37,6 +37,7 @@ import { formatProgrammeOption, getProgrammeSelectOptions } from "@/types/progra
 type EnquiriesClientProps = {
   enquiries: CustomerEnquiry[];
   staffProfile: StaffProfile;
+  initialFilters?: InitialEnquiryFilters;
   savedMessage?: string;
   errorMessage?: string;
   dataError?: string;
@@ -46,6 +47,27 @@ type EnquiryFilterValue<TValue extends string> = "All" | TValue;
 type TicketTab = "open" | "new" | "contacted" | "trial_booked" | "signed_up" | "closed" | "all";
 type SortOrder = "latest" | "oldest";
 type SourceCategory = "respond.io" | "website contact form";
+type InitialEnquiryFilters = {
+  centre?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  search?: string;
+  sort?: string;
+  source?: string;
+  tab?: string;
+  type?: string;
+};
+
+type EnquiryFiltersState = {
+  centreFilter: string;
+  dateFrom: string;
+  dateTo: string;
+  search: string;
+  sortOrder: SortOrder;
+  sourceFilter: EnquiryFilterValue<SourceCategory>;
+  ticketTab: TicketTab;
+  typeFilter: EnquiryFilterValue<EnquiryType>;
+};
 
 const sourceCategories: SourceCategory[] = ["respond.io", "website contact form"];
 const ticketTabs: TicketTab[] = [
@@ -63,21 +85,38 @@ const dateFormatter = new Intl.DateTimeFormat("en-SG", {
   timeStyle: "short"
 });
 
+const defaultEnquiryFilters: EnquiryFiltersState = {
+  centreFilter: "All",
+  dateFrom: "",
+  dateTo: "",
+  search: "",
+  sortOrder: "latest",
+  sourceFilter: "All",
+  ticketTab: "open",
+  typeFilter: "All"
+};
+
 export function EnquiriesClient({
   enquiries,
   staffProfile,
+  initialFilters,
   savedMessage,
   errorMessage,
   dataError
 }: EnquiriesClientProps) {
-  const [search, setSearch] = useState("");
-  const [typeFilter, setTypeFilter] = useState<EnquiryFilterValue<EnquiryType>>("All");
-  const [centreFilter, setCentreFilter] = useState("All");
-  const [sourceFilter, setSourceFilter] = useState<EnquiryFilterValue<SourceCategory>>("All");
-  const [ticketTab, setTicketTab] = useState<TicketTab>("open");
-  const [sortOrder, setSortOrder] = useState<SortOrder>("latest");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
+  const initialFilterValues = normalizeInitialFilters(initialFilters);
+  const [search, setSearch] = useState(initialFilterValues.search);
+  const [typeFilter, setTypeFilter] = useState<EnquiryFilterValue<EnquiryType>>(
+    initialFilterValues.typeFilter
+  );
+  const [centreFilter, setCentreFilter] = useState(initialFilterValues.centreFilter);
+  const [sourceFilter, setSourceFilter] = useState<EnquiryFilterValue<SourceCategory>>(
+    initialFilterValues.sourceFilter
+  );
+  const [ticketTab, setTicketTab] = useState<TicketTab>(initialFilterValues.ticketTab);
+  const [sortOrder, setSortOrder] = useState<SortOrder>(initialFilterValues.sortOrder);
+  const [dateFrom, setDateFrom] = useState(initialFilterValues.dateFrom);
+  const [dateTo, setDateTo] = useState(initialFilterValues.dateTo);
   const [expandedTicketId, setExpandedTicketId] = useState<string | null>(null);
 
   const centreOptions = useMemo(
@@ -114,16 +153,30 @@ export function EnquiriesClient({
     }),
     [baseFilteredEnquiries]
   );
+  const returnQuery = useMemo(
+    () =>
+      buildFilterReturnQuery({
+        centreFilter,
+        dateFrom,
+        dateTo,
+        search,
+        sortOrder,
+        sourceFilter,
+        ticketTab,
+        typeFilter
+      }),
+    [centreFilter, dateFrom, dateTo, search, sortOrder, sourceFilter, ticketTab, typeFilter]
+  );
 
   function resetFilters() {
-    setSearch("");
-    setTypeFilter("All");
-    setCentreFilter("All");
-    setSourceFilter("All");
-    setTicketTab("open");
-    setSortOrder("latest");
-    setDateFrom("");
-    setDateTo("");
+    setSearch(defaultEnquiryFilters.search);
+    setTypeFilter(defaultEnquiryFilters.typeFilter);
+    setCentreFilter(defaultEnquiryFilters.centreFilter);
+    setSourceFilter(defaultEnquiryFilters.sourceFilter);
+    setTicketTab(defaultEnquiryFilters.ticketTab);
+    setSortOrder(defaultEnquiryFilters.sortOrder);
+    setDateFrom(defaultEnquiryFilters.dateFrom);
+    setDateTo(defaultEnquiryFilters.dateTo);
     setExpandedTicketId(null);
   }
 
@@ -281,6 +334,7 @@ export function EnquiriesClient({
                   onToggle={() =>
                     setExpandedTicketId(expandedTicketId === enquiry.id ? null : enquiry.id)
                   }
+                  returnQuery={returnQuery}
                 />
               ))}
             </div>
@@ -339,12 +393,14 @@ function EnquiryRow({
   enquiry,
   isAlternate,
   isExpanded,
-  onToggle
+  onToggle,
+  returnQuery
 }: {
   enquiry: CustomerEnquiry;
   isAlternate: boolean;
   isExpanded: boolean;
   onToggle: () => void;
+  returnQuery: string;
 }) {
   const centreName = getEnquiryCentre(enquiry);
   const contact = enquiry.phone || enquiry.email || "-";
@@ -423,6 +479,7 @@ function EnquiryRow({
         >
           <input name="enquiryId" type="hidden" value={enquiry.id} />
           <input name="centreName" type="hidden" value={enquiry.centreName ?? ""} />
+          <input name="returnQuery" type="hidden" value={returnQuery} />
 
           <section className="min-w-0">
             <h4 className="mb-2 text-sm font-semibold text-ink">Contact</h4>
@@ -866,6 +923,64 @@ function getCentreOptions(enquiries: CustomerEnquiry[], assignedCentres: string[
   return Array.from(new Set(centres.map((centre) => centre.trim()).filter(Boolean))).sort((a, b) =>
     a.localeCompare(b)
   );
+}
+
+function normalizeInitialFilters(initialFilters?: InitialEnquiryFilters): EnquiryFiltersState {
+  const initialType = initialFilters?.type ?? defaultEnquiryFilters.typeFilter;
+  const initialSource = initialFilters?.source ?? defaultEnquiryFilters.sourceFilter;
+  const initialTab = initialFilters?.tab ?? defaultEnquiryFilters.ticketTab;
+  const initialSort = initialFilters?.sort ?? defaultEnquiryFilters.sortOrder;
+
+  return {
+    centreFilter: initialFilters?.centre?.trim() || defaultEnquiryFilters.centreFilter,
+    dateFrom: normalizeDateFilter(initialFilters?.dateFrom),
+    dateTo: normalizeDateFilter(initialFilters?.dateTo),
+    search: initialFilters?.search ?? defaultEnquiryFilters.search,
+    sortOrder: isSortOrder(initialSort) ? initialSort : defaultEnquiryFilters.sortOrder,
+    sourceFilter: isSourceFilter(initialSource)
+      ? initialSource
+      : defaultEnquiryFilters.sourceFilter,
+    ticketTab: isTicketTab(initialTab) ? initialTab : defaultEnquiryFilters.ticketTab,
+    typeFilter: isTypeFilter(initialType) ? initialType : defaultEnquiryFilters.typeFilter
+  };
+}
+
+function buildFilterReturnQuery(filters: EnquiryFiltersState) {
+  const params = new URLSearchParams();
+  const search = filters.search.trim();
+
+  if (search) params.set("search", search);
+  if (filters.typeFilter !== defaultEnquiryFilters.typeFilter) params.set("type", filters.typeFilter);
+  if (filters.centreFilter !== defaultEnquiryFilters.centreFilter) params.set("centre", filters.centreFilter);
+  if (filters.sourceFilter !== defaultEnquiryFilters.sourceFilter) params.set("source", filters.sourceFilter);
+  if (filters.ticketTab !== defaultEnquiryFilters.ticketTab) params.set("tab", filters.ticketTab);
+  if (filters.sortOrder !== defaultEnquiryFilters.sortOrder) params.set("sort", filters.sortOrder);
+  if (filters.dateFrom) params.set("from", filters.dateFrom);
+  if (filters.dateTo) params.set("to", filters.dateTo);
+
+  return params.toString();
+}
+
+function normalizeDateFilter(value: string | undefined) {
+  const trimmedValue = value?.trim() ?? "";
+
+  return /^\d{4}-\d{2}-\d{2}$/.test(trimmedValue) ? trimmedValue : "";
+}
+
+function isTypeFilter(value: string): value is EnquiryFilterValue<EnquiryType> {
+  return value === "All" || enquiryTypes.includes(value as EnquiryType);
+}
+
+function isSourceFilter(value: string): value is EnquiryFilterValue<SourceCategory> {
+  return value === "All" || sourceCategories.includes(value as SourceCategory);
+}
+
+function isTicketTab(value: string): value is TicketTab {
+  return ticketTabs.includes(value as TicketTab);
+}
+
+function isSortOrder(value: string): value is SortOrder {
+  return value === "latest" || value === "oldest";
 }
 
 function getTicketTabCounts(enquiries: CustomerEnquiry[]): Record<TicketTab, number> {

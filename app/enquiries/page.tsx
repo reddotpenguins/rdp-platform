@@ -24,6 +24,16 @@ export default async function EnquiriesPage({ searchParams }: EnquiriesPageProps
       dataError={enquiriesResult.error}
       enquiries={enquiriesResult.enquiries}
       errorMessage={getSearchParam(searchParams, "error")}
+      initialFilters={{
+        centre: getSearchParam(searchParams, "centre"),
+        dateFrom: getSearchParam(searchParams, "from"),
+        dateTo: getSearchParam(searchParams, "to"),
+        search: getSearchParam(searchParams, "search"),
+        sort: getSearchParam(searchParams, "sort"),
+        source: getSearchParam(searchParams, "source"),
+        tab: getSearchParam(searchParams, "tab"),
+        type: getSearchParam(searchParams, "type")
+      }}
       savedMessage={getSearchParam(searchParams, "saved")}
       staffProfile={profile}
     />

@@ -82,9 +82,11 @@ export async function updateEnquiryTicketAction(formData: FormData) {
     redirect("/dashboard");
   }
 
-  const enquiryId = getRequiredText(formData, "enquiryId");
-  const status = getOptionalText(formData, "statusOverride") || getRequiredText(formData, "status");
-  const enquiryType = getRequiredText(formData, "enquiryType");
+  const returnQuery = getOptionalText(formData, "returnQuery");
+  const enquiryId = getRequiredText(formData, "enquiryId", returnQuery);
+  const status =
+    getOptionalText(formData, "statusOverride") || getRequiredText(formData, "status", returnQuery);
+  const enquiryType = getRequiredText(formData, "enquiryType", returnQuery);
   const notes = getOptionalText(formData, "notes");
   const trialLocation = getOptionalText(formData, "trialLocation");
   const signedUpLocation = getOptionalText(formData, "signedUpLocation");
@@ -92,11 +94,11 @@ export async function updateEnquiryTicketAction(formData: FormData) {
   const trialCoach = getOptionalText(formData, "trialCoach");
 
   if (!isEnquiryStatus(status)) {
-    redirectWithError("Choose a valid enquiry status.");
+    redirectWithError("Choose a valid enquiry status.", returnQuery);
   }
 
   if (!isEnquiryType(enquiryType)) {
-    redirectWithError("Choose a valid enquiry type.");
+    redirectWithError("Choose a valid enquiry type.", returnQuery);
   }
 
   const isClosed = status === "closed";
@@ -109,16 +111,16 @@ export async function updateEnquiryTicketAction(formData: FormData) {
       closed_at: isClosed ? new Date().toISOString() : null,
       closed_by: isClosed ? profile.id : null,
       enquiry_type: enquiryType,
-      first_touch_date: getOptionalDate(formData, "firstTouchDate"),
+      first_touch_date: getOptionalDate(formData, "firstTouchDate", returnQuery),
       notes: notes || null,
       outcome_notes: getOptionalText(formData, "outcomeNotes") || null,
       programme: getOptionalText(formData, "programme") || null,
-      registration_date: getOptionalDate(formData, "registrationDate"),
+      registration_date: getOptionalDate(formData, "registrationDate", returnQuery),
       signed_up_coach: getOptionalText(formData, "signedUpCoach") || null,
       signed_up_location: signedUpLocation || null,
       status,
       trial_coach: trialCoach || null,
-      trial_date: getOptionalDate(formData, "trialDate"),
+      trial_date: getOptionalDate(formData, "trialDate", returnQuery),
       trial_details: getOptionalText(formData, "trialDetails") || null,
       trial_location: trialLocation || null,
       trial_time: getOptionalText(formData, "trialTime") || null,
@@ -129,20 +131,23 @@ export async function updateEnquiryTicketAction(formData: FormData) {
     .single<CustomerEnquirySyncRow>();
 
   if (error) {
-    redirectWithError(error.message);
+    redirectWithError(error.message, returnQuery);
   }
 
   const syncWarning = await syncEnquiryUpdateToMake(data);
 
   revalidatePath("/enquiries");
-  redirectWithSuccess(`${isClosed ? "Ticket closed." : "Ticket updated."}${syncWarning ?? ""}`);
+  redirectWithSuccess(
+    `${isClosed ? "Ticket closed." : "Ticket updated."}${syncWarning ?? ""}`,
+    returnQuery
+  );
 }
 
-function getRequiredText(formData: FormData, key: string) {
+function getRequiredText(formData: FormData, key: string, returnQuery: string) {
   const value = getOptionalText(formData, key);
 
   if (!value) {
-    redirectWithError("Please fill in all required fields.");
+    redirectWithError("Please fill in all required fields.", returnQuery);
   }
 
   return value;
@@ -152,7 +157,7 @@ function getOptionalText(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
 }
 
-function getOptionalDate(formData: FormData, key: string) {
+function getOptionalDate(formData: FormData, key: string, returnQuery: string) {
   const value = getOptionalText(formData, key);
 
   if (!value) {
@@ -160,7 +165,7 @@ function getOptionalDate(formData: FormData, key: string) {
   }
 
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    redirectWithError("Use the date picker or YYYY-MM-DD date format.");
+    redirectWithError("Use the date picker or YYYY-MM-DD date format.", returnQuery);
   }
 
   return value;
@@ -221,12 +226,24 @@ async function syncEnquiryUpdateToMake(row: CustomerEnquirySyncRow | null) {
   return null;
 }
 
-function redirectWithError(message: string): never {
-  const params = new URLSearchParams({ error: message });
-  redirect(`/enquiries?${params.toString()}`);
+function redirectWithError(message: string, returnQuery = ""): never {
+  redirect(buildEnquiriesRedirectUrl("error", message, returnQuery));
 }
 
-function redirectWithSuccess(message: string): never {
-  const params = new URLSearchParams({ saved: message });
-  redirect(`/enquiries?${params.toString()}`);
+function redirectWithSuccess(message: string, returnQuery = ""): never {
+  redirect(buildEnquiriesRedirectUrl("saved", message, returnQuery));
+}
+
+function buildEnquiriesRedirectUrl(
+  messageKey: "error" | "saved",
+  message: string,
+  returnQuery: string
+) {
+  const params = new URLSearchParams(returnQuery);
+
+  params.delete("error");
+  params.delete("saved");
+  params.set(messageKey, message);
+
+  return `/enquiries?${params.toString()}`;
 }
