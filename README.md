@@ -51,6 +51,8 @@ supabase/claims-foundation.sql
 
 Run `supabase/auth-and-roles.sql` first, then `supabase/claims-foundation.sql` when you are ready to connect claims to Supabase tables and private `claim-receipts` storage.
 
+Receipt uploads can auto-fill claim fields when `OPENAI_API_KEY` is configured. The extraction runs through the server route, so the key is never exposed to the browser. Uploaded receipt photos or PDFs are sent to OpenAI to extract visible merchant, receipt number, transaction date, currency, subtotal, GST, total, and payment method values; staff should still review the fields before submitting.
+
 For the current prototype, run this file in Supabase SQL Editor after creating the tables:
 
 ```text
@@ -407,6 +409,8 @@ Add these Vercel environment variables for Production, Preview, and Development:
 NEXT_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your-publishable-key
 SUPABASE_SERVICE_ROLE_KEY=your-private-service-role-key
+OPENAI_API_KEY=your-private-openai-api-key
+OPENAI_RECEIPT_MODEL=gpt-5-mini
 ENABLE_EXPERIMENTAL_COREPACK=1
 ```
 
@@ -415,6 +419,8 @@ ENABLE_EXPERIMENTAL_COREPACK=1
 `SUPABASE_SERVICE_ROLE_KEY` is private and optional, but recommended. It lets the admin-only RBA delete button remove the Supabase Auth login account as well as the staff profile. Without it, the button removes website access only.
 
 The same private key is required for the RBA page to send Supabase invite emails from the website.
+
+`OPENAI_API_KEY` is private and required only for claims receipt auto-fill. `OPENAI_RECEIPT_MODEL` is optional; the app uses `gpt-5-mini` when it is not set.
 
 ## Default Dataset
 

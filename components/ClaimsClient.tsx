@@ -94,7 +94,29 @@ type ReviewInput = {
   approvedAmount: string;
 };
 
+type ReceiptExtractionState = {
+  confidence?: number;
+  message: string;
+  status: "idle" | "extracting" | "completed" | "failed";
+};
+
+type ExtractedReceiptDetails = {
+  amountRequested: string | null;
+  confidence: number;
+  currency: string | null;
+  gstClaimable: string | null;
+  gstShown: string | null;
+  merchantName: string | null;
+  paymentMethod: string | null;
+  receiptNumber: string | null;
+  subtotal: string | null;
+  totalSpent: string | null;
+  transactionDate: string | null;
+  warnings: string[];
+};
+
 const storageKey = "rdp-platform-claims.v1";
+const idleReceiptExtractionState: ReceiptExtractionState = { message: "", status: "idle" };
 
 const dateFormatter = new Intl.DateTimeFormat("en-SG", {
   dateStyle: "medium"
@@ -110,6 +132,8 @@ export function ClaimsClient({ staffProfile }: ClaimsClientProps) {
     createBlankDraft(createDefaultClaimsState(staffProfile))
   );
   const [receiptProgress, setReceiptProgress] = useState(0);
+  const [receiptExtraction, setReceiptExtraction] =
+    useState<ReceiptExtractionState>(idleReceiptExtractionState);
   const [message, setMessage] = useState<{ tone: "success" | "error"; text: string } | null>(null);
   const [reviewFilter, setReviewFilter] = useState<LedgerStatusFilter>("Submitted");
   const [reviewInputs, setReviewInputs] = useState<Record<string, ReviewInput>>({});
@@ -232,6 +256,7 @@ export function ClaimsClient({ staffProfile }: ClaimsClientProps) {
   function resetDraft() {
     setEditingClaimId(null);
     setDraft(createBlankDraft(state));
+    setReceiptExtraction(idleReceiptExtractionState);
     setReceiptProgress(0);
   }
 
@@ -263,6 +288,11 @@ export function ClaimsClient({ staffProfile }: ClaimsClientProps) {
       totalSpent: "86.40",
       transactionDate: "2026-08-12"
     }));
+    setReceiptExtraction({
+      confidence: 1,
+      message: "Sample receipt details filled.",
+      status: "completed"
+    });
     setReceiptProgress(100);
     showMessage("success", "Sample receipt details added.");
   }
@@ -291,6 +321,7 @@ export function ClaimsClient({ staffProfile }: ClaimsClientProps) {
       totalSpent: centsToDecimal(claim.totalSpentCents),
       transactionDate: claim.transactionDate
     });
+    setReceiptExtraction(idleReceiptExtractionState);
     setReceiptProgress(claim.receipt ? 100 : 0);
     setActiveTab("new");
   }
@@ -409,6 +440,7 @@ export function ClaimsClient({ staffProfile }: ClaimsClientProps) {
 
   function removeDraftReceipt() {
     updateDraftField("receipt", null);
+    setReceiptExtraction(idleReceiptExtractionState);
     setReceiptProgress(0);
   }
 
@@ -432,6 +464,10 @@ export function ClaimsClient({ staffProfile }: ClaimsClientProps) {
     };
 
     setReceiptProgress(35);
+    setReceiptExtraction({
+      message: "Extracting receipt details...",
+      status: "extracting"
+    });
 
     if (receipt.type.startsWith("image/") && !receipt.type.includes("heic") && !receipt.type.includes("heif")) {
       const reader = new FileReader();
@@ -447,11 +483,57 @@ export function ClaimsClient({ staffProfile }: ClaimsClientProps) {
         setReceiptProgress(100);
       };
       reader.readAsDataURL(file);
-      return;
+    } else {
+      updateDraftField("receipt", receipt);
     }
 
-    updateDraftField("receipt", receipt);
-    setReceiptProgress(100);
+    void extractReceiptDetails(file, receipt.id);
+  }
+
+  async function extractReceiptDetails(file: File, receiptId: string) {
+    setReceiptProgress(65);
+
+    try {
+      const formData = new FormData();
+      formData.append("receipt", file);
+
+      const response = await fetch("/api/claims/extract-receipt", {
+        method: "POST",
+        body: formData
+      });
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || "Receipt details could not be extracted.");
+      }
+
+      const extraction = result as ExtractedReceiptDetails;
+
+      setDraft((currentDraft) => {
+        if (currentDraft.receipt?.id !== receiptId) {
+          return currentDraft;
+        }
+
+        return applyReceiptExtraction(currentDraft, extraction);
+      });
+      setReceiptExtraction({
+        confidence: extraction.confidence,
+        message: getReceiptExtractionSuccessMessage(extraction),
+        status: "completed"
+      });
+      setReceiptProgress(100);
+      showMessage("success", "Receipt details filled. Please review before submitting.");
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Receipt details could not be extracted.";
+
+      setReceiptExtraction({
+        message: errorMessage,
+        status: "failed"
+      });
+      setReceiptProgress(100);
+      showMessage("error", errorMessage);
+    }
   }
 
   function updateReviewInput(claimId: string, patch: Partial<ReviewInput>) {
@@ -682,6 +764,7 @@ export function ClaimsClient({ staffProfile }: ClaimsClientProps) {
           onSaveDraft={() => saveDraft("Draft")}
           onSubmitClaim={() => saveDraft("Submitted")}
           onUpdateDraft={updateDraftField}
+          receiptExtraction={receiptExtraction}
           receiptProgress={receiptProgress}
         />
       ) : null}
@@ -927,6 +1010,7 @@ function ClaimFormPanel({
   onSaveDraft,
   onSubmitClaim,
   onUpdateDraft,
+  receiptExtraction,
   receiptProgress
 }: {
   categories: ExpenseCategory[];
@@ -942,6 +1026,7 @@ function ClaimFormPanel({
   onSaveDraft: () => void;
   onSubmitClaim: () => void;
   onUpdateDraft: <TKey extends keyof DraftForm>(key: TKey, value: DraftForm[TKey]) => void;
+  receiptExtraction: ReceiptExtractionState;
   receiptProgress: number;
 }) {
   return (
@@ -1072,6 +1157,7 @@ function ClaimFormPanel({
         onDropFile={onDropFile}
         onRemoveReceipt={onRemoveReceipt}
         receipt={draft.receipt}
+        receiptExtraction={receiptExtraction}
         receiptProgress={receiptProgress}
       />
     </section>
@@ -1082,11 +1168,13 @@ function ReceiptUploadPanel({
   onDropFile,
   onRemoveReceipt,
   receipt,
+  receiptExtraction,
   receiptProgress
 }: {
   onDropFile: (file: File | null) => void;
   onRemoveReceipt: () => void;
   receipt: ClaimReceipt | null;
+  receiptExtraction: ReceiptExtractionState;
   receiptProgress: number;
 }) {
   return (
@@ -1131,6 +1219,29 @@ function ReceiptUploadPanel({
           onChange={(event) => onDropFile(event.target.files?.[0] ?? null)}
         />
       </label>
+
+      {receiptExtraction.status !== "idle" ? (
+        <div
+          className={clsx(
+            "mt-3 rounded-md border px-3 py-2 text-sm",
+            receiptExtraction.status === "completed"
+              ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+              : receiptExtraction.status === "failed"
+                ? "border-red-200 bg-red-50 text-red-700"
+                : "border-amber-200 bg-amber-50 text-amber-900"
+          )}
+          role="status"
+        >
+          <p className="font-semibold">
+            {receiptExtraction.status === "extracting"
+              ? "Reading receipt"
+              : receiptExtraction.status === "completed"
+                ? "Details filled"
+                : "Extraction needs review"}
+          </p>
+          <p className="mt-1">{receiptExtraction.message}</p>
+        </div>
+      ) : null}
 
       {receipt ? (
         <div className="mt-4 overflow-hidden rounded-lg border border-line bg-field">
@@ -2078,6 +2189,44 @@ function createBlankDraft(state: ClaimsState): DraftForm {
     totalSpent: "",
     transactionDate: ""
   };
+}
+
+function applyReceiptExtraction(
+  draft: DraftForm,
+  extraction: ExtractedReceiptDetails
+): DraftForm {
+  const totalSpent = cleanExtractedValue(extraction.totalSpent);
+  const gstShown = cleanExtractedValue(extraction.gstShown);
+
+  return {
+    ...draft,
+    amountRequested:
+      cleanExtractedValue(extraction.amountRequested) || totalSpent || draft.amountRequested,
+    currency: cleanExtractedValue(extraction.currency) || draft.currency,
+    gstClaimable: cleanExtractedValue(extraction.gstClaimable) || gstShown || draft.gstClaimable,
+    gstShown: gstShown || draft.gstShown,
+    merchantName: cleanExtractedValue(extraction.merchantName) || draft.merchantName,
+    paymentMethod: cleanExtractedValue(extraction.paymentMethod) || draft.paymentMethod,
+    receiptNumber: cleanExtractedValue(extraction.receiptNumber) || draft.receiptNumber,
+    subtotal: cleanExtractedValue(extraction.subtotal) || draft.subtotal,
+    totalSpent: totalSpent || draft.totalSpent,
+    transactionDate: cleanExtractedValue(extraction.transactionDate) || draft.transactionDate
+  };
+}
+
+function cleanExtractedValue(value: string | null | undefined) {
+  return value?.trim() || "";
+}
+
+function getReceiptExtractionSuccessMessage(extraction: ExtractedReceiptDetails) {
+  const confidencePercent = Math.round(extraction.confidence * 100);
+  const warnings = extraction.warnings.filter(Boolean);
+
+  if (warnings.length > 0) {
+    return `Filled visible fields with ${confidencePercent}% confidence. ${warnings[0]}`;
+  }
+
+  return `Filled visible fields with ${confidencePercent}% confidence. Please review before submitting.`;
 }
 
 function parseDraftFinancials(draft: DraftForm) {
