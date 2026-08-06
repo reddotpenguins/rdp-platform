@@ -26,6 +26,7 @@ import {
   type LucideIcon
 } from "lucide-react";
 import { SignOutButton } from "@/components/SignOutButton";
+import { extractReceiptDetailsFromOcrText } from "@/lib/receiptOcr";
 import {
   calculateNonClaimableCents,
   canDeleteReferencedItem,
@@ -465,7 +466,7 @@ export function ClaimsClient({ staffProfile }: ClaimsClientProps) {
 
     setReceiptProgress(35);
     setReceiptExtraction({
-      message: "Extracting receipt details...",
+      message: "Reading receipt with free OCR...",
       status: "extracting"
     });
     updateDraftField("receipt", receipt);
@@ -499,21 +500,22 @@ export function ClaimsClient({ staffProfile }: ClaimsClientProps) {
     setReceiptProgress(65);
 
     try {
-      const extractionFile = await prepareReceiptFileForExtraction(file);
-      const formData = new FormData();
-      formData.append("receipt", extractionFile);
+      const ocrFile = await prepareReceiptFileForOcr(file);
 
-      const response = await fetch("/api/claims/extract-receipt", {
-        method: "POST",
-        body: formData
-      });
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.error || "Receipt details could not be extracted.");
+      if (!ocrFile) {
+        throw new Error(
+          "PDF receipts can be attached, but free auto-fill works with receipt images only. Upload a clear photo or key in the details."
+        );
       }
 
-      const extraction = result as ExtractedReceiptDetails;
+      const receiptText = await readReceiptTextWithOcr(ocrFile, (progress) => {
+        setReceiptProgress(progress);
+      });
+      const extraction = extractReceiptDetailsFromOcrText(receiptText) as ExtractedReceiptDetails;
+
+      if (!hasExtractedReceiptFields(extraction)) {
+        throw new Error("Receipt text was read, but no obvious date or amount was found. Please key in the details.");
+      }
 
       setDraft((currentDraft) => {
         if (currentDraft.receipt?.id !== receiptId) {
@@ -528,7 +530,7 @@ export function ClaimsClient({ staffProfile }: ClaimsClientProps) {
         status: "completed"
       });
       setReceiptProgress(100);
-      showMessage("success", "Receipt details filled. Please review before submitting.");
+      showMessage("success", "Receipt details filled by OCR. Please review before submitting.");
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : "Receipt details could not be extracted.";
@@ -2316,16 +2318,67 @@ function getMimeTypeFromExtension(extension: string) {
   return "image/jpeg";
 }
 
-async function prepareReceiptFileForExtraction(file: File) {
-  if (file.type === "application/pdf" || file.type === "image/jpeg" || file.type === "image/png") {
+async function prepareReceiptFileForOcr(file: File) {
+  const extension = getFileExtension(file.name);
+
+  if (file.type === "application/pdf" || extension === "pdf") {
+    return null;
+  }
+
+  if (
+    file.type === "image/jpeg" ||
+    file.type === "image/png" ||
+    extension === "jpg" ||
+    extension === "jpeg" ||
+    extension === "png"
+  ) {
     return file;
   }
 
-  if (!file.type.startsWith("image/")) {
+  if (!file.type.startsWith("image/") && extension !== "heic" && extension !== "heif") {
     return file;
   }
 
   return convertImageToJpeg(file);
+}
+
+async function readReceiptTextWithOcr(file: File, onProgress: (progress: number) => void) {
+  const { OEM, PSM, createWorker } = await import("tesseract.js");
+  let worker: Awaited<ReturnType<typeof createWorker>> | null = null;
+
+  try {
+    worker = await createWorker("eng", OEM.LSTM_ONLY, {
+      logger: (message) => {
+        if (message.status.includes("loading")) {
+          onProgress(50 + Math.round(message.progress * 15));
+        }
+
+        if (message.status.includes("recognizing")) {
+          onProgress(65 + Math.round(message.progress * 30));
+        }
+      }
+    });
+    await worker.setParameters({
+      preserve_interword_spaces: "1",
+      tessedit_pageseg_mode: PSM.AUTO
+    });
+    const result = await worker.recognize(file);
+
+    return result.data.text;
+  } finally {
+    await worker?.terminate().catch(() => undefined);
+  }
+}
+
+function hasExtractedReceiptFields(extraction: ExtractedReceiptDetails) {
+  return Boolean(
+    extraction.amountRequested ||
+      extraction.gstShown ||
+      extraction.merchantName ||
+      extraction.receiptNumber ||
+      extraction.totalSpent ||
+      extraction.transactionDate
+  );
 }
 
 function convertImageToJpeg(file: File) {
@@ -2382,6 +2435,10 @@ function replaceFileExtension(filename: string, extension: string) {
   const base = filename.replace(/\.[^.]+$/, "");
 
   return `${base || "receipt"}.${extension}`;
+}
+
+function getFileExtension(filename: string) {
+  return filename.split(".").pop()?.toLowerCase() ?? "";
 }
 
 function createClientId() {

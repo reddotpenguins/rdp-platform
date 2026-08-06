@@ -1,0 +1,45 @@
+import assert from "node:assert/strict";
+import { describe, it } from "node:test";
+import { extractReceiptDetailsFromOcrText } from "../lib/receiptOcr.ts";
+
+describe("receipt OCR parsing", () => {
+  it("extracts common Singapore receipt fields", () => {
+    const extraction = extractReceiptDetailsFromOcrText(`
+      RED DOT SWIM SCHOOL
+      TAX INVOICE
+      Receipt No: RDP-2026-1188
+      Date: 15/03/26 14:22
+      Subtotal 43.58
+      GST 9% 3.92
+      Grand Total SGD 47.50
+      Paid by Visa
+    `);
+
+    assert.equal(extraction.merchantName, "RED DOT SWIM SCHOOL");
+    assert.equal(extraction.receiptNumber, "RDP-2026-1188");
+    assert.equal(extraction.transactionDate, "2026-03-15");
+    assert.equal(extraction.subtotal, "43.58");
+    assert.equal(extraction.gstShown, "3.92");
+    assert.equal(extraction.totalSpent, "47.50");
+    assert.equal(extraction.amountRequested, "47.50");
+    assert.equal(extraction.currency, "SGD");
+    assert.equal(extraction.paymentMethod, "Visa");
+  });
+
+  it("falls back to the largest visible amount when no total label is clear", () => {
+    const extraction = extractReceiptDetailsFromOcrText(`
+      POOL SUPPLIES PTE LTD
+      INV 900733
+      2026-08-06
+      lane rope 18.00
+      clips 6.40
+      VISA 24.40
+    `);
+
+    assert.equal(extraction.merchantName, "POOL SUPPLIES PTE LTD");
+    assert.equal(extraction.receiptNumber, "900733");
+    assert.equal(extraction.transactionDate, "2026-08-06");
+    assert.equal(extraction.totalSpent, "24.40");
+    assert.equal(extraction.amountRequested, "24.40");
+  });
+});

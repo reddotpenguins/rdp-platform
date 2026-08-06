@@ -409,8 +409,6 @@ Add these Vercel environment variables for Production, Preview, and Development:
 NEXT_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your-publishable-key
 SUPABASE_SERVICE_ROLE_KEY=your-private-service-role-key
-OPENAI_API_KEY=your-private-openai-api-key
-OPENAI_RECEIPT_MODEL=gpt-4o-mini
 ENABLE_EXPERIMENTAL_COREPACK=1
 ```
 
@@ -420,7 +418,7 @@ ENABLE_EXPERIMENTAL_COREPACK=1
 
 The same private key is required for the RBA page to send Supabase invite emails from the website.
 
-`OPENAI_API_KEY` is private and required only for claims receipt auto-fill. `OPENAI_RECEIPT_MODEL` is optional; the app uses `gpt-4o-mini` when it is not set.
+Claims receipt auto-fill uses browser OCR by default, so no OpenAI API credits are required for normal receipt uploads. The older `/api/claims/extract-receipt` route can still be enabled later with `OPENAI_API_KEY` and `OPENAI_RECEIPT_MODEL` if a paid smart extractor is needed.
 
 ## Default Dataset
 
