@@ -95,7 +95,7 @@ export function WithdrawalsClient({
 
         <div className="flex flex-wrap items-center gap-2 sm:w-auto">
           <HeaderLink href="/admin" icon={ArrowLeft} label="Admin home" />
-          <HeaderLink href="/students" icon={Users} label="Students" />
+          <HeaderLink href="/students" icon={Users} label="Student lifecycle" />
           <SignOutButton className="flex-1 sm:flex-none" />
         </div>
       </header>

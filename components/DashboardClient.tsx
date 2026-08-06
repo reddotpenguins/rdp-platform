@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   BarChart3,
   ChevronDown,
@@ -201,21 +201,43 @@ function AdminToolsMenu({
       </summary>
       <div className="absolute right-0 z-30 mt-2 w-64 overflow-hidden rounded-lg border border-line bg-paper p-2 shadow-panel">
         <AdminToolLink href="/admin" icon={BarChart3} label="Admin home" />
-        <AdminToolLink href="/dashboard/quarter" icon={ClipboardList} label="Quarter assessment" />
-        {canUpload ? <AdminToolLink href="/upload" icon={FileUp} label="Upload data" /> : null}
-        {canManageEnquiries ? (
-          <AdminToolLink href="/enquiries" icon={Inbox} label="Enquiries" />
-        ) : null}
-        {canViewStudentLifecycle ? (
-          <AdminToolLink href="/students" icon={Users} label="Students" />
-        ) : null}
-        {canManageStudentLifecycle ? (
-          <AdminToolLink href="/withdrawals" icon={UserMinus} label="Withdrawals" />
-        ) : null}
-        <AdminToolLink href="/claims" icon={Receipt} label="Claims" />
-        {canManageStaff ? <AdminToolLink href="/rba" icon={ShieldCheck} label="RBA" /> : null}
+        <AdminToolGroup label="Assessment">
+          <AdminToolLink href="/dashboard" icon={BarChart3} label="Coach assessment" />
+          <AdminToolLink href="/dashboard/quarter" icon={ClipboardList} label="Quarter assessment" />
+          {canUpload ? <AdminToolLink href="/upload" icon={FileUp} label="Upload data" /> : null}
+        </AdminToolGroup>
+        <AdminToolGroup label="Lifecycle">
+          {canManageEnquiries ? (
+            <AdminToolLink href="/enquiries" icon={Inbox} label="Enquiries" />
+          ) : null}
+          {canViewStudentLifecycle ? (
+            <AdminToolLink href="/students" icon={Users} label="Student lifecycle" />
+          ) : null}
+          {canManageStudentLifecycle ? (
+            <AdminToolLink href="/withdrawals" icon={UserMinus} label="Withdrawals" />
+          ) : null}
+        </AdminToolGroup>
+        <AdminToolGroup label="Operations">
+          <AdminToolLink href="/claims" icon={Receipt} label="Claims" />
+          {canManageStaff ? <AdminToolLink href="/rba" icon={ShieldCheck} label="RBA" /> : null}
+        </AdminToolGroup>
       </div>
     </details>
+  );
+}
+
+function AdminToolGroup({
+  children,
+  label
+}: {
+  children: ReactNode;
+  label: string;
+}) {
+  return (
+    <div className="mt-2 border-t border-line pt-2 first:mt-0 first:border-t-0 first:pt-0">
+      <p className="px-3 pb-1 text-[11px] font-semibold uppercase text-slate-400">{label}</p>
+      {children}
+    </div>
   );
 }
 

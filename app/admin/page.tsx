@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import {
@@ -38,18 +39,14 @@ export default async function AdminPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2 sm:w-auto">
-          <Link
-            href="/dashboard"
-            className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-md bg-teal px-3 text-sm font-semibold text-white transition hover:bg-teal/90 sm:flex-none"
-          >
-            <BarChart3 aria-hidden="true" className="size-4" />
-            Assessment
-          </Link>
           <SignOutButton className="flex-1 sm:flex-none" />
         </div>
       </header>
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <AdminSection
+        title="Assessment Management"
+        description="Assessment review and data import live together here."
+      >
         <AdminCard
           href="/dashboard"
           icon={BarChart3}
@@ -68,6 +65,12 @@ export default async function AdminPage() {
           title="Upload data"
           description="Import new assessment records."
         />
+      </AdminSection>
+
+      <AdminSection
+        title="Customer & Student Lifecycle"
+        description="Follow enquiries from first contact through sign-up, active status, freeze, and withdrawal."
+      >
         <AdminCard
           href="/enquiries"
           icon={Inbox}
@@ -77,8 +80,8 @@ export default async function AdminPage() {
         <AdminCard
           href="/students"
           icon={Users}
-          title="Students"
-          description="Track sign-ups and current student status."
+          title="Student lifecycle"
+          description="Track sign-ups, active students, and freeze status."
         />
         <AdminCard
           href="/withdrawals"
@@ -86,6 +89,12 @@ export default async function AdminPage() {
           title="Withdrawals"
           description="Record withdrawals, freeze, and status updates."
         />
+      </AdminSection>
+
+      <AdminSection
+        title="Internal Operations"
+        description="Staff access and operational workflows."
+      >
         <AdminCard
           href="/claims"
           icon={Receipt}
@@ -98,8 +107,28 @@ export default async function AdminPage() {
           title="RBA"
           description="Invite staff and update roles."
         />
-      </section>
+      </AdminSection>
     </main>
+  );
+}
+
+function AdminSection({
+  children,
+  description,
+  title
+}: {
+  children: ReactNode;
+  description: string;
+  title: string;
+}) {
+  return (
+    <section className="space-y-3">
+      <div>
+        <h2 className="text-lg font-semibold text-ink">{title}</h2>
+        <p className="mt-1 text-sm text-slate-500">{description}</p>
+      </div>
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{children}</div>
+    </section>
   );
 }
 
