@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import clsx from "clsx";
 import {
@@ -135,6 +136,8 @@ const dateFormatter = new Intl.DateTimeFormat("en-SG", {
 
 export function ClaimsClient({ staffProfile }: ClaimsClientProps) {
   const permissions = getClaimPermissions(staffProfile.role);
+  const searchParams = useSearchParams();
+  const quickBooksStatus = searchParams.get("quickbooks");
   const [state, setState] = useState<ClaimsState>(() => createDefaultClaimsState(staffProfile));
   const [activeTab, setActiveTab] = useState<ClaimsTab>("mine");
   const [ready, setReady] = useState(false);
@@ -179,6 +182,17 @@ export function ClaimsClient({ staffProfile }: ClaimsClientProps) {
       setActiveTab("mine");
     }
   }, [activeTab, permissions.canManageSettings, permissions.canReview]);
+
+  useEffect(() => {
+    if (!quickBooksStatus) return;
+
+    const statusMessage = getQuickBooksStatusMessage(quickBooksStatus);
+
+    if (statusMessage) {
+      setMessage(statusMessage);
+      setActiveTab("settings");
+    }
+  }, [quickBooksStatus]);
 
   const sortedGroups = useMemo(() => sortClaimConfigItems(state.groups), [state.groups]);
   const sortedCategories = useMemo(
@@ -1135,6 +1149,63 @@ function MetricCard({ icon: Icon, label, value }: { icon: LucideIcon; label: str
   );
 }
 
+function getQuickBooksStatusMessage(status: string): { tone: "success" | "error"; text: string } | null {
+  switch (status) {
+    case "connected":
+      return {
+        tone: "success",
+        text: "QuickBooks connection saved. Claims can now be linked to QuickBooks in the next setup step."
+      };
+    case "denied":
+      return {
+        tone: "error",
+        text: "QuickBooks authorization was cancelled."
+      };
+    case "invalid-state":
+      return {
+        tone: "error",
+        text: "QuickBooks connection expired. Start the connection again."
+      };
+    case "missing-callback":
+      return {
+        tone: "error",
+        text: "QuickBooks did not return the required authorization details."
+      };
+    case "missing-config":
+      return {
+        tone: "error",
+        text: "QuickBooks environment variables are missing in Vercel."
+      };
+    case "missing-organisation":
+      return {
+        tone: "error",
+        text: "Claims organisation setup is missing. Run the claims foundation SQL first."
+      };
+    case "missing-service-role":
+      return {
+        tone: "error",
+        text: "Supabase service role key is missing in Vercel, so QuickBooks tokens cannot be saved."
+      };
+    case "not-authorized":
+      return {
+        tone: "error",
+        text: "Only admins can connect QuickBooks."
+      };
+    case "storage-error":
+      return {
+        tone: "error",
+        text: "QuickBooks connected, but the token could not be saved in Supabase."
+      };
+    case "token-error":
+      return {
+        tone: "error",
+        text: "QuickBooks authorization failed while exchanging the code for tokens."
+      };
+    default:
+      return null;
+  }
+}
+
 function StatusMessage({ message, tone }: { message: string; tone: "success" | "error" }) {
   return (
     <div
@@ -1989,6 +2060,30 @@ function SettingsPanel({
 }) {
   return (
     <section className="grid gap-5 xl:grid-cols-2">
+      <div className="rounded-lg border border-line bg-paper shadow-panel xl:col-span-2">
+        <div className="flex items-center gap-3 border-b border-line px-4 py-3">
+          <span className="flex size-9 items-center justify-center rounded-lg bg-teal/10 text-teal">
+            <WalletCards aria-hidden="true" className="size-5" />
+          </span>
+          <div>
+            <h2 className="text-lg font-semibold text-ink">QuickBooks Online</h2>
+            <p className="text-sm text-slate-500">Connect the company QuickBooks account for claims sync.</p>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-3 p-4">
+          <p className="max-w-2xl text-sm text-slate-600">
+            The connection uses Intuit OAuth and stores tokens server-side in Supabase.
+          </p>
+          <a
+            href="/api/quickbooks/connect"
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-teal px-3 text-sm font-semibold text-white transition hover:bg-teal/90"
+          >
+            <WalletCards aria-hidden="true" className="size-4" />
+            Connect QuickBooks
+          </a>
+        </div>
+      </div>
+
       <ConfigPanel
         icon={FolderCog}
         items={groups}

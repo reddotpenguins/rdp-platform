@@ -420,6 +420,10 @@ SUPABASE_SERVICE_ROLE_KEY=your-private-service-role-key
 AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT=https://your-resource-name.cognitiveservices.azure.com
 AZURE_DOCUMENT_INTELLIGENCE_KEY=your-private-azure-document-intelligence-key
 AZURE_DOCUMENT_INTELLIGENCE_API_VERSION=2024-11-30
+QUICKBOOKS_CLIENT_ID=your-intuit-client-id
+QUICKBOOKS_CLIENT_SECRET=your-intuit-client-secret
+QUICKBOOKS_REDIRECT_URI=https://rdp-platform-rouge.vercel.app/api/quickbooks/callback
+QUICKBOOKS_ENVIRONMENT=sandbox
 ENABLE_EXPERIMENTAL_COREPACK=1
 ```
 
@@ -432,6 +436,8 @@ The same private Supabase key is required for the RBA page to send Supabase invi
 Claims receipt auto-fill uses Azure AI Document Intelligence through `/api/claims/extract-receipt`. Keep the Azure key server-side only. The current setup targets Azure Free F0 limits: JPG, PNG, or PDF; 4MB max file size; first two pages per request; and low request-rate/free-page quotas. If Azure misses a field or confidence is low, the app keeps manual review enabled and staff can type the claim details.
 
 The app does not store the raw Azure response by default. It stores normalized claim fields, per-field confidence JSON, field review status, and receipt metadata. This avoids coupling the database schema directly to Azure and reduces sensitive OCR payload retention. Abandoned draft cleanup should be handled by a service-role maintenance job after review, for example deleting draft claims older than 30 days with no active receipt and removing matching storage objects.
+
+QuickBooks Online setup starts with `supabase/quickbooks-connections.sql`, then the four `QUICKBOOKS_*` Vercel variables above. For Intuit Development apps, keep `QUICKBOOKS_ENVIRONMENT=sandbox`. After redeploying, admins can open Claims > Setup and click Connect QuickBooks to authorize the company file.
 
 ## Default Dataset
 
