@@ -1,7 +1,21 @@
+export type ReceiptFieldStatus = "confirmed" | "verify" | "missing";
+
+export type ReceiptFieldKey =
+  | "merchantName"
+  | "receiptNumber"
+  | "transactionDate"
+  | "subtotal"
+  | "gstShown"
+  | "totalSpent"
+  | "paymentMethod";
+
+export type ReceiptFieldStatuses = Record<ReceiptFieldKey, ReceiptFieldStatus>;
+
 export type ReceiptOcrExtraction = {
   amountRequested: string | null;
   confidence: number;
   currency: string | null;
+  fieldStatuses: ReceiptFieldStatuses;
   gstClaimable: string | null;
   gstShown: string | null;
   merchantName: string | null;
@@ -36,10 +50,16 @@ const totalExclusionPatterns = [
   /\bround/i
 ];
 
+type TotalAmountMatch = {
+  amount: string;
+  source: "label" | "fallback";
+};
+
 export function extractReceiptDetailsFromOcrText(text: string): ReceiptOcrExtraction {
   const lines = getReceiptLines(text);
   const joinedText = lines.join("\n");
-  const totalSpent = findTotalAmount(lines) ?? findLargestMoneyAmount(lines);
+  const totalSpentMatch = findTotalAmount(lines) ?? findLargestMoneyAmount(lines);
+  const totalSpent = totalSpentMatch?.amount ?? null;
   const gstShown = findKeywordAmount(lines, gstKeywordPatterns);
   const subtotal = findKeywordAmount(lines, subtotalKeywordPatterns);
   const transactionDate = findTransactionDate(joinedText);
@@ -67,6 +87,16 @@ export function extractReceiptDetailsFromOcrText(text: string): ReceiptOcrExtrac
       transactionDate
     }),
     currency,
+    fieldStatuses: buildFieldStatuses({
+      gstShown,
+      merchantName,
+      paymentMethod,
+      receiptNumber,
+      subtotal,
+      totalSpent,
+      totalSpentSource: totalSpentMatch?.source ?? null,
+      transactionDate
+    }),
     gstClaimable: gstShown,
     gstShown,
     merchantName,
@@ -86,7 +116,7 @@ function getReceiptLines(text: string) {
     .filter(Boolean);
 }
 
-function findTotalAmount(lines: string[]) {
+function findTotalAmount(lines: string[]): TotalAmountMatch | null {
   const candidates = lines.flatMap((line, index) => {
     const amounts = getMoneyAmounts(line);
 
@@ -119,16 +149,16 @@ function findTotalAmount(lines: string[]) {
     return second.index - first.index;
   })[0];
 
-  return bestCandidate ? formatAmount(bestCandidate.amount) : null;
+  return bestCandidate ? { amount: formatAmount(bestCandidate.amount), source: "label" } : null;
 }
 
-function findLargestMoneyAmount(lines: string[]) {
+function findLargestMoneyAmount(lines: string[]): TotalAmountMatch | null {
   const amounts = lines
     .filter((line) => !totalExclusionPatterns.some((pattern) => pattern.test(line)))
     .flatMap(getMoneyAmounts)
     .filter((amount) => amount > 0 && amount < 100000);
 
-  return amounts.length > 0 ? formatAmount(Math.max(...amounts)) : null;
+  return amounts.length > 0 ? { amount: formatAmount(Math.max(...amounts)), source: "fallback" } : null;
 }
 
 function findKeywordAmount(lines: string[], keywordPatterns: RegExp[]) {
@@ -317,6 +347,38 @@ function calculateConfidence(fields: {
   return Math.min(0.92, Math.max(0.2, Number(score.toFixed(2))));
 }
 
+function buildFieldStatuses(fields: {
+  gstShown: string | null;
+  merchantName: string | null;
+  paymentMethod: string | null;
+  receiptNumber: string | null;
+  subtotal: string | null;
+  totalSpent: string | null;
+  totalSpentSource: TotalAmountMatch["source"] | null;
+  transactionDate: string | null;
+}): ReceiptFieldStatuses {
+  return {
+    gstShown: fields.gstShown ? "confirmed" : "missing",
+    merchantName: fields.merchantName ? "verify" : "missing",
+    paymentMethod: fields.paymentMethod ? "confirmed" : "missing",
+    receiptNumber: fields.receiptNumber ? "confirmed" : "missing",
+    subtotal: fields.subtotal ? "confirmed" : "missing",
+    totalSpent: getTotalSpentStatus(fields.totalSpent, fields.totalSpentSource),
+    transactionDate: fields.transactionDate ? "confirmed" : "missing"
+  };
+}
+
+function getTotalSpentStatus(
+  totalSpent: string | null,
+  source: TotalAmountMatch["source"] | null
+): ReceiptFieldStatus {
+  if (!totalSpent) {
+    return "missing";
+  }
+
+  return source === "label" ? "confirmed" : "verify";
+}
+
 function buildWarnings(fields: {
   merchantName: string | null;
   receiptNumber: string | null;
@@ -330,10 +392,10 @@ function buildWarnings(fields: {
 
   const warnings: string[] = [];
 
-  if (!fields.totalSpent) warnings.push("Total amount was not confidently detected.");
-  if (!fields.transactionDate) warnings.push("Receipt date was not confidently detected.");
-  if (!fields.merchantName) warnings.push("Merchant name was not confidently detected.");
-  if (!fields.receiptNumber) warnings.push("Receipt number was not confidently detected.");
+  if (!fields.totalSpent) warnings.push("Total amount was not found.");
+  if (!fields.transactionDate) warnings.push("Receipt date was not found.");
+  if (!fields.merchantName) warnings.push("Merchant name was not found.");
+  if (!fields.receiptNumber) warnings.push("Receipt number was not found.");
 
   return warnings;
 }

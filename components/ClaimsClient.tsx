@@ -26,7 +26,13 @@ import {
   type LucideIcon
 } from "lucide-react";
 import { SignOutButton } from "@/components/SignOutButton";
-import { extractReceiptDetailsFromOcrText } from "@/lib/receiptOcr";
+import {
+  extractReceiptDetailsFromOcrText,
+  type ReceiptFieldKey,
+  type ReceiptFieldStatus,
+  type ReceiptFieldStatuses,
+  type ReceiptOcrExtraction
+} from "@/lib/receiptOcr";
 import {
   calculateNonClaimableCents,
   canDeleteReferencedItem,
@@ -95,25 +101,12 @@ type ReviewInput = {
 };
 
 type ReceiptExtractionState = {
-  confidence?: number;
+  fieldStatuses?: ReceiptFieldStatuses;
   message: string;
   status: "idle" | "extracting" | "completed" | "failed";
 };
 
-type ExtractedReceiptDetails = {
-  amountRequested: string | null;
-  confidence: number;
-  currency: string | null;
-  gstClaimable: string | null;
-  gstShown: string | null;
-  merchantName: string | null;
-  paymentMethod: string | null;
-  receiptNumber: string | null;
-  subtotal: string | null;
-  totalSpent: string | null;
-  transactionDate: string | null;
-  warnings: string[];
-};
+type ExtractedReceiptDetails = ReceiptOcrExtraction;
 
 const storageKey = "rdp-platform-claims.v1";
 const idleReceiptExtractionState: ReceiptExtractionState = { message: "", status: "idle" };
@@ -289,7 +282,7 @@ export function ClaimsClient({ staffProfile }: ClaimsClientProps) {
       transactionDate: "2026-08-12"
     }));
     setReceiptExtraction({
-      confidence: 1,
+      fieldStatuses: createConfirmedReceiptFieldStatuses(),
       message: "Sample receipt details filled.",
       status: "completed"
     });
@@ -377,7 +370,7 @@ export function ClaimsClient({ staffProfile }: ClaimsClientProps) {
       claimantUserId: staffProfile.id,
       createdAt: existingClaim?.createdAt ?? now,
       currency: draft.currency || "SGD",
-      extractionConfidence: draft.receipt ? 0.82 : null,
+      extractionConfidence: null,
       extractionReviewStatus: "review_required",
       extractionStatus: draft.receipt ? "reviewed" : "not_started",
       groupId: draft.groupId,
@@ -465,7 +458,7 @@ export function ClaimsClient({ staffProfile }: ClaimsClientProps) {
 
     setReceiptProgress(35);
     setReceiptExtraction({
-      message: "Reading receipt with free OCR...",
+      message: "Reading receipt with OCR...",
       status: "extracting"
     });
     updateDraftField("receipt", receipt);
@@ -503,7 +496,7 @@ export function ClaimsClient({ staffProfile }: ClaimsClientProps) {
 
       if (!ocrFile) {
         throw new Error(
-          "PDF receipts can be attached, but free auto-fill works with receipt images only. Upload a clear photo or key in the details."
+          "PDF receipts can be attached, but receipt auto-fill works with images only for now. Upload a clear photo or key in the details."
         );
       }
 
@@ -524,7 +517,7 @@ export function ClaimsClient({ staffProfile }: ClaimsClientProps) {
         return applyReceiptExtraction(currentDraft, extraction);
       });
       setReceiptExtraction({
-        confidence: extraction.confidence,
+        fieldStatuses: extraction.fieldStatuses,
         message: getReceiptExtractionSuccessMessage(extraction),
         status: "completed"
       });
@@ -1247,6 +1240,24 @@ function ReceiptUploadPanel({
                 : "Extraction needs review"}
           </p>
           <p className="mt-1">{receiptExtraction.message}</p>
+          {receiptExtraction.fieldStatuses ? (
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              {getReceiptStatusItems(receiptExtraction.fieldStatuses).map((item) => (
+                <div
+                  key={item.key}
+                  className={clsx(
+                    "flex min-h-9 items-center justify-between gap-2 rounded-md border px-2.5 py-1.5 text-xs",
+                    getReceiptFieldStatusClasses(item.status)
+                  )}
+                >
+                  <span className="font-medium">{item.label}</span>
+                  <span className="shrink-0 font-semibold">
+                    {getReceiptFieldStatusLabel(item.status)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : null}
         </div>
       ) : null}
 
@@ -2131,7 +2142,7 @@ function createClaim(
     approverUserId: null,
     businessPurpose: "",
     currency: "SGD",
-    extractionConfidence: 0.82,
+    extractionConfidence: null,
     extractionReviewStatus: "review_required",
     extractionStatus: "reviewed",
     gstClaimableCents: 0,
@@ -2226,14 +2237,93 @@ function cleanExtractedValue(value: string | null | undefined) {
 }
 
 function getReceiptExtractionSuccessMessage(extraction: ExtractedReceiptDetails) {
-  const confidencePercent = Math.round(extraction.confidence * 100);
-  const warnings = extraction.warnings.filter(Boolean);
+  const summary = getReceiptFieldStatusSummary(extraction.fieldStatuses);
 
-  if (warnings.length > 0) {
-    return `Filled visible fields with ${confidencePercent}% confidence. ${warnings[0]}`;
+  if (summary.missing > 0) {
+    return `Filled visible fields. ${summary.missing} ${pluralizeField(
+      summary.missing
+    )} not found. Please review before submitting.`;
   }
 
-  return `Filled visible fields with ${confidencePercent}% confidence. Please review before submitting.`;
+  if (summary.verify > 0) {
+    return `Filled visible fields. ${summary.verify} ${
+      summary.verify === 1 ? "field needs" : "fields need"
+    } review before submitting.`;
+  }
+
+  return "Filled visible fields. Please review before submitting.";
+}
+
+const receiptFieldOrder: ReceiptFieldKey[] = [
+  "merchantName",
+  "receiptNumber",
+  "transactionDate",
+  "subtotal",
+  "gstShown",
+  "totalSpent",
+  "paymentMethod"
+];
+
+const receiptFieldLabels: Record<ReceiptFieldKey, string> = {
+  gstShown: "GST",
+  merchantName: "Merchant",
+  paymentMethod: "Payment",
+  receiptNumber: "Receipt no.",
+  subtotal: "Subtotal",
+  totalSpent: "Total",
+  transactionDate: "Date"
+};
+
+function createConfirmedReceiptFieldStatuses(): ReceiptFieldStatuses {
+  return receiptFieldOrder.reduce((statuses, key) => {
+    statuses[key] = "confirmed";
+    return statuses;
+  }, {} as ReceiptFieldStatuses);
+}
+
+function getReceiptStatusItems(fieldStatuses: ReceiptFieldStatuses) {
+  return receiptFieldOrder.map((key) => ({
+    key,
+    label: receiptFieldLabels[key],
+    status: fieldStatuses[key]
+  }));
+}
+
+function getReceiptFieldStatusLabel(status: ReceiptFieldStatus) {
+  switch (status) {
+    case "confirmed":
+      return "Confidently extracted";
+    case "verify":
+      return "Please verify";
+    case "missing":
+      return "Not found";
+  }
+}
+
+function getReceiptFieldStatusClasses(status: ReceiptFieldStatus) {
+  switch (status) {
+    case "confirmed":
+      return "border-emerald-200 bg-emerald-100 text-emerald-900";
+    case "verify":
+      return "border-amber-200 bg-amber-100 text-amber-950";
+    case "missing":
+      return "border-red-200 bg-red-100 text-red-800";
+  }
+}
+
+function getReceiptFieldStatusSummary(fieldStatuses: ReceiptFieldStatuses) {
+  return Object.values(fieldStatuses).reduce(
+    (summary, status) => ({
+      confirmed: summary.confirmed + (status === "confirmed" ? 1 : 0),
+      missing: summary.missing + (status === "missing" ? 1 : 0),
+      verify: summary.verify + (status === "verify" ? 1 : 0)
+    }),
+    { confirmed: 0, missing: 0, verify: 0 }
+  );
+}
+
+function pluralizeField(count: number) {
+  return count === 1 ? "field was" : "fields were";
 }
 
 function parseDraftFinancials(draft: DraftForm) {

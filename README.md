@@ -51,7 +51,7 @@ supabase/claims-foundation.sql
 
 Run `supabase/auth-and-roles.sql` first, then `supabase/claims-foundation.sql` when you are ready to connect claims to Supabase tables and private `claim-receipts` storage.
 
-Receipt uploads can auto-fill claim fields when `OPENAI_API_KEY` is configured. The extraction runs through the server route, so the key is never exposed to the browser. Uploaded receipt photos or PDFs are sent to OpenAI to extract visible merchant, receipt number, transaction date, currency, subtotal, GST, total, and payment method values; staff should still review the fields before submitting.
+Receipt uploads can auto-fill claim fields from receipt images with browser OCR. The upload panel shows field-level review statuses instead of an overall accuracy percentage: green for confidently extracted, yellow for please verify, and red for not found. PDF receipts can be attached, but image receipts are required for the current auto-fill flow.
 
 For the current prototype, run this file in Supabase SQL Editor after creating the tables:
 
@@ -421,6 +421,8 @@ ENABLE_EXPERIMENTAL_COREPACK=1
 The same private key is required for the RBA page to send Supabase invite emails from the website.
 
 Claims receipt auto-fill uses browser OCR by default, so no OpenAI API credits are required for normal receipt uploads. The older `/api/claims/extract-receipt` route can still be enabled later with `OPENAI_API_KEY` and `OPENAI_RECEIPT_MODEL` if a paid smart extractor is needed.
+
+OpenCV preprocessing plus PaddleOCR should be added as a private backend OCR route or worker before replacing the browser OCR path, because PaddleOCR needs a Python/inference runtime or hosted OCR API rather than a simple browser package swap.
 
 ## Default Dataset
 

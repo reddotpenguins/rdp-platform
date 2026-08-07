@@ -24,6 +24,13 @@ describe("receipt OCR parsing", () => {
     assert.equal(extraction.amountRequested, "47.50");
     assert.equal(extraction.currency, "SGD");
     assert.equal(extraction.paymentMethod, "Visa");
+    assert.equal(extraction.fieldStatuses.merchantName, "verify");
+    assert.equal(extraction.fieldStatuses.receiptNumber, "confirmed");
+    assert.equal(extraction.fieldStatuses.transactionDate, "confirmed");
+    assert.equal(extraction.fieldStatuses.subtotal, "confirmed");
+    assert.equal(extraction.fieldStatuses.gstShown, "confirmed");
+    assert.equal(extraction.fieldStatuses.totalSpent, "confirmed");
+    assert.equal(extraction.fieldStatuses.paymentMethod, "confirmed");
   });
 
   it("falls back to the largest visible amount when no total label is clear", () => {
@@ -41,5 +48,8 @@ describe("receipt OCR parsing", () => {
     assert.equal(extraction.transactionDate, "2026-08-06");
     assert.equal(extraction.totalSpent, "24.40");
     assert.equal(extraction.amountRequested, "24.40");
+    assert.equal(extraction.fieldStatuses.totalSpent, "verify");
+    assert.equal(extraction.fieldStatuses.subtotal, "missing");
+    assert.equal(extraction.fieldStatuses.gstShown, "missing");
   });
 });
