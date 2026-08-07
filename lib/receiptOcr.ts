@@ -55,13 +55,21 @@ type TotalAmountMatch = {
   source: "label" | "fallback";
 };
 
+type GstAmountMatch = {
+  amount: string;
+  source: "label" | "calculated";
+};
+
 export function extractReceiptDetailsFromOcrText(text: string): ReceiptOcrExtraction {
   const lines = getReceiptLines(text);
   const joinedText = lines.join("\n");
   const totalSpentMatch = findTotalAmount(lines) ?? findLargestMoneyAmount(lines);
   const totalSpent = totalSpentMatch?.amount ?? null;
-  const gstShown = findKeywordAmount(lines, gstKeywordPatterns);
   const subtotal = findKeywordAmount(lines, subtotalKeywordPatterns);
+  const gstShownMatch =
+    findKeywordAmount(lines, gstKeywordPatterns, "match") ??
+    calculateGstFromSubtotalAndTotal({ lines, subtotal, totalSpent });
+  const gstShown = gstShownMatch?.amount ?? null;
   const transactionDate = findTransactionDate(joinedText);
   const merchantName = findMerchantName(lines);
   const receiptNumber = findReceiptNumber(lines);
@@ -89,6 +97,7 @@ export function extractReceiptDetailsFromOcrText(text: string): ReceiptOcrExtrac
     currency,
     fieldStatuses: buildFieldStatuses({
       gstShown,
+      gstShownSource: gstShownMatch?.source ?? null,
       merchantName,
       paymentMethod,
       receiptNumber,
@@ -161,7 +170,21 @@ function findLargestMoneyAmount(lines: string[]): TotalAmountMatch | null {
   return amounts.length > 0 ? { amount: formatAmount(Math.max(...amounts)), source: "fallback" } : null;
 }
 
-function findKeywordAmount(lines: string[], keywordPatterns: RegExp[]) {
+function findKeywordAmount(
+  lines: string[],
+  keywordPatterns: RegExp[],
+  returnMode?: "amount"
+): string | null;
+function findKeywordAmount(
+  lines: string[],
+  keywordPatterns: RegExp[],
+  returnMode: "match"
+): GstAmountMatch | null;
+function findKeywordAmount(
+  lines: string[],
+  keywordPatterns: RegExp[],
+  returnMode: "amount" | "match" = "amount"
+) {
   for (const line of lines) {
     if (!keywordPatterns.some((pattern) => pattern.test(line))) {
       continue;
@@ -170,15 +193,50 @@ function findKeywordAmount(lines: string[], keywordPatterns: RegExp[]) {
     const amounts = getMoneyAmounts(line);
 
     if (amounts.length > 0) {
-      return formatAmount(amounts[amounts.length - 1]);
+      const amount = formatAmount(amounts[amounts.length - 1]);
+
+      return returnMode === "match" ? { amount, source: "label" } : amount;
     }
   }
 
   return null;
 }
 
+function calculateGstFromSubtotalAndTotal({
+  lines,
+  subtotal,
+  totalSpent
+}: {
+  lines: string[];
+  subtotal: string | null;
+  totalSpent: string | null;
+}): GstAmountMatch | null {
+  if (!subtotal || !totalSpent || !hasTaxRateLine(lines)) {
+    return null;
+  }
+
+  const subtotalAmount = Number(subtotal);
+  const totalAmount = Number(totalSpent);
+  const gstAmount = totalAmount - subtotalAmount;
+
+  if (!Number.isFinite(gstAmount) || gstAmount <= 0 || gstAmount > totalAmount * 0.2) {
+    return null;
+  }
+
+  return { amount: formatAmount(gstAmount), source: "calculated" };
+}
+
+function hasTaxRateLine(lines: string[]) {
+  return lines.some(
+    (line) =>
+      gstKeywordPatterns.some((pattern) => pattern.test(line)) &&
+      /\b\d{1,2}(?:\.\d+)?\s*%/.test(line)
+  );
+}
+
 function getMoneyAmounts(line: string) {
   return Array.from(line.matchAll(/(?:s\$|sgd|\$)?\s*([0-9]{1,5}(?:[,\s][0-9]{3})*(?:\.[0-9]{1,2}))/gi))
+    .filter((match) => !line.slice((match.index ?? 0) + match[0].length).trimStart().startsWith("%"))
     .map((match) => Number(match[1].replace(/[,\s]/g, "")))
     .filter((amount) => Number.isFinite(amount));
 }
@@ -275,19 +333,55 @@ function findReceiptNumber(lines: string[]) {
       continue;
     }
 
-    const cleaned = line.replace(/\b(no|number|num|id)\b/gi, "").replace(/[#:=]/g, " ");
-    const tokens = cleaned.match(/[a-z0-9][a-z0-9/-]{2,}/gi) ?? [];
-    const candidate = tokens
-      .reverse()
-      .find(
-        (token) =>
-          /\d/.test(token) &&
-          !keywordPattern.test(token) &&
-          !/^\d{1,2}[./-]\d{1,2}[./-]\d{2,4}$/.test(token)
-      );
+    const candidate = extractReceiptNumberFromLine(line, keywordPattern);
 
     if (candidate) {
       return candidate.toUpperCase();
+    }
+  }
+
+  return null;
+}
+
+function extractReceiptNumberFromLine(line: string, keywordPattern: RegExp) {
+  const keywordIndex = line.search(keywordPattern);
+  const afterKeyword = line
+    .slice(keywordIndex)
+    .replace(keywordPattern, " ")
+    .replace(/\b(no|number|num|id)\b/gi, " ")
+    .replace(/[#:=]/g, " ")
+    .split(/\b(date|time|total|sub\s*total|subtotal|gst|tax|amount|paid|cash|card|visa|mastercard)\b/i)[0]
+    .replace(/\b(20\d{2}|19\d{2})[./-]\d{1,2}[./-]\d{1,2}\b/g, " ")
+    .replace(/\b\d{1,2}[./-]\d{1,2}[./-]\d{2,4}\b/g, " ");
+
+  const tokens = afterKeyword.match(/[a-z0-9]+(?:[-/][a-z0-9]+)*/gi) ?? [];
+  const usefulTokens = tokens.filter(
+    (token) => /\d/.test(token) && !/^\d{1,2}[./-]\d{1,2}[./-]\d{2,4}$/.test(token)
+  );
+
+  for (let index = 0; index < usefulTokens.length; index += 1) {
+    const token = usefulTokens[index];
+
+    if (!/^\d+$/.test(token)) {
+      if (token.length >= 3) {
+        return token;
+      }
+
+      continue;
+    }
+
+    const numericChunks = [token];
+    let nextIndex = index + 1;
+
+    while (nextIndex < usefulTokens.length && /^\d+$/.test(usefulTokens[nextIndex])) {
+      numericChunks.push(usefulTokens[nextIndex]);
+      nextIndex += 1;
+    }
+
+    const joinedNumber = numericChunks.join("");
+
+    if (joinedNumber.length >= 3 && joinedNumber.length <= 24) {
+      return joinedNumber;
     }
   }
 
@@ -349,6 +443,7 @@ function calculateConfidence(fields: {
 
 function buildFieldStatuses(fields: {
   gstShown: string | null;
+  gstShownSource: GstAmountMatch["source"] | null;
   merchantName: string | null;
   paymentMethod: string | null;
   receiptNumber: string | null;
@@ -358,7 +453,7 @@ function buildFieldStatuses(fields: {
   transactionDate: string | null;
 }): ReceiptFieldStatuses {
   return {
-    gstShown: fields.gstShown ? "confirmed" : "missing",
+    gstShown: getGstShownStatus(fields.gstShown, fields.gstShownSource),
     merchantName: fields.merchantName ? "verify" : "missing",
     paymentMethod: fields.paymentMethod ? "confirmed" : "missing",
     receiptNumber: fields.receiptNumber ? "confirmed" : "missing",
@@ -366,6 +461,17 @@ function buildFieldStatuses(fields: {
     totalSpent: getTotalSpentStatus(fields.totalSpent, fields.totalSpentSource),
     transactionDate: fields.transactionDate ? "confirmed" : "missing"
   };
+}
+
+function getGstShownStatus(
+  gstShown: string | null,
+  source: GstAmountMatch["source"] | null
+): ReceiptFieldStatus {
+  if (!gstShown) {
+    return "missing";
+  }
+
+  return source === "label" ? "confirmed" : "verify";
 }
 
 function getTotalSpentStatus(

@@ -52,4 +52,39 @@ describe("receipt OCR parsing", () => {
     assert.equal(extraction.fieldStatuses.subtotal, "missing");
     assert.equal(extraction.fieldStatuses.gstShown, "missing");
   });
+
+  it("keeps split receipt number digits and ignores GST percentage rates", () => {
+    const extraction = extractReceiptDetailsFromOcrText(`
+      SWIM GEAR SHOP
+      Tax Invoice
+      Receipt No: 7 613
+      Date: 07/08/2026
+      Subtotal 40.00
+      GST 9.00% 3.60
+      Total SGD 43.60
+      NETS
+    `);
+
+    assert.equal(extraction.receiptNumber, "7613");
+    assert.equal(extraction.gstShown, "3.60");
+    assert.equal(extraction.totalSpent, "43.60");
+    assert.equal(extraction.fieldStatuses.receiptNumber, "confirmed");
+    assert.equal(extraction.fieldStatuses.gstShown, "confirmed");
+  });
+
+  it("marks GST as needing review when it is calculated from subtotal and total", () => {
+    const extraction = extractReceiptDetailsFromOcrText(`
+      AQUA MART
+      INV 881002
+      2026-08-07
+      Subtotal 100.00
+      GST 9%
+      Grand Total 109.00
+      Paid by Card
+    `);
+
+    assert.equal(extraction.gstShown, "9.00");
+    assert.equal(extraction.gstClaimable, "9.00");
+    assert.equal(extraction.fieldStatuses.gstShown, "verify");
+  });
 });
