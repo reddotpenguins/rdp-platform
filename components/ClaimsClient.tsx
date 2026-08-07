@@ -2137,7 +2137,9 @@ function readStoredClaimsState(staffProfile: StaffProfile): ClaimsState {
 
     return {
       categories: mergeCategories(parsed.categories, fallback.categories),
-      claims: Array.isArray(parsed.claims) ? ensureCurrentUserClaim(parsed.claims, staffProfile) : fallback.claims,
+      claims: Array.isArray(parsed.claims)
+        ? ensureCurrentUserClaim(sanitizeStoredClaims(parsed.claims), staffProfile)
+        : fallback.claims,
       groups: mergeConfigItems(parsed.groups, fallback.groups),
       settings: {
         ...fallback.settings,
@@ -2155,6 +2157,32 @@ function ensureCurrentUserClaim(claims: ClaimRecord[], staffProfile: StaffProfil
   }
 
   return [createCurrentUserSeedClaim(staffProfile), ...claims];
+}
+
+function sanitizeStoredClaims(claims: ClaimRecord[]) {
+  return claims.map((claim) => {
+    if (!claim.receipt || !isClaimEditableByClaimant(claim, claim.claimantUserId)) {
+      return claim;
+    }
+
+    const receiptValidation = validateReceiptFile({
+      name: claim.receipt.name || claim.receipt.safeName,
+      size: claim.receipt.size,
+      type: claim.receipt.type
+    });
+
+    if (receiptValidation.valid) {
+      return claim;
+    }
+
+    return {
+      ...claim,
+      extractionConfidence: null,
+      extractionReviewStatus: "review_required" as const,
+      extractionStatus: "not_started" as const,
+      receipt: null
+    };
+  });
 }
 
 function mergeConfigItems<TItem extends ClaimConfigItem>(items: TItem[] | undefined, fallback: TItem[]) {
