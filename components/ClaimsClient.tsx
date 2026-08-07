@@ -220,11 +220,10 @@ export function ClaimsClient({ staffProfile }: ClaimsClientProps) {
   const reviewClaims = useMemo(
     () =>
       state.claims
-        .filter((claim) => claim.claimantUserId !== staffProfile.id)
         .filter(isVisibleInReviewQueue)
         .filter((claim) => reviewFilter === "All" || claim.status === reviewFilter)
         .sort(sortClaimsByUpdatedDesc),
-    [reviewFilter, staffProfile.id, state.claims]
+    [reviewFilter, state.claims]
   );
   const ledgerClaims = useMemo(
     () =>
@@ -1079,6 +1078,7 @@ export function ClaimsClient({ staffProfile }: ClaimsClientProps) {
           onFilterChange={setReviewFilter}
           onUpdateInput={updateReviewInput}
           reviewInputs={reviewInputs}
+          userId={staffProfile.id}
         />
       ) : null}
 
@@ -1715,7 +1715,8 @@ function ReviewPanel({
   onAction,
   onFilterChange,
   onUpdateInput,
-  reviewInputs
+  reviewInputs,
+  userId
 }: {
   canMarkPaid: boolean;
   categories: ExpenseCategory[];
@@ -1726,6 +1727,7 @@ function ReviewPanel({
   onFilterChange: (status: LedgerStatusFilter) => void;
   onUpdateInput: (claimId: string, patch: Partial<ReviewInput>) => void;
   reviewInputs: Record<string, ReviewInput>;
+  userId: string;
 }) {
   const filters: LedgerStatusFilter[] = ["Submitted", "Under Review", "Returned for Correction", "Approved", "Paid", "Rejected", "All"];
 
@@ -1762,6 +1764,7 @@ function ReviewPanel({
               claim={claim}
               groups={groups}
               input={reviewInputs[claim.id]}
+              isOwnClaim={claim.claimantUserId === userId}
               key={claim.id}
               onAction={onAction}
               onUpdateInput={onUpdateInput}
@@ -1783,6 +1786,7 @@ function ReviewCard({
   claim,
   groups,
   input,
+  isOwnClaim,
   onAction,
   onUpdateInput
 }: {
@@ -1791,6 +1795,7 @@ function ReviewCard({
   claim: ClaimRecord;
   groups: ClaimGroup[];
   input?: ReviewInput;
+  isOwnClaim: boolean;
   onAction: (claim: ClaimRecord, action: "start" | "return" | "approve" | "reject" | "paid") => void;
   onUpdateInput: (claimId: string, patch: Partial<ReviewInput>) => void;
 }) {
@@ -1798,9 +1803,9 @@ function ReviewCard({
     approvedAmount: centsToDecimal(claim.approvedAmountCents ?? claim.amountRequestedCents),
     comment: ""
   };
-  const canStart = claim.status === "Submitted";
-  const canDecide = claim.status === "Under Review";
-  const canPay = claim.status === "Approved" && canMarkPaid;
+  const canStart = !isOwnClaim && claim.status === "Submitted";
+  const canDecide = !isOwnClaim && claim.status === "Under Review";
+  const canPay = !isOwnClaim && claim.status === "Approved" && canMarkPaid;
   const warnings = [
     ...claim.validationWarnings,
     claim.possibleDuplicate ? "Possible duplicate receipt or claim details." : null
@@ -1833,6 +1838,12 @@ function ReviewCard({
             {warnings.map((warning) => (
               <p key={warning}>{warning}</p>
             ))}
+          </div>
+        ) : null}
+
+        {isOwnClaim ? (
+          <div className="mt-4 rounded-lg border border-line bg-field px-3 py-2 text-sm text-slate-600">
+            This claim was submitted by you. It is visible here for tracking, but another admin should review it.
           </div>
         ) : null}
       </div>
