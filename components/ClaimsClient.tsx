@@ -39,6 +39,7 @@ import {
   defaultClaimSettings,
   detectPossibleDuplicates,
   formatMoneyCents,
+  getClaimReceipts,
   getNextClaimReference,
   initialClaimGroups,
   initialExpenseCategories,
@@ -90,6 +91,7 @@ type DraftForm = {
   paymentMethod: string;
   notes: string;
   receipt: ClaimReceipt | null;
+  receipts: ClaimReceipt[];
 };
 
 type ReviewInput = {
@@ -281,7 +283,9 @@ export function ClaimsClient({ staffProfile }: ClaimsClientProps) {
 
   function resetDraft() {
     receiptAbortController.current?.abort();
-    void cancelServerReceipt(draft.receipt, { deleteDraftClaim: !editingClaimId });
+    if (!editingClaimId) {
+      void cancelServerReceipts(getDraftReceipts(draft), { deleteDraftClaim: true });
+    }
     clearDraftForm();
   }
 
@@ -308,6 +312,7 @@ export function ClaimsClient({ staffProfile }: ClaimsClientProps) {
       merchantName: "Decathlon Singapore",
       paymentMethod: "Card",
       receipt: sampleReceipt,
+      receipts: [sampleReceipt],
       receiptNumber: "DCSG-2026-0812",
       subtotal: "79.27",
       totalSpent: "86.40",
@@ -329,6 +334,7 @@ export function ClaimsClient({ staffProfile }: ClaimsClientProps) {
     }
 
     setEditingClaimId(claim.id);
+    const claimReceipts = getClaimReceipts(claim);
     setDraft({
       amountRequested: centsToDecimal(claim.amountRequestedCents),
       businessPurpose: claim.businessPurpose,
@@ -340,14 +346,15 @@ export function ClaimsClient({ staffProfile }: ClaimsClientProps) {
       merchantName: claim.merchantName,
       notes: claim.notes,
       paymentMethod: claim.paymentMethod,
-      receipt: claim.receipt,
+      receipt: claimReceipts[0] ?? null,
+      receipts: claimReceipts,
       receiptNumber: claim.receiptNumber,
       subtotal: centsToDecimal(claim.subtotalCents),
       totalSpent: centsToDecimal(claim.totalSpentCents),
       transactionDate: claim.transactionDate
     });
     setReceiptExtraction(idleReceiptExtractionState);
-    setReceiptProgress(claim.receipt ? 100 : 0);
+    setReceiptProgress(claimReceipts.length > 0 ? 100 : 0);
     setActiveTab("new");
   }
 
@@ -395,7 +402,9 @@ export function ClaimsClient({ staffProfile }: ClaimsClientProps) {
     const existingClaim = editingClaimId
       ? state.claims.find((claim) => claim.id === editingClaimId) ?? null
       : null;
-    const claimId = existingClaim?.id ?? draft.receipt?.claimReference ?? getNextClaimReference(state.claims);
+    const draftReceipts = getDraftReceipts(draft);
+    const primaryReceipt = draftReceipts[0] ?? null;
+    const claimId = existingClaim?.id ?? primaryReceipt?.claimReference ?? getNextClaimReference(state.claims);
     const status =
       nextStatus === "Submitted"
         ? "Submitted"
@@ -415,7 +424,7 @@ export function ClaimsClient({ staffProfile }: ClaimsClientProps) {
       currency: draft.currency || "SGD",
       extractionConfidence: null,
       extractionReviewStatus: "review_required",
-      extractionStatus: draft.receipt ? "reviewed" : "not_started",
+      extractionStatus: draftReceipts.length > 0 ? "reviewed" : "not_started",
       groupId: draft.groupId,
       gstClaimableCents: parsed.gstClaimableCents,
       gstShownCents: parsed.gstShownCents,
@@ -427,7 +436,8 @@ export function ClaimsClient({ staffProfile }: ClaimsClientProps) {
       paidAt: existingClaim?.paidAt ?? null,
       paymentMethod: draft.paymentMethod.trim(),
       possibleDuplicate: false,
-      receipt: draft.receipt,
+      receipt: primaryReceipt,
+      receipts: draftReceipts,
       receiptNumber: draft.receiptNumber.trim(),
       status,
       submittedAt: nextStatus === "Submitted" ? existingClaim?.submittedAt ?? now : existingClaim?.submittedAt ?? null,
@@ -474,15 +484,24 @@ export function ClaimsClient({ staffProfile }: ClaimsClientProps) {
     );
   }
 
-  function removeDraftReceipt() {
+  function removeDraftReceipt(receiptId: string) {
     receiptAbortController.current?.abort();
-    void cancelServerReceipt(draft.receipt, { deleteDraftClaim: !editingClaimId });
-    updateDraftField("receipt", null);
+    const currentReceipts = getDraftReceipts(draft);
+    const receipt = currentReceipts.find((item) => item.id === receiptId) ?? null;
+    const willDeleteNewDraftClaim = !editingClaimId && currentReceipts.length <= 1;
+
+    void cancelServerReceipt(receipt, { deleteDraftClaim: willDeleteNewDraftClaim });
+    setDraft((currentDraft) => removeReceiptFromDraft(currentDraft, receiptId));
     setReceiptExtraction(idleReceiptExtractionState);
-    setReceiptProgress(0);
+    setReceiptProgress(currentReceipts.length > 1 ? 100 : 0);
   }
 
   function handleReceiptFile(file: File | null) {
+    if (receiptBusy) {
+      showMessage("error", "Please wait until the current receipt is attached before adding another one.");
+      return;
+    }
+
     const validation = validateReceiptFile(file, state.settings);
 
     if (!file || !validation.valid) {
@@ -491,16 +510,17 @@ export function ClaimsClient({ staffProfile }: ClaimsClientProps) {
     }
 
     receiptAbortController.current?.abort();
-    const previousReceipt = draft.receipt;
+    const previousReceipts = getDraftReceipts(draft);
+    const serverClaimId = getDraftServerClaimId(draft);
     const extractionAttemptId = createClientId();
     const receipt: ClaimReceipt = {
       checksum: `${validation.safeName}-${file.size}-${file.lastModified}`,
       extractionAttemptId,
       id: createClientId(),
       name: file.name,
-      receiptVersion: (previousReceipt?.receiptVersion ?? 0) + 1,
+      receiptVersion: getNextClientReceiptVersion(previousReceipts),
       safeName: validation.safeName,
-      serverClaimId: previousReceipt?.serverClaimId,
+      serverClaimId,
       size: file.size,
       type: file.type || getMimeTypeFromExtension(validation.extension),
       uploadedAt: new Date().toISOString(),
@@ -512,24 +532,20 @@ export function ClaimsClient({ staffProfile }: ClaimsClientProps) {
       message: "Uploading receipt to private storage...",
       status: "uploading"
     });
-    setDraft((currentDraft) => ({
-      ...clearExtractedDraftFields(currentDraft),
-      receipt
-    }));
+    setDraft((currentDraft) =>
+      addReceiptToDraft(
+        previousReceipts.length === 0 ? clearExtractedDraftFields(currentDraft) : currentDraft,
+        receipt
+      )
+    );
 
     if (receipt.type.startsWith("image/")) {
       const reader = new FileReader();
       reader.onload = () => {
         setDraft((currentDraft) =>
-          currentDraft.receipt?.id === receipt.id
-            ? {
-                ...currentDraft,
-                receipt: {
-                  ...currentDraft.receipt,
-                  dataUrl: typeof reader.result === "string" ? reader.result : undefined
-                }
-              }
-            : currentDraft
+          updateDraftReceipt(currentDraft, receipt.id, {
+            dataUrl: typeof reader.result === "string" ? reader.result : undefined
+          })
         );
         setReceiptProgress((currentProgress) => Math.max(currentProgress, 45));
       };
@@ -565,29 +581,25 @@ export function ClaimsClient({ staffProfile }: ClaimsClientProps) {
         status: "filling"
       });
       setDraft((currentDraft) => {
-        if (
-          currentDraft.receipt?.id !== receipt.id ||
-          currentDraft.receipt.extractionAttemptId !== receipt.extractionAttemptId
-        ) {
+        const currentReceipt = currentDraft.receipts.find((item) => item.id === receipt.id);
+
+        if (!currentReceipt || currentReceipt.extractionAttemptId !== receipt.extractionAttemptId) {
           return currentDraft;
         }
 
-        return applyReceiptExtraction(
-          {
-            ...currentDraft,
-            receipt: {
-              ...currentDraft.receipt,
-              checksum: extractionResponse.receipt.checksum ?? currentDraft.receipt.checksum,
-              claimReference: extractionResponse.claimReference,
-              receiptVersion: extractionResponse.receipt.receiptVersion,
-              serverClaimId: extractionResponse.claimId,
-              serverReceiptId: extractionResponse.receipt.id,
-              storageObjectPath: extractionResponse.receipt.storageObjectPath,
-              uploadedAt: extractionResponse.receipt.uploadedAt
-            }
-          },
-          extraction
-        );
+        const updatedDraft = updateDraftReceipt(currentDraft, receipt.id, {
+          checksum: extractionResponse.receipt.checksum ?? currentReceipt.checksum,
+          claimReference: extractionResponse.claimReference,
+          receiptVersion: extractionResponse.receipt.receiptVersion,
+          serverClaimId: extractionResponse.claimId,
+          serverReceiptId: extractionResponse.receipt.id,
+          storageObjectPath: extractionResponse.receipt.storageObjectPath,
+          uploadedAt: extractionResponse.receipt.uploadedAt
+        });
+
+        return shouldApplyReceiptExtraction(currentDraft, receipt.id)
+          ? applyReceiptExtraction(updatedDraft, extraction)
+          : updatedDraft;
       });
       setReceiptExtraction({
         fieldStatuses: extraction.fieldStatuses,
@@ -595,7 +607,12 @@ export function ClaimsClient({ staffProfile }: ClaimsClientProps) {
         status: "completed"
       });
       setReceiptProgress(100);
-      showMessage("success", "Receipt details filled by Azure. Please review before submitting.");
+      showMessage(
+        "success",
+        draft.receipts.length === 0
+          ? "Receipt details filled by Azure. Please review before submitting."
+          : "Receipt attached. Please review the overall claim totals before submitting."
+      );
     } catch (error) {
       if (isAbortError(error)) {
         return;
@@ -650,7 +667,9 @@ export function ClaimsClient({ staffProfile }: ClaimsClientProps) {
   }
 
   async function syncServerClaim(nextStatus: "Draft" | "Submitted", validationWarnings: string[]) {
-    if (!draft.receipt?.serverClaimId) {
+    const serverClaimId = getDraftServerClaimId(draft);
+
+    if (!serverClaimId) {
       return true;
     }
 
@@ -659,7 +678,7 @@ export function ClaimsClient({ staffProfile }: ClaimsClientProps) {
         amountRequested: draft.amountRequested,
         businessPurpose: draft.businessPurpose,
         categoryName: getCategoryName(state.categories, draft.categoryId),
-        claimId: draft.receipt.serverClaimId,
+        claimId: serverClaimId,
         currency: draft.currency,
         groupName: getGroupName(state.groups, draft.groupId),
         gstClaimable: draft.gstClaimable,
@@ -710,16 +729,41 @@ export function ClaimsClient({ staffProfile }: ClaimsClientProps) {
     }).catch(() => undefined);
   }
 
+  async function cancelServerReceipts(
+    receipts: ClaimReceipt[],
+    options: { deleteDraftClaim?: boolean } = {}
+  ) {
+    const serverClaimId = getServerClaimIdFromReceipts(receipts);
+
+    if (options.deleteDraftClaim && serverClaimId) {
+      await fetch("/api/claims/extract-receipt", {
+        body: JSON.stringify({
+          claimId: serverClaimId,
+          deleteClaim: true
+        }),
+        headers: {
+          "Content-Type": "application/json"
+        },
+        method: "DELETE"
+      }).catch(() => undefined);
+      return;
+    }
+
+    await Promise.all(receipts.map((receipt) => cancelServerReceipt(receipt)));
+  }
+
   async function deleteServerDraftClaim(claim: ClaimRecord) {
-    if (!claim.receipt?.serverClaimId && !claim.receipt?.serverReceiptId) {
+    const receipts = getClaimReceipts(claim);
+    const serverClaimId = getServerClaimIdFromReceipts(receipts);
+
+    if (!serverClaimId && receipts.every((receipt) => !receipt.serverReceiptId)) {
       return true;
     }
 
     const response = await fetch("/api/claims/extract-receipt", {
       body: JSON.stringify({
-        claimId: claim.receipt.serverClaimId,
-        deleteClaim: true,
-        receiptId: claim.receipt.serverReceiptId
+        claimId: serverClaimId,
+        deleteClaim: true
       }),
       headers: {
         "Content-Type": "application/json"
@@ -1221,7 +1265,7 @@ function ClaimListItem({
           {getCategoryName(categories, claim.categoryId)}
         </p>
         <p className="mt-1 text-xs text-slate-500">
-          {formatDate(claim.transactionDate)} · {claim.receipt?.safeName ?? "No receipt attached"}
+          {formatDate(claim.transactionDate)} · {formatReceiptSummary(getClaimReceipts(claim))}
         </p>
       </div>
       <div className="flex shrink-0 items-center gap-2 sm:justify-end">
@@ -1285,7 +1329,7 @@ function ClaimFormPanel({
   onDeleteDraft: () => void;
   onDropFile: (file: File | null) => void;
   onFillSample: () => void;
-  onRemoveReceipt: () => void;
+  onRemoveReceipt: (receiptId: string) => void;
   onReset: () => void;
   onSaveDraft: () => void;
   onSubmitClaim: () => void;
@@ -1436,7 +1480,8 @@ function ClaimFormPanel({
       <ReceiptUploadPanel
         onDropFile={onDropFile}
         onRemoveReceipt={onRemoveReceipt}
-        receipt={draft.receipt}
+        activeReceipt={draft.receipt}
+        receipts={draft.receipts}
         receiptExtraction={receiptExtraction}
         receiptProgress={receiptProgress}
       />
@@ -1445,15 +1490,17 @@ function ClaimFormPanel({
 }
 
 function ReceiptUploadPanel({
+  activeReceipt,
   onDropFile,
   onRemoveReceipt,
-  receipt,
+  receipts,
   receiptExtraction,
   receiptProgress
 }: {
+  activeReceipt: ClaimReceipt | null;
   onDropFile: (file: File | null) => void;
-  onRemoveReceipt: () => void;
-  receipt: ClaimReceipt | null;
+  onRemoveReceipt: (receiptId: string) => void;
+  receipts: ClaimReceipt[];
   receiptExtraction: ReceiptExtractionState;
   receiptProgress: number;
 }) {
@@ -1464,8 +1511,8 @@ function ReceiptUploadPanel({
           <UploadCloud aria-hidden="true" className="size-5" />
         </span>
         <div>
-          <h2 className="text-lg font-semibold text-ink">Receipt</h2>
-          <p className="text-sm text-slate-500">Photo, gallery, PDF, or desktop drop</p>
+          <h2 className="text-lg font-semibold text-ink">Receipts</h2>
+          <p className="text-sm text-slate-500">Attach one or more receipts to this claim</p>
         </div>
       </div>
 
@@ -1478,7 +1525,7 @@ function ReceiptUploadPanel({
         }}
       >
         <Receipt aria-hidden="true" className="size-9 text-teal" />
-        <span className="text-sm font-semibold text-ink">Upload receipt</span>
+        <span className="text-sm font-semibold text-ink">Add receipt</span>
         <span className="text-xs text-slate-500">JPG, JPEG, PNG, or PDF up to 4MB</span>
         <input
           className="sr-only"
@@ -1537,34 +1584,50 @@ function ReceiptUploadPanel({
         </div>
       ) : null}
 
-      {receipt ? (
+      {activeReceipt ? (
         <div className="mt-4 overflow-hidden rounded-lg border border-line bg-field">
-          {receipt.dataUrl ? (
+          {activeReceipt.dataUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={receipt.dataUrl} alt={`Receipt preview for ${receipt.safeName}`} className="max-h-72 w-full object-contain bg-white" />
+            <img src={activeReceipt.dataUrl} alt={`Receipt preview for ${activeReceipt.safeName}`} className="max-h-72 w-full object-contain bg-white" />
           ) : (
             <div className="flex h-40 flex-col items-center justify-center gap-2 bg-white text-center">
               <FileText aria-hidden="true" className="size-9 text-slate-400" />
-              <p className="px-4 text-sm font-semibold text-ink">{receipt.safeName}</p>
+              <p className="px-4 text-sm font-semibold text-ink">{activeReceipt.safeName}</p>
             </div>
           )}
-          <div className="border-t border-line px-3 py-3 text-sm">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="break-words font-semibold text-ink">{receipt.safeName}</p>
-                <p className="mt-1 text-xs text-slate-500">{formatFileSize(receipt.size)}</p>
+        </div>
+      ) : null}
+
+      {receipts.length > 0 ? (
+        <div className="mt-4 overflow-hidden rounded-lg border border-line bg-field">
+          <div className="border-b border-line px-3 py-2 text-sm font-semibold text-ink">
+            Attached receipts ({receipts.length})
+          </div>
+          <div className="space-y-2 px-3 py-3 text-sm">
+            {receipts.map((receipt, index) => (
+              <div className="rounded-md border border-line bg-paper px-3 py-2" key={receipt.id}>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="break-words font-semibold text-ink">
+                      {index + 1}. {receipt.safeName}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">{formatFileSize(receipt.size)}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => onRemoveReceipt(receipt.id)}
+                    className="inline-flex h-8 items-center justify-center rounded-md border border-line bg-paper px-2 text-xs font-semibold text-slate-700 transition hover:border-teal hover:text-teal"
+                  >
+                    Remove
+                  </button>
+                </div>
+                {activeReceipt?.id === receipt.id ? (
+                  <div className="mt-3 h-2 overflow-hidden rounded-full bg-line">
+                    <div className="h-full rounded-full bg-teal" style={{ width: `${receiptProgress}%` }} />
+                  </div>
+                ) : null}
               </div>
-              <button
-                type="button"
-                onClick={onRemoveReceipt}
-                className="inline-flex h-8 items-center justify-center rounded-md border border-line bg-paper px-2 text-xs font-semibold text-slate-700 transition hover:border-teal hover:text-teal"
-              >
-                Remove
-              </button>
-            </div>
-            <div className="mt-3 h-2 overflow-hidden rounded-full bg-line">
-              <div className="h-full rounded-full bg-teal" style={{ width: `${receiptProgress}%` }} />
-            </div>
+            ))}
           </div>
         </div>
       ) : null}
@@ -1689,7 +1752,7 @@ function ReviewCard({
           <MetaBox label="Category" value={getCategoryName(categories, claim.categoryId)} />
           <MetaBox label="Requested" value={formatMoneyCents(claim.amountRequestedCents, claim.currency)} />
           <MetaBox label="GST claimable" value={formatMoneyCents(claim.gstClaimableCents, claim.currency)} />
-          <MetaBox label="Receipt" value={claim.receipt?.safeName ?? "No receipt"} />
+          <MetaBox label="Receipts" value={formatReceiptSummary(getClaimReceipts(claim))} />
           <MetaBox label="Date" value={formatDate(claim.transactionDate)} />
           <MetaBox label="Review" value={claim.extractionReviewStatus.replace("_", " ")} />
         </div>
@@ -2282,18 +2345,26 @@ function ensureCurrentUserClaim(claims: ClaimRecord[], staffProfile: StaffProfil
 
 function sanitizeStoredClaims(claims: ClaimRecord[]) {
   return claims.map((claim) => {
-    if (!claim.receipt || !isClaimEditableByClaimant(claim, claim.claimantUserId)) {
+    if (!isClaimEditableByClaimant(claim, claim.claimantUserId)) {
       return claim;
     }
 
-    const receiptValidation = validateReceiptFile({
-      name: claim.receipt.name || claim.receipt.safeName,
-      size: claim.receipt.size,
-      type: claim.receipt.type
+    const validReceipts = getClaimReceipts(claim).filter((receipt) => {
+      const receiptValidation = validateReceiptFile({
+        name: receipt.name || receipt.safeName,
+        size: receipt.size,
+        type: receipt.type
+      });
+
+      return receiptValidation.valid;
     });
 
-    if (receiptValidation.valid) {
-      return claim;
+    if (validReceipts.length > 0) {
+      return {
+        ...claim,
+        receipt: validReceipts[0],
+        receipts: validReceipts
+      };
     }
 
     return {
@@ -2301,7 +2372,8 @@ function sanitizeStoredClaims(claims: ClaimRecord[]) {
       extractionConfidence: null,
       extractionReviewStatus: "review_required" as const,
       extractionStatus: "not_started" as const,
-      receipt: null
+      receipt: null,
+      receipts: []
     };
   });
 }
@@ -2506,6 +2578,7 @@ function createBlankDraft(state: ClaimsState): DraftForm {
     notes: "",
     paymentMethod: "",
     receipt: null,
+    receipts: [],
     receiptNumber: "",
     subtotal: "",
     totalSpent: "",
@@ -2518,7 +2591,77 @@ function getDraftClaimReference(
   editingClaim: ClaimRecord | null,
   claims: ClaimRecord[]
 ) {
-  return editingClaim?.id ?? draft.receipt?.claimReference ?? getNextClaimReference(claims);
+  return editingClaim?.id ?? getDraftReceipts(draft)[0]?.claimReference ?? getNextClaimReference(claims);
+}
+
+function getDraftReceipts(draft: DraftForm) {
+  const receipts = draft.receipts.length > 0 ? draft.receipts : draft.receipt ? [draft.receipt] : [];
+  const byId = new Map<string, ClaimReceipt>();
+
+  for (const receipt of receipts) {
+    byId.set(receipt.id, receipt);
+  }
+
+  return Array.from(byId.values());
+}
+
+function getDraftServerClaimId(draft: DraftForm) {
+  return getServerClaimIdFromReceipts(getDraftReceipts(draft));
+}
+
+function getServerClaimIdFromReceipts(receipts: ClaimReceipt[]) {
+  return receipts.find((receipt) => receipt.serverClaimId)?.serverClaimId;
+}
+
+function getNextClientReceiptVersion(receipts: ClaimReceipt[]) {
+  return Math.max(0, ...receipts.map((receipt) => Number(receipt.receiptVersion || 0)).filter(Number.isFinite)) + 1;
+}
+
+function addReceiptToDraft(draft: DraftForm, receipt: ClaimReceipt): DraftForm {
+  const receipts = [...getDraftReceipts(draft), receipt];
+
+  return {
+    ...draft,
+    receipt,
+    receipts
+  };
+}
+
+function updateDraftReceipt(
+  draft: DraftForm,
+  receiptId: string,
+  patch: Partial<ClaimReceipt>
+): DraftForm {
+  const receipts = getDraftReceipts(draft).map((receipt) =>
+    receipt.id === receiptId
+      ? {
+          ...receipt,
+          ...patch
+        }
+      : receipt
+  );
+
+  return {
+    ...draft,
+    receipt: draft.receipt?.id === receiptId ? receipts.find((receipt) => receipt.id === receiptId) ?? null : draft.receipt,
+    receipts
+  };
+}
+
+function removeReceiptFromDraft(draft: DraftForm, receiptId: string): DraftForm {
+  const receipts = getDraftReceipts(draft).filter((receipt) => receipt.id !== receiptId);
+
+  return {
+    ...draft,
+    receipt: draft.receipt?.id === receiptId ? receipts[receipts.length - 1] ?? null : draft.receipt,
+    receipts
+  };
+}
+
+function shouldApplyReceiptExtraction(draft: DraftForm, receiptId: string) {
+  const receipts = getDraftReceipts(draft);
+
+  return receipts[0]?.id === receiptId && !draft.merchantName.trim() && !draft.totalSpent.trim();
 }
 
 function applyReceiptExtraction(
@@ -2748,6 +2891,18 @@ function formatFileSize(size: number) {
   return `${(size / 1024 / 1024).toFixed(1)} MB`;
 }
 
+function formatReceiptSummary(receipts: ClaimReceipt[]) {
+  if (receipts.length === 0) {
+    return "No receipt attached";
+  }
+
+  if (receipts.length === 1) {
+    return receipts[0].safeName;
+  }
+
+  return `${receipts.length} receipts, first: ${receipts[0].safeName}`;
+}
+
 function getMimeTypeFromExtension(extension: string) {
   if (extension === "pdf") return "application/pdf";
   if (extension === "png") return "image/png";
@@ -2813,7 +2968,7 @@ function downloadClaimsCsv(claims: ClaimRecord[], groups: ClaimGroup[], categori
     "Status",
     "Submission date",
     "Paid date",
-    "Receipt attachment"
+    "Receipt attachments"
   ];
   const rows = claims.map((claim) => [
     claim.id,
@@ -2833,7 +2988,7 @@ function downloadClaimsCsv(claims: ClaimRecord[], groups: ClaimGroup[], categori
     claim.status,
     claim.submittedAt ?? "",
     claim.paidAt ?? "",
-    claim.receipt?.safeName ?? ""
+    getClaimReceipts(claim).map((receipt) => receipt.safeName).join("; ")
   ]);
   const csv = [headers, ...rows]
     .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","))

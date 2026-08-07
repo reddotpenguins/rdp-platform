@@ -101,6 +101,7 @@ export type ClaimRecord = {
   extractionConfidence: number | null;
   extractionReviewStatus: "review_required" | "confirmed";
   receipt: ClaimReceipt | null;
+  receipts?: ClaimReceipt[];
   createdAt: string;
   updatedAt: string;
   history: ClaimHistoryEntry[];
@@ -396,14 +397,19 @@ export function createReceiptPath({
 export function detectPossibleDuplicates(candidate: ClaimRecord, claims: ClaimRecord[]) {
   const merchant = candidate.merchantName.trim().toLowerCase();
   const receiptNumber = candidate.receiptNumber.trim().toLowerCase();
+  const candidateReceiptChecksums = new Set(
+    getClaimReceipts(candidate)
+      .map((receipt) => receipt.checksum)
+      .filter(Boolean)
+  );
 
   return claims.filter((claim) => {
     if (claim.id === candidate.id) return false;
     if (claim.claimantUserId !== candidate.claimantUserId) return false;
 
-    const sameChecksum =
-      Boolean(candidate.receipt?.checksum) &&
-      candidate.receipt?.checksum === claim.receipt?.checksum;
+    const sameChecksum = getClaimReceipts(claim).some(
+      (receipt) => receipt.checksum && candidateReceiptChecksums.has(receipt.checksum)
+    );
     const sameReceiptNumber =
       Boolean(receiptNumber) && claim.receiptNumber.trim().toLowerCase() === receiptNumber;
     const sameDetails =
@@ -441,6 +447,17 @@ export function isClaimEditableByClaimant(claim: ClaimRecord, userId: string) {
 
 export function canDeleteClaimDraft(claim: ClaimRecord, userId: string) {
   return claim.claimantUserId === userId && claim.status === "Draft";
+}
+
+export function getClaimReceipts(claim: Pick<ClaimRecord, "receipt" | "receipts">) {
+  const receipts = claim.receipts && claim.receipts.length > 0 ? claim.receipts : claim.receipt ? [claim.receipt] : [];
+  const byId = new Map<string, ClaimReceipt>();
+
+  for (const receipt of receipts) {
+    byId.set(receipt.id, receipt);
+  }
+
+  return Array.from(byId.values());
 }
 
 export function isVisibleInReviewQueue(claim: ClaimRecord) {

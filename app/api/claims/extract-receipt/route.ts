@@ -145,7 +145,6 @@ export async function POST(request: NextRequest) {
     }
 
     activeClaimId = claim.id;
-    await invalidateExistingReceipts(admin, claim);
 
     const existingReceipts = await getClaimReceiptVersions(admin, claim.id);
     const receiptVersion = getNextReceiptVersion(existingReceipts);
@@ -327,22 +326,26 @@ export async function DELETE(request: NextRequest) {
   if (body.deleteClaim && shouldHardDeleteDraftClaim(claim.status)) {
     await admin.from("claims").delete().eq("id", claim.id).eq("status", "Draft");
   } else {
-    await admin
-      .from("claims")
-      .update({
-        extraction_status: "not_started",
-        extraction_review_status: "review_required",
-        merchant_name: null,
-        receipt_number: null,
-        transaction_date: null,
-        subtotal_amount: 0,
-        gst_shown_amount: 0,
-        total_spent_amount: 0,
-        amount_requested: 0,
-        gst_claimable_amount: 0,
-        updated_at: new Date().toISOString()
-      })
-      .eq("id", claim.id);
+    const remainingReceipts = await getActiveReceipts(admin, claim.id);
+
+    if (remainingReceipts.length === 0) {
+      await admin
+        .from("claims")
+        .update({
+          extraction_status: "not_started",
+          extraction_review_status: "review_required",
+          merchant_name: null,
+          receipt_number: null,
+          transaction_date: null,
+          subtotal_amount: 0,
+          gst_shown_amount: 0,
+          total_spent_amount: 0,
+          amount_requested: 0,
+          gst_claimable_amount: 0,
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", claim.id);
+    }
   }
 
   return NextResponse.json({ ok: true });
@@ -585,27 +588,6 @@ async function getActiveReceipts(
     .is("deleted_at", null);
 
   return (data ?? []) as Array<ReceiptRow & { claim_id: string }>;
-}
-
-async function invalidateExistingReceipts(
-  admin: NonNullable<ReturnType<typeof createOptionalSupabaseAdminClient>>,
-  claim: ClaimRow
-) {
-  const receipts = await getActiveReceipts(admin, claim.id);
-
-  await Promise.all(
-    receipts.map(async (receipt) => {
-      await admin
-        .from("claim_receipts")
-        .update({
-          deleted_at: new Date().toISOString(),
-          extraction_status: "replaced",
-          extraction_error: "Replaced by a newer receipt before submission."
-        })
-        .eq("id", receipt.id);
-      await admin.storage.from(receipt.storage_bucket).remove([receipt.storage_object_path]);
-    })
-  );
 }
 
 async function createReceiptRecord(

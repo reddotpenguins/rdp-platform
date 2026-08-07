@@ -7,6 +7,7 @@ import {
   createReceiptPath,
   decimalToCents,
   detectPossibleDuplicates,
+  getClaimReceipts,
   validateFinancials,
   validateReceiptFile,
   type ClaimRecord
@@ -83,6 +84,25 @@ describe("claims duplicate detection", () => {
 
     assert.equal(detectPossibleDuplicates(candidate, [existing]).length, 1);
   });
+
+  it("checks all receipt attachments for duplicate checksums", () => {
+    const existing = buildClaim({
+      id: "RDP-260806-001",
+      receipt: null,
+      receipts: [
+        buildReceipt("receipt-a", "checksum-a"),
+        buildReceipt("receipt-b", "checksum-b")
+      ]
+    });
+    const candidate = buildClaim({
+      id: "RDP-260806-002",
+      receipt: null,
+      receipts: [buildReceipt("receipt-c", "checksum-b")]
+    });
+
+    assert.equal(getClaimReceipts(existing).length, 2);
+    assert.equal(detectPossibleDuplicates(candidate, [existing]).length, 1);
+  });
 });
 
 function buildClaim(overrides: Partial<ClaimRecord>): ClaimRecord {
@@ -123,5 +143,18 @@ function buildClaim(overrides: Partial<ClaimRecord>): ClaimRecord {
     updatedAt: now,
     validationWarnings: [],
     ...overrides
+  };
+}
+
+function buildReceipt(id: string, checksum: string) {
+  return {
+    checksum,
+    id,
+    name: `${id}.pdf`,
+    safeName: `${id}.pdf`,
+    size: 1000,
+    type: "application/pdf",
+    uploadedAt: "2026-08-06T00:00:00.000Z",
+    uploadedBy: "user-1"
   };
 }
