@@ -127,6 +127,14 @@ type ServerReceiptExtractionResponse = {
   };
 };
 
+type QuickBooksPostResponse = {
+  alreadyPosted: boolean;
+  docNumber: string;
+  postedAt: string;
+  purchaseId: string;
+  syncToken: string;
+};
+
 const storageKey = "rdp-platform-claims.v1";
 const idleReceiptExtractionState: ReceiptExtractionState = { message: "", status: "idle" };
 
@@ -836,7 +844,7 @@ export function ClaimsClient({ staffProfile }: ClaimsClientProps) {
     }));
   }
 
-  function applyReviewAction(claim: ClaimRecord, action: "start" | "return" | "approve" | "reject" | "paid") {
+  async function applyReviewAction(claim: ClaimRecord, action: "start" | "return" | "approve" | "reject" | "paid") {
     if (claim.claimantUserId === staffProfile.id) {
       showMessage("error", "You cannot review your own claim.");
       return;
@@ -893,6 +901,16 @@ export function ClaimsClient({ staffProfile }: ClaimsClientProps) {
       return;
     }
 
+    let quickBooksPosting: QuickBooksPostResponse | null = null;
+
+    if (targetStatus === "Paid") {
+      quickBooksPosting = await postClaimToQuickBooks(claim, approvedAmountCents);
+
+      if (!quickBooksPosting) {
+        return;
+      }
+    }
+
     const nextClaim: ClaimRecord = {
       ...transition.claim,
       approvalComment: input.comment.trim(),
@@ -900,14 +918,88 @@ export function ClaimsClient({ staffProfile }: ClaimsClientProps) {
       approverUserId:
         targetStatus === "Approved" || targetStatus === "Rejected" || targetStatus === "Returned for Correction"
           ? staffProfile.id
-          : transition.claim.approverUserId
+          : transition.claim.approverUserId,
+      quickBooksError: quickBooksPosting ? null : transition.claim.quickBooksError,
+      quickBooksPostedAt: quickBooksPosting?.postedAt ?? transition.claim.quickBooksPostedAt,
+      quickBooksPostingStatus: quickBooksPosting ? "posted" : transition.claim.quickBooksPostingStatus,
+      quickBooksPurchaseDocNumber: quickBooksPosting?.docNumber ?? transition.claim.quickBooksPurchaseDocNumber,
+      quickBooksPurchaseId: quickBooksPosting?.purchaseId ?? transition.claim.quickBooksPurchaseId,
+      quickBooksSyncToken: quickBooksPosting?.syncToken ?? transition.claim.quickBooksSyncToken
     };
 
     setState((currentState) => ({
       ...currentState,
       claims: currentState.claims.map((item) => (item.id === claim.id ? nextClaim : item))
     }));
-    showMessage("success", `Claim moved to ${targetStatus}.`);
+    showMessage(
+      "success",
+      quickBooksPosting
+        ? `Claim posted to QuickBooks Purchase ${quickBooksPosting.purchaseId} and moved to Paid.`
+        : `Claim moved to ${targetStatus}.`
+    );
+  }
+
+  async function postClaimToQuickBooks(claim: ClaimRecord, approvedAmountCents: number) {
+    const serverClaimId = getServerClaimIdFromReceipts(getClaimReceipts(claim));
+
+    if (!serverClaimId) {
+      showMessage("error", "This claim has not been synced to Supabase yet, so it cannot post to QuickBooks.");
+      return null;
+    }
+
+    const response = await fetch("/api/quickbooks/post-claim", {
+      body: JSON.stringify({
+        claim: {
+          amountCents: approvedAmountCents,
+          businessPurpose: claim.businessPurpose,
+          categoryName: getCategoryName(state.categories, claim.categoryId),
+          claimReference: claim.id,
+          claimantName: claim.claimantName,
+          currency: claim.currency,
+          groupName: getGroupName(state.groups, claim.groupId),
+          gstClaimableCents: claim.gstClaimableCents,
+          gstShownCents: claim.gstShownCents,
+          merchantName: claim.merchantName,
+          notes: claim.notes,
+          receiptNumber: claim.receiptNumber,
+          transactionDate: claim.transactionDate
+        },
+        claimId: serverClaimId
+      }),
+      headers: {
+        "Content-Type": "application/json"
+      },
+      method: "POST"
+    });
+    const payload = (await response.json().catch(() => ({}))) as Partial<QuickBooksPostResponse> & {
+      error?: string;
+    };
+
+    if (!response.ok || !payload.purchaseId || !payload.postedAt) {
+      const errorMessage = payload.error || "QuickBooks posting failed. The claim is still Approved.";
+      setState((currentState) => ({
+        ...currentState,
+        claims: currentState.claims.map((item) =>
+          item.id === claim.id
+            ? {
+                ...item,
+                quickBooksError: errorMessage,
+                quickBooksPostingStatus: "failed"
+              }
+            : item
+        )
+      }));
+      showMessage("error", errorMessage);
+      return null;
+    }
+
+    return {
+      alreadyPosted: Boolean(payload.alreadyPosted),
+      docNumber: payload.docNumber || claim.id,
+      postedAt: payload.postedAt,
+      purchaseId: payload.purchaseId,
+      syncToken: payload.syncToken || ""
+    };
   }
 
   function updateConfigItem(
@@ -1831,6 +1923,7 @@ function ReviewCard({
           <MetaBox label="Receipts" value={formatReceiptSummary(getClaimReceipts(claim))} />
           <MetaBox label="Date" value={formatDate(claim.transactionDate)} />
           <MetaBox label="Review" value={claim.extractionReviewStatus.replace("_", " ")} />
+          <MetaBox label="QuickBooks" value={formatQuickBooksPosting(claim)} />
         </div>
 
         {warnings.length > 0 ? (
@@ -3007,6 +3100,18 @@ function formatReceiptSummary(receipts: ClaimReceipt[]) {
   }
 
   return `${receipts.length} receipts, first: ${receipts[0].safeName}`;
+}
+
+function formatQuickBooksPosting(claim: ClaimRecord) {
+  if (claim.quickBooksPurchaseId) {
+    return `Posted ${claim.quickBooksPurchaseId}`;
+  }
+
+  if (claim.quickBooksPostingStatus === "failed") {
+    return "Posting failed";
+  }
+
+  return "Not posted";
 }
 
 function getMimeTypeFromExtension(extension: string) {

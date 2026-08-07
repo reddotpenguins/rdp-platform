@@ -96,6 +96,12 @@ export type ClaimRecord = {
   approvedAmountCents: number | null;
   paidAt: string | null;
   possibleDuplicate: boolean;
+  quickBooksError?: string | null;
+  quickBooksPostedAt?: string | null;
+  quickBooksPostingStatus?: "not_posted" | "posted" | "failed";
+  quickBooksPurchaseDocNumber?: string | null;
+  quickBooksPurchaseId?: string | null;
+  quickBooksSyncToken?: string | null;
   validationWarnings: string[];
   extractionStatus: "not_started" | "completed" | "failed" | "reviewed";
   extractionConfidence: number | null;

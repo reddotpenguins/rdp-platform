@@ -424,6 +424,13 @@ QUICKBOOKS_CLIENT_ID=your-intuit-client-id
 QUICKBOOKS_CLIENT_SECRET=your-intuit-client-secret
 QUICKBOOKS_REDIRECT_URI=https://rdp-platform-rouge.vercel.app/api/quickbooks/callback
 QUICKBOOKS_ENVIRONMENT=sandbox
+QUICKBOOKS_PAYMENT_ACCOUNT_ID=quickbooks-bank-or-cash-account-id
+QUICKBOOKS_EXPENSE_ACCOUNT_ID=quickbooks-default-expense-account-id
+QUICKBOOKS_EXPENSE_ACCOUNT_MAP={"Equipment":"quickbooks-equipment-expense-account-id"}
+QUICKBOOKS_PURCHASE_PAYMENT_TYPE=Cash
+QUICKBOOKS_REIMBURSEMENT_VENDOR_ID=
+QUICKBOOKS_PURCHASE_TAX_CODE_ID=
+QUICKBOOKS_MINOR_VERSION=75
 ENABLE_EXPERIMENTAL_COREPACK=1
 ```
 
@@ -437,7 +444,9 @@ Claims receipt auto-fill uses Azure AI Document Intelligence through `/api/claim
 
 The app does not store the raw Azure response by default. It stores normalized claim fields, per-field confidence JSON, field review status, and receipt metadata. This avoids coupling the database schema directly to Azure and reduces sensitive OCR payload retention. Abandoned draft cleanup should be handled by a service-role maintenance job after review, for example deleting draft claims older than 30 days with no active receipt and removing matching storage objects.
 
-QuickBooks Online setup starts with `supabase/quickbooks-connections.sql`, then the four `QUICKBOOKS_*` Vercel variables above. For Intuit Development apps, keep `QUICKBOOKS_ENVIRONMENT=sandbox`. After redeploying, admins can open Claims > Setup and click Connect QuickBooks to authorize the company file.
+QuickBooks Online setup starts with `supabase/quickbooks-connections.sql`, then the `QUICKBOOKS_*` Vercel variables above. For Intuit Development apps, keep `QUICKBOOKS_ENVIRONMENT=sandbox`. After redeploying, admins can open Claims > Setup and click Connect QuickBooks to authorize the company file.
+
+When an admin marks an approved claim as paid, the app posts a QuickBooks Purchase automatically before moving the claim to Paid. `QUICKBOOKS_PAYMENT_ACCOUNT_ID` should be the QuickBooks bank/cash/credit-card account used for reimbursements. `QUICKBOOKS_EXPENSE_ACCOUNT_ID` is the fallback expense account for the purchase line. `QUICKBOOKS_EXPENSE_ACCOUNT_MAP` can override by claim category name, for example `{"Transport":"45","Equipment":"72"}`. The app records GST information in the QuickBooks private note unless you provide `QUICKBOOKS_PURCHASE_TAX_CODE_ID`.
 
 ## Default Dataset
 
