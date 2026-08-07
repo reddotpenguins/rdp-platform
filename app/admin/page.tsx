@@ -5,6 +5,7 @@ import {
   BarChart3,
   ClipboardList,
   FileUp,
+  GraduationCap,
   Inbox,
   Receipt,
   ShieldCheck,
@@ -101,6 +102,12 @@ export default async function AdminPage() {
           icon={Receipt}
           title="My claims & approvals"
           description="Create draft claims, review submitted claims, and manage claim setup."
+        />
+        <AdminCard
+          href="/training"
+          icon={GraduationCap}
+          title="Training department"
+          description="Review coach readiness, hierarchy, feedback, and trainee attachment hours."
         />
         <AdminCard
           href="/rba"

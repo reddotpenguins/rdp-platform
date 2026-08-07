@@ -18,6 +18,8 @@ export const staffPermissions = [
   "claims.approve",
   "claims.markPaid",
   "claims.settings.manage",
+  "training.view",
+  "training.manage",
   "enquiries.assign",
   "students.view",
   "students.manage",
@@ -111,6 +113,10 @@ export function canAccessClaims(profile: StaffProfile) {
   return hasAnyStaffPermission(profile, ["claims.create", "claims.viewOwn", "claims.review"]);
 }
 
+export function canViewTrainingDepartment(profile: StaffProfile) {
+  return hasStaffPermission(profile, "training.view");
+}
+
 export function canViewQuarterAssessmentDashboard(profile: StaffProfile) {
   return canViewAllAssessments(profile);
 }
@@ -129,6 +135,7 @@ export function canViewAdminHome(profile: StaffProfile) {
     "assessments.create",
     "claims.create",
     "claims.review",
+    "training.view",
     "enquiries.assign",
     "students.view",
     "settings.manage"
