@@ -20,6 +20,7 @@ import {
   Send,
   Settings,
   ShieldCheck,
+  Trash2,
   UploadCloud,
   WalletCards,
   XCircle,
@@ -30,6 +31,7 @@ import type { NormalizedReceiptExtraction } from "@/lib/receiptExtraction";
 import type { ReceiptFieldKey, ReceiptFieldStatus, ReceiptFieldStatuses } from "@/lib/receiptOcr";
 import {
   calculateNonClaimableCents,
+  canDeleteClaimDraft,
   canDeleteReferencedItem,
   centsToDecimal,
   claimStatuses,
@@ -194,6 +196,10 @@ export function ClaimsClient({ staffProfile }: ClaimsClientProps) {
         .sort(sortClaimsByUpdatedDesc),
     [staffProfile.id, state.claims]
   );
+  const editingClaim = useMemo(
+    () => (editingClaimId ? state.claims.find((claim) => claim.id === editingClaimId) ?? null : null),
+    [editingClaimId, state.claims]
+  );
   const reviewClaims = useMemo(
     () =>
       state.claims
@@ -261,13 +267,17 @@ export function ClaimsClient({ staffProfile }: ClaimsClientProps) {
     setMessage({ tone, text });
   }
 
-  function resetDraft() {
-    receiptAbortController.current?.abort();
-    void cancelServerReceipt(draft.receipt);
+  function clearDraftForm() {
     setEditingClaimId(null);
     setDraft(createBlankDraft(state));
     setReceiptExtraction(idleReceiptExtractionState);
     setReceiptProgress(0);
+  }
+
+  function resetDraft() {
+    receiptAbortController.current?.abort();
+    void cancelServerReceipt(draft.receipt, { deleteDraftClaim: !editingClaimId });
+    clearDraftForm();
   }
 
   function fillSampleReceipt() {
@@ -447,7 +457,7 @@ export function ClaimsClient({ staffProfile }: ClaimsClientProps) {
         ? currentState.claims.map((claim) => (claim.id === nextClaim.id ? nextClaim : claim))
         : [nextClaim, ...currentState.claims]
     }));
-    resetDraft();
+    clearDraftForm();
     setActiveTab("mine");
     showMessage(
       duplicateCount > 0 ? "error" : "success",
@@ -461,7 +471,7 @@ export function ClaimsClient({ staffProfile }: ClaimsClientProps) {
 
   function removeDraftReceipt() {
     receiptAbortController.current?.abort();
-    void cancelServerReceipt(draft.receipt);
+    void cancelServerReceipt(draft.receipt, { deleteDraftClaim: !editingClaimId });
     updateDraftField("receipt", null);
     setReceiptExtraction(idleReceiptExtractionState);
     setReceiptProgress(0);
@@ -673,7 +683,10 @@ export function ClaimsClient({ staffProfile }: ClaimsClientProps) {
     return true;
   }
 
-  async function cancelServerReceipt(receipt: ClaimReceipt | null) {
+  async function cancelServerReceipt(
+    receipt: ClaimReceipt | null,
+    options: { deleteDraftClaim?: boolean } = {}
+  ) {
     if (!receipt?.serverClaimId && !receipt?.serverReceiptId) {
       return;
     }
@@ -681,6 +694,7 @@ export function ClaimsClient({ staffProfile }: ClaimsClientProps) {
     await fetch("/api/claims/extract-receipt", {
       body: JSON.stringify({
         claimId: receipt.serverClaimId,
+        deleteClaim: options.deleteDraftClaim ?? false,
         receiptId: receipt.serverReceiptId
       }),
       headers: {
@@ -688,6 +702,64 @@ export function ClaimsClient({ staffProfile }: ClaimsClientProps) {
       },
       method: "DELETE"
     }).catch(() => undefined);
+  }
+
+  async function deleteServerDraftClaim(claim: ClaimRecord) {
+    if (!claim.receipt?.serverClaimId && !claim.receipt?.serverReceiptId) {
+      return true;
+    }
+
+    const response = await fetch("/api/claims/extract-receipt", {
+      body: JSON.stringify({
+        claimId: claim.receipt.serverClaimId,
+        deleteClaim: true,
+        receiptId: claim.receipt.serverReceiptId
+      }),
+      headers: {
+        "Content-Type": "application/json"
+      },
+      method: "DELETE"
+    });
+
+    if (!response.ok) {
+      const payload = (await response.json().catch(() => ({}))) as { error?: string };
+      showMessage("error", payload.error || "Draft claim could not be deleted.");
+      return false;
+    }
+
+    return true;
+  }
+
+  async function deleteSavedDraftClaim(claim: ClaimRecord) {
+    if (!canDeleteClaimDraft(claim, staffProfile.id)) {
+      showMessage("error", "Only your own draft claims can be deleted.");
+      return;
+    }
+
+    if (!window.confirm(`Delete draft ${claim.id}? This cannot be undone.`)) {
+      return;
+    }
+
+    if (editingClaimId === claim.id) {
+      receiptAbortController.current?.abort();
+    }
+
+    const deleted = await deleteServerDraftClaim(claim);
+
+    if (!deleted) {
+      return;
+    }
+
+    setState((currentState) => ({
+      ...currentState,
+      claims: currentState.claims.filter((item) => item.id !== claim.id)
+    }));
+
+    if (editingClaimId === claim.id) {
+      clearDraftForm();
+    }
+
+    showMessage("success", "Draft claim deleted.");
   }
 
   function updateReviewInput(claimId: string, patch: Partial<ReviewInput>) {
@@ -898,6 +970,7 @@ export function ClaimsClient({ staffProfile }: ClaimsClientProps) {
           claims={ownClaims}
           categories={state.categories}
           groups={state.groups}
+          onDeleteDraft={(claim) => void deleteSavedDraftClaim(claim)}
           onEdit={editClaim}
           userId={staffProfile.id}
         />
@@ -906,12 +979,18 @@ export function ClaimsClient({ staffProfile }: ClaimsClientProps) {
       {activeTab === "new" ? (
         <ClaimFormPanel
           categories={sortedCategories}
+          canDeleteDraft={Boolean(editingClaim && canDeleteClaimDraft(editingClaim, staffProfile.id))}
           draft={draft}
           editingClaimId={editingClaimId}
           formNonClaimable={formNonClaimable}
           formValidation={formValidation}
           groups={sortedGroups}
           onDropFile={handleReceiptFile}
+          onDeleteDraft={() => {
+            if (editingClaim) {
+              void deleteSavedDraftClaim(editingClaim);
+            }
+          }}
           onFillSample={fillSampleReceipt}
           onRemoveReceipt={removeDraftReceipt}
           onReset={resetDraft}
@@ -1050,12 +1129,14 @@ function MyClaimsPanel({
   categories,
   claims,
   groups,
+  onDeleteDraft,
   onEdit,
   userId
 }: {
   categories: ExpenseCategory[];
   claims: ClaimRecord[];
   groups: ClaimGroup[];
+  onDeleteDraft: (claim: ClaimRecord) => void;
   onEdit: (claim: ClaimRecord) => void;
   userId: string;
 }) {
@@ -1089,6 +1170,7 @@ function MyClaimsPanel({
                     claim={claim}
                     groups={groups}
                     key={claim.id}
+                    onDeleteDraft={onDeleteDraft}
                     onEdit={onEdit}
                     userId={userId}
                   />
@@ -1108,12 +1190,14 @@ function ClaimListItem({
   categories,
   claim,
   groups,
+  onDeleteDraft,
   onEdit,
   userId
 }: {
   categories: ExpenseCategory[];
   claim: ClaimRecord;
   groups: ClaimGroup[];
+  onDeleteDraft: (claim: ClaimRecord) => void;
   onEdit: (claim: ClaimRecord) => void;
   userId: string;
 }) {
@@ -1146,6 +1230,17 @@ function ClaimListItem({
             Edit
           </button>
         ) : null}
+        {canDeleteClaimDraft(claim, userId) ? (
+          <button
+            type="button"
+            aria-label={`Delete draft ${claim.id}`}
+            onClick={() => onDeleteDraft(claim)}
+            className="inline-flex h-9 items-center gap-1.5 rounded-md border border-red-200 bg-red-50 px-3 text-sm font-semibold text-red-700 transition hover:border-red-300 hover:bg-red-100"
+          >
+            <Trash2 aria-hidden="true" className="size-4" />
+            Delete
+          </button>
+        ) : null}
       </div>
     </article>
   );
@@ -1153,11 +1248,13 @@ function ClaimListItem({
 
 function ClaimFormPanel({
   categories,
+  canDeleteDraft,
   draft,
   editingClaimId,
   formNonClaimable,
   formValidation,
   groups,
+  onDeleteDraft,
   onDropFile,
   onFillSample,
   onRemoveReceipt,
@@ -1170,11 +1267,13 @@ function ClaimFormPanel({
   receiptProgress
 }: {
   categories: ExpenseCategory[];
+  canDeleteDraft: boolean;
   draft: DraftForm;
   editingClaimId: string | null;
   formNonClaimable: number;
   formValidation: ReturnType<typeof validateFinancials>;
   groups: ClaimGroup[];
+  onDeleteDraft: () => void;
   onDropFile: (file: File | null) => void;
   onFillSample: () => void;
   onRemoveReceipt: () => void;
@@ -1202,14 +1301,26 @@ function ClaimFormPanel({
             </h2>
             <p className="text-sm text-slate-500">Receipt, claim amount, GST, and review fields</p>
           </div>
-          <button
-            type="button"
-            onClick={onFillSample}
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-line bg-field px-3 text-sm font-semibold text-slate-700 transition hover:border-teal hover:text-teal"
-          >
-            <FileText aria-hidden="true" className="size-4" />
-            Sample
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            {canDeleteDraft ? (
+              <button
+                type="button"
+                onClick={onDeleteDraft}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-red-200 bg-red-50 px-3 text-sm font-semibold text-red-700 transition hover:border-red-300 hover:bg-red-100"
+              >
+                <Trash2 aria-hidden="true" className="size-4" />
+                Delete draft
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={onFillSample}
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-line bg-field px-3 text-sm font-semibold text-slate-700 transition hover:border-teal hover:text-teal"
+            >
+              <FileText aria-hidden="true" className="size-4" />
+              Sample
+            </button>
+          </div>
         </div>
 
         <div className="mt-4 grid gap-3 md:grid-cols-2">

@@ -438,6 +438,10 @@ export function isClaimEditableByClaimant(claim: ClaimRecord, userId: string) {
   );
 }
 
+export function canDeleteClaimDraft(claim: ClaimRecord, userId: string) {
+  return claim.claimantUserId === userId && claim.status === "Draft";
+}
+
 export function isVisibleInReviewQueue(claim: ClaimRecord) {
   return claim.status !== "Draft" && claim.status !== "Cancelled";
 }

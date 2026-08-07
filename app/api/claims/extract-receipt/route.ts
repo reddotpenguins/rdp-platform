@@ -287,6 +287,7 @@ export async function DELETE(request: NextRequest) {
 
   const body = (await request.json().catch(() => ({}))) as {
     claimId?: string;
+    deleteClaim?: boolean;
     receiptId?: string;
   };
 
@@ -321,7 +322,7 @@ export async function DELETE(request: NextRequest) {
     })
   );
 
-  if (shouldHardDeleteDraftClaim(claim.status)) {
+  if (body.deleteClaim && shouldHardDeleteDraftClaim(claim.status)) {
     await admin.from("claims").delete().eq("id", claim.id).eq("status", "Draft");
   } else {
     await admin

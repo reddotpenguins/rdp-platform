@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   calculateNonClaimableCents,
+  canDeleteClaimDraft,
   canTransitionClaimStatus,
   createReceiptPath,
   decimalToCents,
@@ -35,6 +36,12 @@ describe("claims financial rules", () => {
     assert.equal(canTransitionClaimStatus("Draft", "Submitted"), true);
     assert.equal(canTransitionClaimStatus("Submitted", "Approved"), false);
     assert.equal(canTransitionClaimStatus("Approved", "Paid"), true);
+  });
+
+  it("allows claimants to delete only their own draft claims", () => {
+    assert.equal(canDeleteClaimDraft(buildClaim({ status: "Draft" }), "user-1"), true);
+    assert.equal(canDeleteClaimDraft(buildClaim({ status: "Draft" }), "user-2"), false);
+    assert.equal(canDeleteClaimDraft(buildClaim({ status: "Submitted" }), "user-1"), false);
   });
 });
 
