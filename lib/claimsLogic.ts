@@ -54,6 +54,11 @@ export type ClaimReceipt = {
   uploadedBy: string;
   uploadedAt: string;
   dataUrl?: string;
+  extractionAttemptId?: string;
+  receiptVersion?: number;
+  serverClaimId?: string;
+  serverReceiptId?: string;
+  storageObjectPath?: string;
 };
 
 export type ClaimHistoryEntry = {
@@ -105,7 +110,7 @@ export const defaultClaimSettings: ClaimSettings = {
   defaultGstRate: 0.09,
   organisationGstRegistered: false,
   manualFinanceReviewRequired: true,
-  maxReceiptSizeBytes: 15 * 1024 * 1024,
+  maxReceiptSizeBytes: 4 * 1024 * 1024,
   allowApprovedAmountOverride: false
 };
 
@@ -148,13 +153,11 @@ export const initialExpenseCategories: ExpenseCategory[] = [
   { id: "other", name: "Other", active: true, sortOrder: 100, normallyGstClaimable: false }
 ];
 
-export const allowedReceiptExtensions = ["jpg", "jpeg", "png", "heic", "heif", "pdf"];
+export const allowedReceiptExtensions = ["jpg", "jpeg", "png", "pdf"];
 
 export const allowedReceiptMimeTypes = [
   "image/jpeg",
   "image/png",
-  "image/heic",
-  "image/heif",
   "application/pdf"
 ];
 
@@ -357,7 +360,7 @@ export function validateReceiptFile(
     );
   }
   if (!allowedReceiptExtensions.includes(extension)) {
-    errors.push("Receipt must be JPG, JPEG, PNG, HEIC, HEIF, or PDF.");
+    errors.push("Receipt must be JPG, JPEG, PNG, or PDF.");
   }
   if (type && !allowedReceiptMimeTypes.includes(type)) {
     errors.push("Receipt file type is not supported.");

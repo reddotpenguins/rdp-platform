@@ -51,7 +51,13 @@ supabase/claims-foundation.sql
 
 Run `supabase/auth-and-roles.sql` first, then `supabase/claims-foundation.sql` when you are ready to connect claims to Supabase tables and private `claim-receipts` storage.
 
-Receipt uploads can auto-fill claim fields from receipt images with browser OCR. The upload panel shows field-level review statuses instead of an overall accuracy percentage: green for confidently extracted, yellow for please verify, and red for not found. PDF receipts can be attached, but image receipts are required for the current auto-fill flow.
+Receipt uploads auto-fill claim fields through a server-side Azure AI Document Intelligence `prebuilt-receipt` extractor. The user selects or photographs the receipt once; the app uploads it to the private Supabase `claim-receipts` bucket, starts Azure extraction automatically, fills the claim, and leaves the user on the review screen before submission. The upload panel shows field-level review statuses instead of an overall accuracy percentage: green for confidently extracted, yellow for please verify, and red for not found.
+
+Run this additional SQL after the claims foundation before enabling Azure receipt extraction:
+
+```text
+supabase/claims-azure-receipts.sql
+```
 
 For the current prototype, run this file in Supabase SQL Editor after creating the tables:
 
@@ -411,6 +417,9 @@ Add these Vercel environment variables for Production, Preview, and Development:
 NEXT_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your-publishable-key
 SUPABASE_SERVICE_ROLE_KEY=your-private-service-role-key
+AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT=https://your-resource-name.cognitiveservices.azure.com
+AZURE_DOCUMENT_INTELLIGENCE_KEY=your-private-azure-document-intelligence-key
+AZURE_DOCUMENT_INTELLIGENCE_API_VERSION=2024-11-30
 ENABLE_EXPERIMENTAL_COREPACK=1
 ```
 
@@ -418,11 +427,11 @@ ENABLE_EXPERIMENTAL_COREPACK=1
 
 `SUPABASE_SERVICE_ROLE_KEY` is private and optional, but recommended. It lets the admin-only RBA delete button remove the Supabase Auth login account as well as the staff profile. Without it, the button removes website access only.
 
-The same private key is required for the RBA page to send Supabase invite emails from the website.
+The same private Supabase key is required for the RBA page to send Supabase invite emails from the website and for claims receipt uploads to write to the private `claim-receipts` bucket from a Vercel server function.
 
-Claims receipt auto-fill uses browser OCR by default, so no OpenAI API credits are required for normal receipt uploads. The older `/api/claims/extract-receipt` route can still be enabled later with `OPENAI_API_KEY` and `OPENAI_RECEIPT_MODEL` if a paid smart extractor is needed.
+Claims receipt auto-fill uses Azure AI Document Intelligence through `/api/claims/extract-receipt`. Keep the Azure key server-side only. The current setup targets Azure Free F0 limits: JPG, PNG, or PDF; 4MB max file size; first two pages per request; and low request-rate/free-page quotas. If Azure misses a field or confidence is low, the app keeps manual review enabled and staff can type the claim details.
 
-OpenCV preprocessing plus PaddleOCR should be added as a private backend OCR route or worker before replacing the browser OCR path, because PaddleOCR needs a Python/inference runtime or hosted OCR API rather than a simple browser package swap.
+The app does not store the raw Azure response by default. It stores normalized claim fields, per-field confidence JSON, field review status, and receipt metadata. This avoids coupling the database schema directly to Azure and reduces sensitive OCR payload retention. Abandoned draft cleanup should be handled by a service-role maintenance job after review, for example deleting draft claims older than 30 days with no active receipt and removing matching storage objects.
 
 ## Default Dataset
 

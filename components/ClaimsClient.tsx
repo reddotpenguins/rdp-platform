@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import clsx from "clsx";
 import {
   ArrowLeft,
@@ -26,13 +26,8 @@ import {
   type LucideIcon
 } from "lucide-react";
 import { SignOutButton } from "@/components/SignOutButton";
-import {
-  extractReceiptDetailsFromOcrText,
-  type ReceiptFieldKey,
-  type ReceiptFieldStatus,
-  type ReceiptFieldStatuses,
-  type ReceiptOcrExtraction
-} from "@/lib/receiptOcr";
+import type { NormalizedReceiptExtraction } from "@/lib/receiptExtraction";
+import type { ReceiptFieldKey, ReceiptFieldStatus, ReceiptFieldStatuses } from "@/lib/receiptOcr";
 import {
   calculateNonClaimableCents,
   canDeleteReferencedItem,
@@ -103,10 +98,28 @@ type ReviewInput = {
 type ReceiptExtractionState = {
   fieldStatuses?: ReceiptFieldStatuses;
   message: string;
-  status: "idle" | "extracting" | "completed" | "failed";
+  status: "idle" | "uploading" | "extracting" | "filling" | "completed" | "failed";
 };
 
-type ExtractedReceiptDetails = ReceiptOcrExtraction;
+type ExtractedReceiptDetails = NormalizedReceiptExtraction;
+
+type ServerReceiptExtractionResponse = {
+  claimId: string;
+  extraction: ExtractedReceiptDetails;
+  extractionAttemptId: string;
+  receipt: {
+    checksum?: string;
+    id: string;
+    name: string;
+    receiptVersion: number;
+    safeName: string;
+    size: number;
+    storageObjectPath: string;
+    type: string;
+    uploadedAt: string;
+    uploadedBy: string;
+  };
+};
 
 const storageKey = "rdp-platform-claims.v1";
 const idleReceiptExtractionState: ReceiptExtractionState = { message: "", status: "idle" };
@@ -127,6 +140,7 @@ export function ClaimsClient({ staffProfile }: ClaimsClientProps) {
   const [receiptProgress, setReceiptProgress] = useState(0);
   const [receiptExtraction, setReceiptExtraction] =
     useState<ReceiptExtractionState>(idleReceiptExtractionState);
+  const receiptAbortController = useRef<AbortController | null>(null);
   const [message, setMessage] = useState<{ tone: "success" | "error"; text: string } | null>(null);
   const [reviewFilter, setReviewFilter] = useState<LedgerStatusFilter>("Submitted");
   const [reviewInputs, setReviewInputs] = useState<Record<string, ReviewInput>>({});
@@ -233,6 +247,7 @@ export function ClaimsClient({ staffProfile }: ClaimsClientProps) {
     () => validateFinancials(formFinancials, state.settings),
     [formFinancials, state.settings]
   );
+  const receiptBusy = isReceiptExtractionBusy(receiptExtraction.status);
   const formNonClaimable = calculateNonClaimableCents(
     formFinancials.totalSpentCents,
     formFinancials.amountRequestedCents
@@ -247,6 +262,8 @@ export function ClaimsClient({ staffProfile }: ClaimsClientProps) {
   }
 
   function resetDraft() {
+    receiptAbortController.current?.abort();
+    void cancelServerReceipt(draft.receipt);
     setEditingClaimId(null);
     setDraft(createBlankDraft(state));
     setReceiptExtraction(idleReceiptExtractionState);
@@ -319,7 +336,12 @@ export function ClaimsClient({ staffProfile }: ClaimsClientProps) {
     setActiveTab("new");
   }
 
-  function saveDraft(nextStatus: "Draft" | "Submitted") {
+  async function saveDraft(nextStatus: "Draft" | "Submitted") {
+    if (receiptBusy) {
+      showMessage("error", "Please wait until receipt extraction is ready to review.");
+      return;
+    }
+
     const parsed = parseDraftFinancials(draft);
     const invalidMoney = Object.values(parsed).some((value) => Number.isNaN(value));
 
@@ -345,6 +367,12 @@ export function ClaimsClient({ staffProfile }: ClaimsClientProps) {
 
     if (validation.errors.length > 0) {
       showMessage("error", validation.errors[0]);
+      return;
+    }
+
+    const synced = await syncServerClaim(nextStatus, validation.warnings);
+
+    if (!synced) {
       return;
     }
 
@@ -432,6 +460,8 @@ export function ClaimsClient({ staffProfile }: ClaimsClientProps) {
   }
 
   function removeDraftReceipt() {
+    receiptAbortController.current?.abort();
+    void cancelServerReceipt(draft.receipt);
     updateDraftField("receipt", null);
     setReceiptExtraction(idleReceiptExtractionState);
     setReceiptProgress(0);
@@ -445,25 +475,34 @@ export function ClaimsClient({ staffProfile }: ClaimsClientProps) {
       return;
     }
 
+    receiptAbortController.current?.abort();
+    const previousReceipt = draft.receipt;
+    const extractionAttemptId = createClientId();
     const receipt: ClaimReceipt = {
       checksum: `${validation.safeName}-${file.size}-${file.lastModified}`,
+      extractionAttemptId,
       id: createClientId(),
       name: file.name,
+      receiptVersion: (previousReceipt?.receiptVersion ?? 0) + 1,
       safeName: validation.safeName,
+      serverClaimId: previousReceipt?.serverClaimId,
       size: file.size,
       type: file.type || getMimeTypeFromExtension(validation.extension),
       uploadedAt: new Date().toISOString(),
       uploadedBy: staffProfile.id
     };
 
-    setReceiptProgress(35);
+    setReceiptProgress(20);
     setReceiptExtraction({
-      message: "Reading receipt with OCR...",
-      status: "extracting"
+      message: "Uploading receipt to private storage...",
+      status: "uploading"
     });
-    updateDraftField("receipt", receipt);
+    setDraft((currentDraft) => ({
+      ...clearExtractedDraftFields(currentDraft),
+      receipt
+    }));
 
-    if (receipt.type.startsWith("image/") && !receipt.type.includes("heic") && !receipt.type.includes("heif")) {
+    if (receipt.type.startsWith("image/")) {
       const reader = new FileReader();
       reader.onload = () => {
         setDraft((currentDraft) =>
@@ -485,36 +524,54 @@ export function ClaimsClient({ staffProfile }: ClaimsClientProps) {
       reader.readAsDataURL(file);
     }
 
-    void extractReceiptDetails(file, receipt.id);
+    void extractReceiptDetails(file, receipt);
   }
 
-  async function extractReceiptDetails(file: File, receiptId: string) {
-    setReceiptProgress(65);
+  async function extractReceiptDetails(file: File, receipt: ClaimReceipt) {
+    const abortController = new AbortController();
+    receiptAbortController.current = abortController;
+    setReceiptProgress(45);
+    setReceiptExtraction({
+      message: "Reading receipt with Azure Document Intelligence...",
+      status: "extracting"
+    });
 
     try {
-      const ocrFile = await prepareReceiptFileForOcr(file);
-
-      if (!ocrFile) {
-        throw new Error(
-          "PDF receipts can be attached, but receipt auto-fill works with images only for now. Upload a clear photo or key in the details."
-        );
-      }
-
-      const receiptText = await readReceiptTextWithOcr(ocrFile, (progress) => {
-        setReceiptProgress(progress);
-      });
-      const extraction = extractReceiptDetailsFromOcrText(receiptText) as ExtractedReceiptDetails;
+      const extractionResponse = await uploadReceiptForExtraction(file, receipt, abortController.signal);
+      const extraction = extractionResponse.extraction;
 
       if (!hasExtractedReceiptFields(extraction)) {
-        throw new Error("Receipt text was read, but no obvious date or amount was found. Please key in the details.");
+        throw new Error("Azure read the receipt, but no obvious date or amount was found. Please key in the details.");
       }
 
+      setReceiptProgress(85);
+      setReceiptExtraction({
+        message: "Filling claim fields...",
+        status: "filling"
+      });
       setDraft((currentDraft) => {
-        if (currentDraft.receipt?.id !== receiptId) {
+        if (
+          currentDraft.receipt?.id !== receipt.id ||
+          currentDraft.receipt.extractionAttemptId !== receipt.extractionAttemptId
+        ) {
           return currentDraft;
         }
 
-        return applyReceiptExtraction(currentDraft, extraction);
+        return applyReceiptExtraction(
+          {
+            ...currentDraft,
+            receipt: {
+              ...currentDraft.receipt,
+              checksum: extractionResponse.receipt.checksum ?? currentDraft.receipt.checksum,
+              receiptVersion: extractionResponse.receipt.receiptVersion,
+              serverClaimId: extractionResponse.claimId,
+              serverReceiptId: extractionResponse.receipt.id,
+              storageObjectPath: extractionResponse.receipt.storageObjectPath,
+              uploadedAt: extractionResponse.receipt.uploadedAt
+            }
+          },
+          extraction
+        );
       });
       setReceiptExtraction({
         fieldStatuses: extraction.fieldStatuses,
@@ -522,8 +579,12 @@ export function ClaimsClient({ staffProfile }: ClaimsClientProps) {
         status: "completed"
       });
       setReceiptProgress(100);
-      showMessage("success", "Receipt details filled by OCR. Please review before submitting.");
+      showMessage("success", "Receipt details filled by Azure. Please review before submitting.");
     } catch (error) {
+      if (isAbortError(error)) {
+        return;
+      }
+
       const errorMessage =
         error instanceof Error ? error.message : "Receipt details could not be extracted.";
 
@@ -533,7 +594,100 @@ export function ClaimsClient({ staffProfile }: ClaimsClientProps) {
       });
       setReceiptProgress(100);
       showMessage("error", errorMessage);
+    } finally {
+      if (receiptAbortController.current === abortController) {
+        receiptAbortController.current = null;
+      }
     }
+  }
+
+  async function uploadReceiptForExtraction(
+    file: File,
+    receipt: ClaimReceipt,
+    signal: AbortSignal
+  ): Promise<ServerReceiptExtractionResponse> {
+    const formData = new FormData();
+
+    formData.append("receipt", file);
+    formData.append("extractionAttemptId", receipt.extractionAttemptId ?? createClientId());
+    formData.append("groupName", getGroupName(state.groups, draft.groupId));
+    formData.append("categoryName", getCategoryName(state.categories, draft.categoryId));
+
+    if (receipt.serverClaimId) {
+      formData.append("claimId", receipt.serverClaimId);
+    }
+
+    const response = await fetch("/api/claims/extract-receipt", {
+      body: formData,
+      method: "POST",
+      signal
+    });
+    const payload = (await response.json().catch(() => ({}))) as Partial<ServerReceiptExtractionResponse> & {
+      error?: string;
+    };
+
+    if (!response.ok || !payload.extraction || !payload.claimId || !payload.receipt) {
+      throw new Error(payload.error || "Receipt details could not be extracted.");
+    }
+
+    return payload as ServerReceiptExtractionResponse;
+  }
+
+  async function syncServerClaim(nextStatus: "Draft" | "Submitted", validationWarnings: string[]) {
+    if (!draft.receipt?.serverClaimId) {
+      return true;
+    }
+
+    const response = await fetch("/api/claims/extract-receipt", {
+      body: JSON.stringify({
+        amountRequested: draft.amountRequested,
+        businessPurpose: draft.businessPurpose,
+        categoryName: getCategoryName(state.categories, draft.categoryId),
+        claimId: draft.receipt.serverClaimId,
+        currency: draft.currency,
+        groupName: getGroupName(state.groups, draft.groupId),
+        gstClaimable: draft.gstClaimable,
+        gstShown: draft.gstShown,
+        merchantName: draft.merchantName,
+        notes: draft.notes,
+        paymentMethod: draft.paymentMethod,
+        receiptNumber: draft.receiptNumber,
+        status: nextStatus,
+        subtotal: draft.subtotal,
+        totalSpent: draft.totalSpent,
+        transactionDate: draft.transactionDate,
+        validationWarnings
+      }),
+      headers: {
+        "Content-Type": "application/json"
+      },
+      method: "PATCH"
+    });
+
+    if (!response.ok) {
+      const payload = (await response.json().catch(() => ({}))) as { error?: string };
+      showMessage("error", payload.error || "Claim could not be saved to Supabase.");
+      return false;
+    }
+
+    return true;
+  }
+
+  async function cancelServerReceipt(receipt: ClaimReceipt | null) {
+    if (!receipt?.serverClaimId && !receipt?.serverReceiptId) {
+      return;
+    }
+
+    await fetch("/api/claims/extract-receipt", {
+      body: JSON.stringify({
+        claimId: receipt.serverClaimId,
+        receiptId: receipt.serverReceiptId
+      }),
+      headers: {
+        "Content-Type": "application/json"
+      },
+      method: "DELETE"
+    }).catch(() => undefined);
   }
 
   function updateReviewInput(claimId: string, patch: Partial<ReviewInput>) {
@@ -765,6 +919,7 @@ export function ClaimsClient({ staffProfile }: ClaimsClientProps) {
           onSubmitClaim={() => saveDraft("Submitted")}
           onUpdateDraft={updateDraftField}
           receiptExtraction={receiptExtraction}
+          receiptBusy={receiptBusy}
           receiptProgress={receiptProgress}
         />
       ) : null}
@@ -1011,6 +1166,7 @@ function ClaimFormPanel({
   onSubmitClaim,
   onUpdateDraft,
   receiptExtraction,
+  receiptBusy,
   receiptProgress
 }: {
   categories: ExpenseCategory[];
@@ -1027,6 +1183,7 @@ function ClaimFormPanel({
   onSubmitClaim: () => void;
   onUpdateDraft: <TKey extends keyof DraftForm>(key: TKey, value: DraftForm[TKey]) => void;
   receiptExtraction: ReceiptExtractionState;
+  receiptBusy: boolean;
   receiptProgress: number;
 }) {
   return (
@@ -1138,14 +1295,16 @@ function ClaimFormPanel({
           <button
             type="button"
             onClick={onSaveDraft}
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-line bg-field px-3 text-sm font-semibold text-slate-700 transition hover:border-teal hover:text-teal"
+            disabled={receiptBusy}
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-line bg-field px-3 text-sm font-semibold text-slate-700 transition hover:border-teal hover:text-teal disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Save aria-hidden="true" className="size-4" />
             Save draft
           </button>
           <button
             type="submit"
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-teal px-3 text-sm font-semibold text-white transition hover:bg-teal/90"
+            disabled={receiptBusy}
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-teal px-3 text-sm font-semibold text-white transition hover:bg-teal/90 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Send aria-hidden="true" className="size-4" />
             Submit
@@ -1199,11 +1358,11 @@ function ReceiptUploadPanel({
       >
         <Receipt aria-hidden="true" className="size-9 text-teal" />
         <span className="text-sm font-semibold text-ink">Upload receipt</span>
-        <span className="text-xs text-slate-500">JPG, JPEG, PNG, HEIC, HEIF, or PDF up to 15MB</span>
+        <span className="text-xs text-slate-500">JPG, JPEG, PNG, or PDF up to 4MB</span>
         <input
           className="sr-only"
           type="file"
-          accept="image/jpeg,image/png,image/heic,image/heif,application/pdf,.jpg,.jpeg,.png,.heic,.heif,.pdf"
+          accept="image/jpeg,image/png,application/pdf,.jpg,.jpeg,.png,.pdf"
           onChange={(event) => onDropFile(event.target.files?.[0] ?? null)}
         />
       </label>
@@ -1214,7 +1373,7 @@ function ReceiptUploadPanel({
         <input
           className="sr-only"
           type="file"
-          accept="image/*"
+          accept="image/jpeg,image/png"
           capture="environment"
           onChange={(event) => onDropFile(event.target.files?.[0] ?? null)}
         />
@@ -1233,11 +1392,7 @@ function ReceiptUploadPanel({
           role="status"
         >
           <p className="font-semibold">
-            {receiptExtraction.status === "extracting"
-              ? "Reading receipt"
-              : receiptExtraction.status === "completed"
-                ? "Details filled"
-                : "Extraction needs review"}
+            {getReceiptExtractionHeading(receiptExtraction.status)}
           </p>
           <p className="mt-1">{receiptExtraction.message}</p>
           {receiptExtraction.fieldStatuses ? (
@@ -2232,6 +2387,22 @@ function applyReceiptExtraction(
   };
 }
 
+function clearExtractedDraftFields(draft: DraftForm): DraftForm {
+  return {
+    ...draft,
+    amountRequested: "",
+    currency: draft.currency || "SGD",
+    gstClaimable: "",
+    gstShown: "",
+    merchantName: "",
+    paymentMethod: "",
+    receiptNumber: "",
+    subtotal: "",
+    totalSpent: "",
+    transactionDate: ""
+  };
+}
+
 function cleanExtractedValue(value: string | null | undefined) {
   return value?.trim() || "";
 }
@@ -2309,6 +2480,27 @@ function getReceiptFieldStatusClasses(status: ReceiptFieldStatus) {
     case "missing":
       return "border-red-200 bg-red-100 text-red-800";
   }
+}
+
+function getReceiptExtractionHeading(status: ReceiptExtractionState["status"]) {
+  switch (status) {
+    case "uploading":
+      return "Uploading receipt";
+    case "extracting":
+      return "Reading receipt";
+    case "filling":
+      return "Filling claim";
+    case "completed":
+      return "Ready to review";
+    case "failed":
+      return "Extraction needs review";
+    case "idle":
+      return "";
+  }
+}
+
+function isReceiptExtractionBusy(status: ReceiptExtractionState["status"]) {
+  return status === "uploading" || status === "extracting" || status === "filling";
 }
 
 function getReceiptFieldStatusSummary(fieldStatuses: ReceiptFieldStatuses) {
@@ -2402,61 +2594,7 @@ function formatFileSize(size: number) {
 function getMimeTypeFromExtension(extension: string) {
   if (extension === "pdf") return "application/pdf";
   if (extension === "png") return "image/png";
-  if (extension === "heic") return "image/heic";
-  if (extension === "heif") return "image/heif";
   return "image/jpeg";
-}
-
-async function prepareReceiptFileForOcr(file: File) {
-  const extension = getFileExtension(file.name);
-
-  if (file.type === "application/pdf" || extension === "pdf") {
-    return null;
-  }
-
-  if (
-    file.type === "image/jpeg" ||
-    file.type === "image/png" ||
-    extension === "jpg" ||
-    extension === "jpeg" ||
-    extension === "png"
-  ) {
-    return file;
-  }
-
-  if (!file.type.startsWith("image/") && extension !== "heic" && extension !== "heif") {
-    return file;
-  }
-
-  return convertImageToJpeg(file);
-}
-
-async function readReceiptTextWithOcr(file: File, onProgress: (progress: number) => void) {
-  const { OEM, PSM, createWorker } = await import("tesseract.js");
-  let worker: Awaited<ReturnType<typeof createWorker>> | null = null;
-
-  try {
-    worker = await createWorker("eng", OEM.LSTM_ONLY, {
-      logger: (message) => {
-        if (message.status.includes("loading")) {
-          onProgress(50 + Math.round(message.progress * 15));
-        }
-
-        if (message.status.includes("recognizing")) {
-          onProgress(65 + Math.round(message.progress * 30));
-        }
-      }
-    });
-    await worker.setParameters({
-      preserve_interword_spaces: "1",
-      tessedit_pageseg_mode: PSM.AUTO
-    });
-    const result = await worker.recognize(file);
-
-    return result.data.text;
-  } finally {
-    await worker?.terminate().catch(() => undefined);
-  }
 }
 
 function hasExtractedReceiptFields(extraction: ExtractedReceiptDetails) {
@@ -2470,64 +2608,8 @@ function hasExtractedReceiptFields(extraction: ExtractedReceiptDetails) {
   );
 }
 
-function convertImageToJpeg(file: File) {
-  return new Promise<File>((resolve, reject) => {
-    const image = new Image();
-    const objectUrl = URL.createObjectURL(file);
-
-    image.onload = () => {
-      try {
-        const canvas = document.createElement("canvas");
-        canvas.width = image.naturalWidth || image.width;
-        canvas.height = image.naturalHeight || image.height;
-        const context = canvas.getContext("2d");
-
-        if (!context || !canvas.width || !canvas.height) {
-          throw new Error("Receipt image could not be prepared for extraction.");
-        }
-
-        context.drawImage(image, 0, 0);
-        canvas.toBlob(
-          (blob) => {
-            URL.revokeObjectURL(objectUrl);
-
-            if (!blob) {
-              reject(new Error("Receipt image could not be prepared for extraction."));
-              return;
-            }
-
-            resolve(
-              new File([blob], replaceFileExtension(file.name, "jpg"), {
-                type: "image/jpeg"
-              })
-            );
-          },
-          "image/jpeg",
-          0.92
-        );
-      } catch (error) {
-        URL.revokeObjectURL(objectUrl);
-        reject(error);
-      }
-    };
-
-    image.onerror = () => {
-      URL.revokeObjectURL(objectUrl);
-      reject(new Error("Receipt image could not be prepared for extraction. Try uploading JPG, PNG, or PDF."));
-    };
-
-    image.src = objectUrl;
-  });
-}
-
-function replaceFileExtension(filename: string, extension: string) {
-  const base = filename.replace(/\.[^.]+$/, "");
-
-  return `${base || "receipt"}.${extension}`;
-}
-
-function getFileExtension(filename: string) {
-  return filename.split(".").pop()?.toLowerCase() ?? "";
+function isAbortError(error: unknown) {
+  return error instanceof DOMException && error.name === "AbortError";
 }
 
 function createClientId() {
