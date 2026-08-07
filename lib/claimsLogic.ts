@@ -46,6 +46,7 @@ export type ClaimSettings = {
 
 export type ClaimReceipt = {
   id: string;
+  claimReference?: string;
   name: string;
   safeName: string;
   type: string;

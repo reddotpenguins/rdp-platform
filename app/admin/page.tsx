@@ -99,8 +99,8 @@ export default async function AdminPage() {
         <AdminCard
           href="/claims"
           icon={Receipt}
-          title="Claims"
-          description="Review internal claims and claim setup."
+          title="My claims & approvals"
+          description="Create draft claims, review submitted claims, and manage claim setup."
         />
         <AdminCard
           href="/rba"

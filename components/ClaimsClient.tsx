@@ -107,6 +107,7 @@ type ExtractedReceiptDetails = NormalizedReceiptExtraction;
 
 type ServerReceiptExtractionResponse = {
   claimId: string;
+  claimReference: string;
   extraction: ExtractedReceiptDetails;
   extractionAttemptId: string;
   receipt: {
@@ -258,6 +259,10 @@ export function ClaimsClient({ staffProfile }: ClaimsClientProps) {
     formFinancials.totalSpentCents,
     formFinancials.amountRequestedCents
   );
+  const draftClaimReference = useMemo(
+    () => getDraftClaimReference(draft, editingClaim, state.claims),
+    [draft, editingClaim, state.claims]
+  );
 
   function updateDraftField<TKey extends keyof DraftForm>(key: TKey, value: DraftForm[TKey]) {
     setDraft((currentDraft) => ({ ...currentDraft, [key]: value }));
@@ -390,7 +395,7 @@ export function ClaimsClient({ staffProfile }: ClaimsClientProps) {
     const existingClaim = editingClaimId
       ? state.claims.find((claim) => claim.id === editingClaimId) ?? null
       : null;
-    const claimId = existingClaim?.id ?? getNextClaimReference(state.claims);
+    const claimId = existingClaim?.id ?? draft.receipt?.claimReference ?? getNextClaimReference(state.claims);
     const status =
       nextStatus === "Submitted"
         ? "Submitted"
@@ -573,6 +578,7 @@ export function ClaimsClient({ staffProfile }: ClaimsClientProps) {
             receipt: {
               ...currentDraft.receipt,
               checksum: extractionResponse.receipt.checksum ?? currentDraft.receipt.checksum,
+              claimReference: extractionResponse.claimReference,
               receiptVersion: extractionResponse.receipt.receiptVersion,
               serverClaimId: extractionResponse.claimId,
               serverReceiptId: extractionResponse.receipt.id,
@@ -636,7 +642,7 @@ export function ClaimsClient({ staffProfile }: ClaimsClientProps) {
       error?: string;
     };
 
-    if (!response.ok || !payload.extraction || !payload.claimId || !payload.receipt) {
+    if (!response.ok || !payload.extraction || !payload.claimId || !payload.claimReference || !payload.receipt) {
       throw new Error(payload.error || "Receipt details could not be extracted.");
     }
 
@@ -981,6 +987,7 @@ export function ClaimsClient({ staffProfile }: ClaimsClientProps) {
           categories={sortedCategories}
           canDeleteDraft={Boolean(editingClaim && canDeleteClaimDraft(editingClaim, staffProfile.id))}
           draft={draft}
+          draftClaimReference={draftClaimReference}
           editingClaimId={editingClaimId}
           formNonClaimable={formNonClaimable}
           formValidation={formValidation}
@@ -1250,6 +1257,7 @@ function ClaimFormPanel({
   categories,
   canDeleteDraft,
   draft,
+  draftClaimReference,
   editingClaimId,
   formNonClaimable,
   formValidation,
@@ -1269,6 +1277,7 @@ function ClaimFormPanel({
   categories: ExpenseCategory[];
   canDeleteDraft: boolean;
   draft: DraftForm;
+  draftClaimReference: string;
   editingClaimId: string | null;
   formNonClaimable: number;
   formValidation: ReturnType<typeof validateFinancials>;
@@ -1324,6 +1333,7 @@ function ClaimFormPanel({
         </div>
 
         <div className="mt-4 grid gap-3 md:grid-cols-2">
+          <ReadOnlyValue label="Claim reference" value={draftClaimReference} />
           <SelectField
             label="Group"
             value={draft.groupId}
@@ -2501,6 +2511,14 @@ function createBlankDraft(state: ClaimsState): DraftForm {
     totalSpent: "",
     transactionDate: ""
   };
+}
+
+function getDraftClaimReference(
+  draft: DraftForm,
+  editingClaim: ClaimRecord | null,
+  claims: ClaimRecord[]
+) {
+  return editingClaim?.id ?? draft.receipt?.claimReference ?? getNextClaimReference(claims);
 }
 
 function applyReceiptExtraction(

@@ -25,6 +25,7 @@ const allowedAzureMimeTypes = ["image/jpeg", "image/png", "application/pdf"];
 
 type ClaimRow = {
   claimant_staff_id: string;
+  claim_reference: string;
   id: string;
   organisation_id: string;
   status: "Draft" | "Returned for Correction" | "Submitted" | "Under Review" | "Approved" | "Rejected" | "Paid" | "Cancelled";
@@ -220,6 +221,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       claimId: claim.id,
+      claimReference: claim.claim_reference,
       extraction,
       receipt: {
         checksum,
@@ -518,7 +520,7 @@ async function createDraftClaim(
       organisation_id: values.organisationId,
       status: "Draft"
     })
-    .select("id, organisation_id, claimant_staff_id, status")
+    .select("id, organisation_id, claim_reference, claimant_staff_id, status")
     .single();
 
   if (error) {
@@ -551,7 +553,7 @@ async function getClaimById(
 ) {
   const { data } = await admin
     .from("claims")
-    .select("id, organisation_id, claimant_staff_id, status")
+    .select("id, organisation_id, claim_reference, claimant_staff_id, status")
     .eq("id", claimId)
     .maybeSingle();
 

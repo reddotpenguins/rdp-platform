@@ -127,6 +127,8 @@ export function canViewAdminHome(profile: StaffProfile) {
   return hasAnyStaffPermission(profile, [
     "users.view",
     "assessments.create",
+    "claims.create",
+    "claims.review",
     "enquiries.assign",
     "students.view",
     "settings.manage"

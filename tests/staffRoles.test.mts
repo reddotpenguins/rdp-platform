@@ -20,6 +20,7 @@ describe("staff permission model", () => {
 
     assert.equal(canManageStaffAccess(admin), true);
     assert.equal(roleCanManageStaffAccess("admin"), true);
+    assert.equal(canAccessClaims(admin), true);
     assert.equal(canUploadAssessmentData(admin), true);
     assert.equal(canViewAllAssessments(admin), true);
     assert.equal(canViewQuarterAssessmentDashboard(admin), true);
