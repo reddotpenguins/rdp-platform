@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   canAccessClaims,
+  canAccessScheduling,
   canManageStaffAccess,
+  canManageScheduling,
   canUploadAssessmentData,
   canViewAllAssessments,
   canViewQuarterAssessmentDashboard,
@@ -22,6 +24,8 @@ describe("staff permission model", () => {
     assert.equal(canManageStaffAccess(admin), true);
     assert.equal(roleCanManageStaffAccess("admin"), true);
     assert.equal(canAccessClaims(admin), true);
+    assert.equal(canAccessScheduling(admin), true);
+    assert.equal(canManageScheduling(admin), true);
     assert.equal(canUploadAssessmentData(admin), true);
     assert.equal(canViewAllAssessments(admin), true);
     assert.equal(canViewQuarterAssessmentDashboard(admin), true);
@@ -36,6 +40,8 @@ describe("staff permission model", () => {
 
     assert.equal(canManageStaffAccess(leadCoach), false);
     assert.equal(canAccessClaims(leadCoach), false);
+    assert.equal(canAccessScheduling(leadCoach), true);
+    assert.equal(canManageScheduling(leadCoach), false);
     assert.equal(canViewTeamAssessments(leadCoach), true);
     assert.equal(canViewTrainingDepartment(leadCoach), false);
     assert.equal(canViewQuarterAssessmentDashboard(leadCoach), false);
@@ -53,6 +59,8 @@ describe("staff permission model", () => {
     assert.equal(hasStaffPermission(coach, "claims.create"), false);
     assert.equal(hasStaffPermission(coach, "claims.approve"), false);
     assert.equal(canAccessClaims(coach), false);
+    assert.equal(canAccessScheduling(coach), true);
+    assert.equal(canManageScheduling(coach), false);
     assert.equal(canViewAllAssessments(coach), false);
     assert.equal(canViewQuarterAssessmentDashboard(coach), false);
     assert.equal(canViewTrainingDepartment(coach), false);

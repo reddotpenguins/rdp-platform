@@ -20,6 +20,13 @@ export const staffPermissions = [
   "claims.settings.manage",
   "training.view",
   "training.manage",
+  "schedule.viewOwn",
+  "schedule.clock",
+  "schedule.leaveRequest",
+  "schedule.viewAll",
+  "schedule.manage",
+  "schedule.approveLeave",
+  "schedule.payroll",
   "enquiries.assign",
   "students.view",
   "students.manage",
@@ -59,8 +66,14 @@ export type ClaimPermissions = {
 
 const rolePermissionMap: Record<StaffRole, readonly StaffPermission[]> = {
   admin: staffPermissions,
-  lead_coach: ["assessments.viewOwn", "assessments.viewTeam"],
-  coach: ["assessments.viewOwn"]
+  lead_coach: [
+    "assessments.viewOwn",
+    "assessments.viewTeam",
+    "schedule.viewOwn",
+    "schedule.clock",
+    "schedule.leaveRequest"
+  ],
+  coach: ["assessments.viewOwn", "schedule.viewOwn", "schedule.clock", "schedule.leaveRequest"]
 };
 
 export function hasRolePermission(role: StaffRole, permission: StaffPermission) {
@@ -117,6 +130,14 @@ export function canViewTrainingDepartment(profile: StaffProfile) {
   return hasStaffPermission(profile, "training.view");
 }
 
+export function canAccessScheduling(profile: StaffProfile) {
+  return hasAnyStaffPermission(profile, ["schedule.viewOwn", "schedule.viewAll"]);
+}
+
+export function canManageScheduling(profile: StaffProfile) {
+  return hasStaffPermission(profile, "schedule.manage");
+}
+
 export function canViewQuarterAssessmentDashboard(profile: StaffProfile) {
   return canViewAllAssessments(profile);
 }
@@ -136,6 +157,7 @@ export function canViewAdminHome(profile: StaffProfile) {
     "claims.create",
     "claims.review",
     "training.view",
+    "schedule.viewAll",
     "enquiries.assign",
     "students.view",
     "settings.manage"

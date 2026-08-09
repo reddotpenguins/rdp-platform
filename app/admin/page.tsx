@@ -3,6 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import {
   BarChart3,
+  CalendarCheck,
   ClipboardList,
   FileUp,
   GraduationCap,
@@ -102,6 +103,12 @@ export default async function AdminPage() {
           icon={Receipt}
           title="My claims & approvals"
           description="Create draft claims, review submitted claims, and manage claim setup."
+        />
+        <AdminCard
+          href="/schedule"
+          icon={CalendarCheck}
+          title="Scheduling & payroll"
+          description="Plan shifts, review clock records, approve leave, and prepare payroll hours."
         />
         <AdminCard
           href="/training"

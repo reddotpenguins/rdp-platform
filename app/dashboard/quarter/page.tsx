@@ -4,6 +4,7 @@ import {
   canManageCustomerEnquiries,
   canManageStudentLifecycle,
   canManageStaffAccess,
+  canAccessScheduling,
   canViewStudentLifecycle,
   canViewQuarterAssessmentDashboard,
   canUploadAssessmentData,
@@ -26,6 +27,7 @@ export default async function QuarterDashboardPage() {
   return (
     <DashboardClient
       initialRecords={dataset.records}
+      canAccessScheduling={canAccessScheduling(profile)}
       canUpload={canUploadAssessmentData(profile)}
       canManageEnquiries={canManageCustomerEnquiries(profile)}
       canManageStaff={canManageStaffAccess(profile)}

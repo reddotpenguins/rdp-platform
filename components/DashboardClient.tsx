@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   BarChart3,
+  CalendarCheck,
   ChevronDown,
   ClipboardList,
   FileUp,
@@ -43,6 +44,7 @@ import type {
 
 type DashboardClientProps = {
   initialRecords: StudentAssessmentRecord[];
+  canAccessScheduling?: boolean;
   canUpload: boolean;
   canManageEnquiries?: boolean;
   canManageStaff?: boolean;
@@ -54,6 +56,7 @@ type DashboardClientProps = {
 
 export function DashboardClient({
   initialRecords,
+  canAccessScheduling = false,
   canUpload,
   canManageEnquiries = false,
   canManageStaff = false,
@@ -120,12 +123,16 @@ export function DashboardClient({
         <div className="flex flex-wrap items-center gap-2 sm:w-auto">
           {canManageStaff ? (
             <AdminToolsMenu
+              canAccessScheduling={canAccessScheduling}
               canManageEnquiries={canManageEnquiries}
               canManageStaff={canManageStaff}
               canManageStudentLifecycle={canManageStudentLifecycle}
               canUpload={canUpload}
               canViewStudentLifecycle={canViewStudentLifecycle}
             />
+          ) : null}
+          {canAccessScheduling ? (
+            <HeaderLink href="/schedule" icon={CalendarCheck} label="Schedule" />
           ) : null}
           <button
             type="button"
@@ -177,12 +184,14 @@ export function DashboardClient({
 }
 
 function AdminToolsMenu({
+  canAccessScheduling,
   canManageEnquiries,
   canManageStaff,
   canManageStudentLifecycle,
   canUpload,
   canViewStudentLifecycle
 }: {
+  canAccessScheduling: boolean;
   canManageEnquiries: boolean;
   canManageStaff: boolean;
   canManageStudentLifecycle: boolean;
@@ -219,6 +228,7 @@ function AdminToolsMenu({
         </AdminToolGroup>
         <AdminToolGroup label="Operations">
           <AdminToolLink href="/claims" icon={Receipt} label="Claims" />
+          {canAccessScheduling ? <AdminToolLink href="/schedule" icon={CalendarCheck} label="Schedule" /> : null}
           {canManageStaff ? <AdminToolLink href="/rba" icon={ShieldCheck} label="RBA" /> : null}
         </AdminToolGroup>
       </div>
@@ -254,6 +264,18 @@ function AdminToolLink({
     <Link
       href={href}
       className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-teal/10 hover:text-teal"
+    >
+      <Icon aria-hidden="true" className="size-4" />
+      {label}
+    </Link>
+  );
+}
+
+function HeaderLink({ href, icon: Icon, label }: { href: string; icon: LucideIcon; label: string }) {
+  return (
+    <Link
+      href={href}
+      className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-md border border-line bg-paper px-3 text-sm font-semibold text-slate-700 transition hover:border-teal hover:text-teal sm:flex-none"
     >
       <Icon aria-hidden="true" className="size-4" />
       {label}

@@ -3,6 +3,7 @@ import {
   canManageCustomerEnquiries,
   canManageStudentLifecycle,
   canManageStaffAccess,
+  canAccessScheduling,
   canViewStudentLifecycle,
   canUploadAssessmentData,
   getCentreFilterAccess
@@ -19,6 +20,7 @@ export default async function DashboardPage() {
   return (
     <DashboardClient
       initialRecords={dataset.records}
+      canAccessScheduling={canAccessScheduling(profile)}
       canUpload={canUploadAssessmentData(profile)}
       canManageEnquiries={canManageCustomerEnquiries(profile)}
       canManageStaff={canManageStaffAccess(profile)}
