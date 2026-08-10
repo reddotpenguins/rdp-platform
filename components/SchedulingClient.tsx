@@ -91,9 +91,13 @@ export function SchedulingClient({ data, flash, staffProfile }: SchedulingClient
   });
   const [viewMode, setViewMode] = useState<ViewMode>("week");
   const [selectedDay, setSelectedDay] = useState(data.week.weekStartDate);
-  const [editingShift, setEditingShift] = useState<RosterShift | null>(null);
+  const [editingShiftId, setEditingShiftId] = useState<string | null>(null);
   const [draggingShiftId, setDraggingShiftId] = useState<string | null>(null);
   const weekDays = useMemo(() => buildWeekDays(data.week.weekStartDate), [data.week.weekStartDate]);
+  const editingShift = useMemo(
+    () => (editingShiftId ? data.shifts.find((shift) => shift.id === editingShiftId) ?? null : null),
+    [data.shifts, editingShiftId]
+  );
   const activeStaff = useMemo(
     () => data.staff.filter((staff) => staff.active).sort((first, second) => getStaffName(first).localeCompare(getStaffName(second))),
     [data.staff]
@@ -187,79 +191,76 @@ export function SchedulingClient({ data, flash, staffProfile }: SchedulingClient
         <MetricCard icon={Send} label="Published shifts" value={publishedCount} />
       </section>
 
-      <section className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
-        <div className="flex min-w-0 flex-col gap-5">
-          <ScheduleToolbar
-            filters={filters}
-            onFilterChange={(patch) => setFilters((current) => ({ ...current, ...patch }))}
-            onViewModeChange={setViewMode}
-            resources={{
-              departments: data.departments,
-              locations: data.locations,
-              programmes: data.programmes,
-              staff: activeStaff
-            }}
-            selectedDay={selectedDay}
-            setSelectedDay={setSelectedDay}
-            viewMode={viewMode}
-            weekDays={weekDays}
-          />
+      <section className="flex min-w-0 flex-col gap-5">
+        <ScheduleToolbar
+          filters={filters}
+          onFilterChange={(patch) => setFilters((current) => ({ ...current, ...patch }))}
+          onViewModeChange={setViewMode}
+          resources={{
+            departments: data.departments,
+            locations: data.locations,
+            programmes: data.programmes,
+            staff: activeStaff
+          }}
+          selectedDay={selectedDay}
+          setSelectedDay={setSelectedDay}
+          viewMode={viewMode}
+          weekDays={weekDays}
+        />
 
-          <ConflictPanel conflicts={data.conflicts.filter((conflict) => conflictMatchesFilters(conflict, activeShifts))} />
+        <ScheduleActionsPanel
+          templates={data.templates}
+          weekDays={weekDays}
+          weekStartDate={data.week.weekStartDate}
+        />
 
-          {viewMode === "week" ? (
-            <WeekRosterGrid
-              isPending={isPending}
-              isDragging={Boolean(draggingShiftId)}
-              onDragState={setDraggingShiftId}
-              onEdit={setEditingShift}
-              onMove={runMoveShift}
-              onResize={runResizeShift}
-              shifts={activeShifts}
-              staff={visibleStaff}
-              weekDays={weekDays}
-              weekStartDate={data.week.weekStartDate}
-            />
-          ) : viewMode === "day" ? (
-            <DayRosterView
-              date={selectedDay}
-              isPending={isPending}
-              isDragging={Boolean(draggingShiftId)}
-              onDragState={setDraggingShiftId}
-              onEdit={setEditingShift}
-              onMove={runMoveShift}
-              onResize={runResizeShift}
-              shifts={activeShifts}
-              staff={visibleStaff}
-              weekStartDate={data.week.weekStartDate}
-            />
-          ) : (
-            <StaffRosterView
-              isPending={isPending}
-              isDragging={Boolean(draggingShiftId)}
-              onDragState={setDraggingShiftId}
-              onEdit={setEditingShift}
-              onMove={runMoveShift}
-              onResize={runResizeShift}
-              shifts={activeShifts}
-              staff={visibleStaff}
-              weekDays={weekDays}
-              weekStartDate={data.week.weekStartDate}
-            />
-          )}
-        </div>
-
-        <aside className="flex min-w-0 flex-col gap-5">
-          <ScheduleActionsPanel
-            templates={data.templates}
+        {viewMode === "week" ? (
+          <WeekRosterGrid
+            isPending={isPending}
+            isDragging={Boolean(draggingShiftId)}
+            onDragState={setDraggingShiftId}
+            onEdit={(shift) => setEditingShiftId(shift.id)}
+            onMove={runMoveShift}
+            onResize={runResizeShift}
+            shifts={activeShifts}
+            staff={visibleStaff}
             weekDays={weekDays}
             weekStartDate={data.week.weekStartDate}
           />
+        ) : viewMode === "day" ? (
+          <DayRosterView
+            date={selectedDay}
+            isPending={isPending}
+            isDragging={Boolean(draggingShiftId)}
+            onDragState={setDraggingShiftId}
+            onEdit={(shift) => setEditingShiftId(shift.id)}
+            onMove={runMoveShift}
+            onResize={runResizeShift}
+            shifts={activeShifts}
+            staff={visibleStaff}
+            weekStartDate={data.week.weekStartDate}
+          />
+        ) : (
+          <StaffRosterView
+            isPending={isPending}
+            isDragging={Boolean(draggingShiftId)}
+            onDragState={setDraggingShiftId}
+            onEdit={(shift) => setEditingShiftId(shift.id)}
+            onMove={runMoveShift}
+            onResize={runResizeShift}
+            shifts={activeShifts}
+            staff={visibleStaff}
+            weekDays={weekDays}
+            weekStartDate={data.week.weekStartDate}
+          />
+        )}
+
+        <section className="grid gap-5 xl:grid-cols-[minmax(360px,1fr)_minmax(320px,0.8fr)] 2xl:grid-cols-[minmax(420px,1fr)_minmax(320px,0.85fr)_minmax(320px,0.85fr)]">
           <ShiftFormPanel
             departments={data.departments}
             editingShift={editingShift}
             locations={data.locations}
-            onClear={() => setEditingShift(null)}
+            onClear={() => setEditingShiftId(null)}
             programmes={data.programmes}
             qualifications={data.qualifications}
             staff={activeStaff}
@@ -268,13 +269,16 @@ export function SchedulingClient({ data, flash, staffProfile }: SchedulingClient
           <OpenShiftsPanel
             isPending={isPending}
             onDragState={setDraggingShiftId}
-            onEdit={setEditingShift}
+            onEdit={(shift) => setEditingShiftId(shift.id)}
             onResize={runResizeShift}
             shifts={unassignedShifts}
             weekStartDate={data.week.weekStartDate}
           />
-          <LocationSettingsPanel locations={data.locations} weekStartDate={data.week.weekStartDate} />
-        </aside>
+          <ConflictPanel conflicts={data.conflicts.filter((conflict) => conflictMatchesFilters(conflict, activeShifts))} />
+          <div className="xl:col-span-2 2xl:col-span-3">
+            <LocationSettingsPanel locations={data.locations} weekStartDate={data.week.weekStartDate} />
+          </div>
+        </section>
       </section>
     </main>
   );
@@ -391,8 +395,8 @@ function WeekRosterGrid({
   weekDays: string[];
 }) {
   return (
-    <section className="overflow-hidden rounded-lg border border-line bg-paper shadow-panel">
-      <div className="grid min-w-[1120px] grid-cols-[190px_repeat(7,minmax(132px,1fr))]">
+    <section className="overflow-x-auto rounded-lg border border-line bg-paper shadow-panel">
+      <div className="grid min-w-[1240px] grid-cols-[220px_repeat(7,minmax(145px,1fr))]">
         <div className="sticky left-0 top-0 z-20 border-b border-r border-line bg-paper p-3 text-xs font-semibold uppercase text-slate-500">
           Staff
         </div>
@@ -769,6 +773,9 @@ function ShiftFormPanel({
 }) {
   const assignedStaffId = editingShift?.assignments[0]?.staffProfileId ?? "";
   const shiftDate = editingShift ? getShiftSingaporeDate(editingShift.startsAt) : weekStartDate;
+  const formKey = editingShift
+    ? `${editingShift.id}-${assignedStaffId || "open"}-${shiftDate}-${editingShift.startsAt}-${editingShift.endsAt}`
+    : "new-shift";
 
   return (
     <section className="rounded-lg border border-line bg-paper shadow-panel">
@@ -777,7 +784,7 @@ function ShiftFormPanel({
         title={editingShift ? "Edit Shift" : "Add Shift"}
         subtitle={editingShift ? getShiftTimeRangeLabel(editingShift) : "Draft roster"}
       />
-      <form action={saveShiftAction} className="grid gap-3 p-4" key={editingShift?.id ?? "new-shift"}>
+      <form action={saveShiftAction} className="grid gap-3 p-4" key={formKey}>
         <input name="shiftId" type="hidden" value={editingShift?.id ?? ""} />
         <TextField defaultValue={editingShift?.title ?? ""} label="Title" name="title" required />
         <div className="grid gap-3 sm:grid-cols-2">
@@ -876,15 +883,22 @@ function ScheduleActionsPanel({
   return (
     <section className="rounded-lg border border-line bg-paper shadow-panel">
       <PanelHeader icon={ClipboardCopy} title="Week Actions" subtitle={getScheduleWeekLabel(weekStartDate)} />
-      <div className="grid gap-3 p-4">
-        <form action={publishScheduleWeekAction}>
+      <div className="grid gap-3 p-4 lg:grid-cols-2 2xl:grid-cols-[minmax(170px,0.75fr)_minmax(170px,0.75fr)_minmax(260px,1.15fr)_minmax(240px,1fr)_minmax(240px,1fr)]">
+        <form action={publishScheduleWeekAction} className="min-w-0">
           <input name="weekStartDate" type="hidden" value={weekStartDate} />
           <button className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md bg-teal px-3 text-sm font-semibold text-white transition hover:bg-coral" type="submit">
             <Send aria-hidden="true" className="size-4" />
             Publish week
           </button>
         </form>
-        <form action={copyDayAction} className="grid gap-2 rounded-md border border-line bg-field p-3">
+        <form action={copyWeekToNextWeekAction} className="min-w-0">
+          <input name="weekStartDate" type="hidden" value={weekStartDate} />
+          <button className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md border border-line bg-field px-3 text-sm font-semibold text-slate-700 transition hover:border-teal hover:text-teal" type="submit">
+            <ChevronRight aria-hidden="true" className="size-4" />
+            Copy to next week
+          </button>
+        </form>
+        <form action={copyDayAction} className="grid min-w-0 gap-2 rounded-md border border-line bg-field p-3">
           <input name="weekStartDate" type="hidden" value={weekStartDate} />
           <div className="grid gap-2 sm:grid-cols-2">
             <SelectField label="From" name="sourceDate" options={weekDays.map((date) => ({ label: formatDayLabel(date), value: date }))} value={weekDays[0]} />
@@ -895,14 +909,7 @@ function ScheduleActionsPanel({
             Copy day
           </button>
         </form>
-        <form action={copyWeekToNextWeekAction}>
-          <input name="weekStartDate" type="hidden" value={weekStartDate} />
-          <button className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md border border-line bg-field px-3 text-sm font-semibold text-slate-700 transition hover:border-teal hover:text-teal" type="submit">
-            <ChevronRight aria-hidden="true" className="size-4" />
-            Copy to next week
-          </button>
-        </form>
-        <form action={saveWeekAsTemplateAction} className="grid gap-2 rounded-md border border-line bg-field p-3">
+        <form action={saveWeekAsTemplateAction} className="grid min-w-0 gap-2 rounded-md border border-line bg-field p-3">
           <input name="weekStartDate" type="hidden" value={weekStartDate} />
           <TextField label="Template name" name="templateName" required />
           <button className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-line bg-paper px-3 text-sm font-semibold text-slate-700 transition hover:border-teal hover:text-teal" type="submit">
@@ -911,7 +918,7 @@ function ScheduleActionsPanel({
           </button>
         </form>
         {templates.length > 0 ? (
-          <form action={applyTemplateAction} className="grid gap-2 rounded-md border border-line bg-field p-3">
+          <form action={applyTemplateAction} className="grid min-w-0 gap-2 rounded-md border border-line bg-field p-3">
             <input name="weekStartDate" type="hidden" value={weekStartDate} />
             <SelectField label="Template" name="templateId" options={templates.map((template) => ({ label: template.name, value: template.id }))} value={templates[0]?.id ?? ""} />
             <button className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-line bg-paper px-3 text-sm font-semibold text-slate-700 transition hover:border-teal hover:text-teal" type="submit">
