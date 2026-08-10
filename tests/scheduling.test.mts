@@ -5,10 +5,14 @@ import {
   canApproveLeaveRequest,
   createClockEvent,
   createShift,
+  detectScheduleConflicts,
   getClockStatus,
+  getRosterShiftHours,
   getPayableHours,
   getScheduledHours,
-  type LeaveRequest
+  getWeekStartDate,
+  type LeaveRequest,
+  type RosterShift
 } from "../lib/scheduling.ts";
 
 describe("scheduling geofence checks", () => {
@@ -79,6 +83,78 @@ describe("scheduling payroll calculations", () => {
       2
     );
   });
+
+  it("handles overnight scheduled shifts", () => {
+    const shift = createShift({
+      centreName: "Dhoby Ghaut",
+      coachName: "Coach",
+      date: "2026-08-09",
+      endTime: "01:00",
+      id: "shift-overnight",
+      programme: "Operations",
+      sessionLabel: "Overnight",
+      staffId: "staff-1",
+      staffRole: "coach",
+      startTime: "23:00"
+    });
+
+    assert.equal(getScheduledHours(shift), 2);
+  });
+});
+
+describe("schedule week and conflict helpers", () => {
+  it("normalizes any date to a Monday week start", () => {
+    assert.equal(getWeekStartDate("2026-08-09"), "2026-08-03");
+    assert.equal(getWeekStartDate("2026-08-10"), "2026-08-10");
+  });
+
+  it("detects under-staffing, overlap, and missing qualifications", () => {
+    const shifts = [
+      buildRosterShift({
+        assignments: [
+          {
+            id: "assignment-1",
+            qualificationIds: [],
+            staffName: "Coach A",
+            staffProfileId: "staff-1",
+            staffRole: "coach",
+            status: "assigned"
+          }
+        ],
+        endsAt: "2026-08-09T02:00:00.000Z",
+        id: "shift-1",
+        requiredQualificationId: "qualification-1",
+        requiredQualificationName: "LTS",
+        startsAt: "2026-08-09T00:00:00.000Z"
+      }),
+      buildRosterShift({
+        assignments: [
+          {
+            id: "assignment-2",
+            qualificationIds: ["qualification-1"],
+            staffName: "Coach A",
+            staffProfileId: "staff-1",
+            staffRole: "coach",
+            status: "assigned"
+          }
+        ],
+        endsAt: "2026-08-09T03:30:00.000Z",
+        id: "shift-2",
+        startsAt: "2026-08-09T01:30:00.000Z"
+      }),
+      buildRosterShift({
+        assignments: [],
+        id: "shift-3",
+        requiredManpower: 2
+      })
+    ];
+    const warnings = detectScheduleConflicts(shifts);
+
+    assert.equal(getRosterShiftHours(shifts[0]), 2);
+    assert.ok(warnings.some((warning) => warning.id === "qualification-shift-1-staff-1"));
+    assert.ok(warnings.some((warning) => warning.id === "overlap-staff-1-shift-1-shift-2"));
+    assert.ok(warnings.some((warning) => warning.id === "understaffed-shift-3"));
+  });
 });
 
 describe("leave approval readiness", () => {
@@ -111,6 +187,32 @@ function buildLeaveRequest(overrides: Partial<LeaveRequest>): LeaveRequest {
     shiftId: "shift-1",
     staffId: "staff-1",
     status: "pending",
+    ...overrides
+  };
+}
+
+function buildRosterShift(overrides: Partial<RosterShift>): RosterShift {
+  return {
+    assignments: [],
+    colour: "#f26a2e",
+    departmentId: null,
+    departmentName: null,
+    endsAt: "2026-08-09T02:00:00.000Z",
+    id: "shift",
+    locationName: "Dhoby Ghaut",
+    notes: null,
+    programmeId: null,
+    programmeName: null,
+    requiredManpower: 1,
+    requiredQualificationId: null,
+    requiredQualificationName: null,
+    requiredRole: null,
+    scheduleWeekId: "week-1",
+    sessionLabel: null,
+    startsAt: "2026-08-09T00:00:00.000Z",
+    status: "draft",
+    title: "Shift",
+    workLocationId: null,
     ...overrides
   };
 }

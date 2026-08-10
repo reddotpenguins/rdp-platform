@@ -68,12 +68,9 @@ const rolePermissionMap: Record<StaffRole, readonly StaffPermission[]> = {
   admin: staffPermissions,
   lead_coach: [
     "assessments.viewOwn",
-    "assessments.viewTeam",
-    "schedule.viewOwn",
-    "schedule.clock",
-    "schedule.leaveRequest"
+    "assessments.viewTeam"
   ],
-  coach: ["assessments.viewOwn", "schedule.viewOwn", "schedule.clock", "schedule.leaveRequest"]
+  coach: ["assessments.viewOwn"]
 };
 
 export function hasRolePermission(role: StaffRole, permission: StaffPermission) {

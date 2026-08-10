@@ -40,7 +40,7 @@ describe("staff permission model", () => {
 
     assert.equal(canManageStaffAccess(leadCoach), false);
     assert.equal(canAccessClaims(leadCoach), false);
-    assert.equal(canAccessScheduling(leadCoach), true);
+    assert.equal(canAccessScheduling(leadCoach), false);
     assert.equal(canManageScheduling(leadCoach), false);
     assert.equal(canViewTeamAssessments(leadCoach), true);
     assert.equal(canViewTrainingDepartment(leadCoach), false);
@@ -59,7 +59,7 @@ describe("staff permission model", () => {
     assert.equal(hasStaffPermission(coach, "claims.create"), false);
     assert.equal(hasStaffPermission(coach, "claims.approve"), false);
     assert.equal(canAccessClaims(coach), false);
-    assert.equal(canAccessScheduling(coach), true);
+    assert.equal(canAccessScheduling(coach), false);
     assert.equal(canManageScheduling(coach), false);
     assert.equal(canViewAllAssessments(coach), false);
     assert.equal(canViewQuarterAssessmentDashboard(coach), false);

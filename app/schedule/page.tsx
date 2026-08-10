@@ -1,20 +1,34 @@
 import { redirect } from "next/navigation";
 import { SchedulingClient } from "@/components/SchedulingClient";
-import { canAccessScheduling, canManageScheduling } from "@/lib/staffRoles";
+import { getWeekStartDate } from "@/lib/scheduling";
+import { canManageScheduling } from "@/lib/staffRoles";
+import { getSchedulingDashboardData } from "@/lib/supabase/scheduling";
 import { requireActiveStaffSession } from "@/lib/supabase/staffProfile";
 
 export const dynamic = "force-dynamic";
 
-export default async function SchedulePage() {
+export default async function SchedulePage({
+  searchParams
+}: {
+  searchParams?: {
+    error?: string;
+    saved?: string;
+    week?: string;
+  };
+}) {
   const { profile } = await requireActiveStaffSession();
 
-  if (!canAccessScheduling(profile)) {
+  if (!canManageScheduling(profile)) {
     redirect("/dashboard");
   }
 
+  const weekStartDate = getWeekStartDate(searchParams?.week);
+  const data = await getSchedulingDashboardData(weekStartDate);
+
   return (
     <SchedulingClient
-      canManageSchedule={canManageScheduling(profile)}
+      data={data}
+      flash={searchParams?.error ? { text: searchParams.error, tone: "error" } : searchParams?.saved ? { text: searchParams.saved, tone: "success" } : null}
       staffProfile={profile}
     />
   );

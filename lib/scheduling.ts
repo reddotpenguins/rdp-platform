@@ -78,7 +78,101 @@ export type PayrollRow = {
   shiftId: string;
 };
 
+export type ScheduleWeekStatus = "draft" | "published" | "completed" | "cancelled";
+export type ScheduleAssignmentStatus = "assigned" | "acknowledged" | "declined" | "removed";
+export type ScheduleConflictSeverity = "warning" | "error";
+
+export type ScheduleResourceOption = {
+  active: boolean;
+  id: string;
+  name: string;
+  sortOrder: number;
+};
+
+export type ScheduleWorkLocation = ScheduleResourceOption & {
+  geofenceRadiusMeters: number;
+  latitude: number | null;
+  longitude: number | null;
+  shortName: string | null;
+};
+
+export type ScheduleStaffOption = {
+  active: boolean;
+  assignedCentres: string[];
+  centreName: string | null;
+  coachName: string | null;
+  email: string;
+  fullName: string;
+  id: string;
+  qualificationIds: string[];
+  role: StaffRole;
+};
+
+export type RosterAssignment = {
+  id: string;
+  qualificationIds: string[];
+  staffName: string;
+  staffProfileId: string;
+  staffRole: StaffRole;
+  status: ScheduleAssignmentStatus;
+};
+
+export type RosterShift = {
+  assignments: RosterAssignment[];
+  colour: string;
+  departmentId: string | null;
+  departmentName: string | null;
+  endsAt: string;
+  id: string;
+  locationName: string | null;
+  notes: string | null;
+  programmeId: string | null;
+  programmeName: string | null;
+  requiredManpower: number;
+  requiredQualificationId: string | null;
+  requiredQualificationName: string | null;
+  requiredRole: StaffRole | null;
+  scheduleWeekId: string;
+  sessionLabel: string | null;
+  startsAt: string;
+  status: ScheduleWeekStatus;
+  title: string;
+  workLocationId: string | null;
+};
+
+export type ScheduleWeek = {
+  id: string | null;
+  notes: string | null;
+  publishedAt: string | null;
+  status: ScheduleWeekStatus;
+  weekStartDate: string;
+};
+
+export type ScheduleTemplate = {
+  active: boolean;
+  description: string | null;
+  id: string;
+  name: string;
+};
+
+export type ScheduleConflictWarning = {
+  id: string;
+  message: string;
+  severity: ScheduleConflictSeverity;
+  shiftId: string | null;
+};
+
+export type ScheduleConflictOptions = {
+  dailyHourLimit?: number;
+  minimumRestHours?: number;
+  weeklyHourLimit?: number;
+};
+
 export const defaultGeofenceRadiusMeters = 150;
+export const singaporeTimeZone = "Asia/Singapore";
+export const defaultDailyHourLimit = 8;
+export const defaultWeeklyHourLimit = 44;
+export const defaultMinimumRestHours = 10;
 
 export const centreLocations: CentreLocation[] = [
   {
@@ -303,7 +397,11 @@ export function calculateDistanceMeters(first: GeoPoint, second: GeoPoint) {
 
 export function getScheduledHours(shift: Pick<ScheduledShift, "date" | "endTime" | "startTime">) {
   const start = Date.parse(`${shift.date}T${shift.startTime}:00+08:00`);
-  const end = Date.parse(`${shift.date}T${shift.endTime}:00+08:00`);
+  let end = Date.parse(`${shift.date}T${shift.endTime}:00+08:00`);
+
+  if (Number.isFinite(start) && Number.isFinite(end) && end <= start) {
+    end += 24 * 60 * 60 * 1000;
+  }
 
   if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) {
     return 0;
@@ -396,6 +494,204 @@ export function toDateInputValue(date: Date) {
   return date.toISOString().slice(0, 10);
 }
 
+export function todayInSingapore() {
+  return formatDateInSingapore(new Date());
+}
+
+export function getWeekStartDate(value = todayInSingapore()) {
+  const date = parseIsoDateAsUtc(value);
+  const day = date.getUTCDay();
+  const daysSinceMonday = (day + 6) % 7;
+  date.setUTCDate(date.getUTCDate() - daysSinceMonday);
+
+  return formatUtcDate(date);
+}
+
+export function addDaysToIsoDate(value: string, days: number) {
+  const date = parseIsoDateAsUtc(value);
+  date.setUTCDate(date.getUTCDate() + days);
+
+  return formatUtcDate(date);
+}
+
+export function buildWeekDays(weekStartDate: string) {
+  return Array.from({ length: 7 }, (_, index) => addDaysToIsoDate(weekStartDate, index));
+}
+
+export function parseSingaporeShiftRange(date: string, startTime: string, endTime: string) {
+  const startsAt = Date.parse(`${date}T${startTime}:00+08:00`);
+  let endsAt = Date.parse(`${date}T${endTime}:00+08:00`);
+
+  if (!Number.isFinite(startsAt) || !Number.isFinite(endsAt)) {
+    throw new Error("Use a valid date, start time, and end time.");
+  }
+
+  if (endsAt <= startsAt) {
+    endsAt += 24 * 60 * 60 * 1000;
+  }
+
+  return {
+    endsAt: new Date(endsAt).toISOString(),
+    startsAt: new Date(startsAt).toISOString()
+  };
+}
+
+export function getRosterShiftHours(shift: Pick<RosterShift, "endsAt" | "startsAt">) {
+  const startsAt = Date.parse(shift.startsAt);
+  const endsAt = Date.parse(shift.endsAt);
+
+  if (!Number.isFinite(startsAt) || !Number.isFinite(endsAt) || endsAt <= startsAt) {
+    return 0;
+  }
+
+  return roundHours((endsAt - startsAt) / 1000 / 60 / 60);
+}
+
+export function getShiftSingaporeDate(value: string) {
+  return formatDateInSingapore(new Date(value));
+}
+
+export function getShiftSingaporeTime(value: string) {
+  return new Intl.DateTimeFormat("en-SG", {
+    hour: "2-digit",
+    hour12: false,
+    minute: "2-digit",
+    timeZone: singaporeTimeZone
+  }).format(new Date(value));
+}
+
+export function getShiftTimeRangeLabel(shift: Pick<RosterShift, "endsAt" | "startsAt">) {
+  return `${getShiftSingaporeTime(shift.startsAt)}-${getShiftSingaporeTime(shift.endsAt)}`;
+}
+
+export function getScheduleWeekLabel(weekStartDate: string) {
+  const weekEndDate = addDaysToIsoDate(weekStartDate, 6);
+
+  return `${formatShortDate(weekStartDate)} to ${formatShortDate(weekEndDate)}`;
+}
+
+export function detectScheduleConflicts(
+  shifts: RosterShift[],
+  options: ScheduleConflictOptions = {}
+): ScheduleConflictWarning[] {
+  const warnings: ScheduleConflictWarning[] = [];
+  const dailyHourLimit = options.dailyHourLimit ?? defaultDailyHourLimit;
+  const weeklyHourLimit = options.weeklyHourLimit ?? defaultWeeklyHourLimit;
+  const minimumRestHours = options.minimumRestHours ?? defaultMinimumRestHours;
+  const activeShifts = shifts.filter((shift) => shift.status !== "cancelled");
+  const shiftsByStaff = new Map<string, Array<{ shift: RosterShift; assignment: RosterAssignment }>>();
+
+  activeShifts.forEach((shift) => {
+    if (shift.assignments.length < shift.requiredManpower) {
+      warnings.push({
+        id: `understaffed-${shift.id}`,
+        message: `${shift.title} needs ${shift.requiredManpower} staff but has ${shift.assignments.length}.`,
+        severity: "warning",
+        shiftId: shift.id
+      });
+    }
+
+    shift.assignments.forEach((assignment) => {
+      if (shift.requiredRole && assignment.staffRole !== shift.requiredRole) {
+        warnings.push({
+          id: `role-${shift.id}-${assignment.staffProfileId}`,
+          message: `${assignment.staffName} is assigned as ${formatStaffRoleForSchedule(assignment.staffRole)}, but this shift requires ${formatStaffRoleForSchedule(shift.requiredRole)}.`,
+          severity: "warning",
+          shiftId: shift.id
+        });
+      }
+
+      if (
+        shift.requiredQualificationId &&
+        !assignment.qualificationIds.includes(shift.requiredQualificationId)
+      ) {
+        warnings.push({
+          id: `qualification-${shift.id}-${assignment.staffProfileId}`,
+          message: `${assignment.staffName} is missing ${shift.requiredQualificationName ?? "the required qualification"}.`,
+          severity: "warning",
+          shiftId: shift.id
+        });
+      }
+
+      const staffShifts = shiftsByStaff.get(assignment.staffProfileId) ?? [];
+      staffShifts.push({ assignment, shift });
+      shiftsByStaff.set(assignment.staffProfileId, staffShifts);
+    });
+  });
+
+  shiftsByStaff.forEach((staffShifts, staffProfileId) => {
+    const sorted = staffShifts
+      .slice()
+      .sort((first, second) => Date.parse(first.shift.startsAt) - Date.parse(second.shift.startsAt));
+    const staffName = sorted[0]?.assignment.staffName ?? "Staff";
+    const hoursByDate = new Map<string, number>();
+    let weeklyHours = 0;
+
+    sorted.forEach(({ shift }) => {
+      const shiftHours = getRosterShiftHours(shift);
+      const shiftDate = getShiftSingaporeDate(shift.startsAt);
+      weeklyHours += shiftHours;
+      hoursByDate.set(shiftDate, roundHours((hoursByDate.get(shiftDate) ?? 0) + shiftHours));
+    });
+
+    hoursByDate.forEach((hours, date) => {
+      if (hours > dailyHourLimit) {
+        warnings.push({
+          id: `daily-hours-${staffProfileId}-${date}`,
+          message: `${staffName} has ${hours.toFixed(2)} scheduled hours on ${date}.`,
+          severity: "warning",
+          shiftId: null
+        });
+      }
+    });
+
+    if (weeklyHours > weeklyHourLimit) {
+      warnings.push({
+        id: `weekly-hours-${staffProfileId}`,
+        message: `${staffName} has ${weeklyHours.toFixed(2)} scheduled hours this week.`,
+        severity: "warning",
+        shiftId: null
+      });
+    }
+
+    for (let index = 0; index < sorted.length; index += 1) {
+      const current = sorted[index];
+      const next = sorted[index + 1];
+
+      if (!next) {
+        continue;
+      }
+
+      const currentStart = Date.parse(current.shift.startsAt);
+      const currentEnd = Date.parse(current.shift.endsAt);
+      const nextStart = Date.parse(next.shift.startsAt);
+
+      if (currentEnd > nextStart) {
+        warnings.push({
+          id: `overlap-${staffProfileId}-${current.shift.id}-${next.shift.id}`,
+          message: `${staffName} has overlapping shifts: ${current.shift.title} and ${next.shift.title}.`,
+          severity: "error",
+          shiftId: next.shift.id
+        });
+        continue;
+      }
+
+      const restHours = roundHours((nextStart - currentEnd) / 1000 / 60 / 60);
+
+      if (restHours < minimumRestHours) {
+        warnings.push({
+          id: `rest-${staffProfileId}-${current.shift.id}-${next.shift.id}`,
+          message: `${staffName} has only ${restHours.toFixed(2)} rest hours before ${next.shift.title}.`,
+          severity: "warning",
+          shiftId: next.shift.id
+        });
+      }
+    }
+  });
+
+  return warnings;
+}
+
 function addDays(date: Date, days: number) {
   const nextDate = new Date(date);
   nextDate.setDate(nextDate.getDate() + days);
@@ -409,4 +705,46 @@ function toRadians(value: number) {
 
 function roundHours(value: number) {
   return Math.round(value * 100) / 100;
+}
+
+function parseIsoDateAsUtc(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return parseIsoDateAsUtc(todayInSingapore());
+  }
+
+  const [year, month, day] = value.split("-").map(Number);
+
+  return new Date(Date.UTC(year, month - 1, day));
+}
+
+function formatUtcDate(date: Date) {
+  return date.toISOString().slice(0, 10);
+}
+
+function formatDateInSingapore(date: Date) {
+  const parts = new Intl.DateTimeFormat("en-SG", {
+    day: "2-digit",
+    month: "2-digit",
+    timeZone: singaporeTimeZone,
+    year: "numeric"
+  }).formatToParts(date);
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
+function formatShortDate(value: string) {
+  return new Intl.DateTimeFormat("en-SG", {
+    day: "numeric",
+    month: "short",
+    timeZone: singaporeTimeZone
+  }).format(new Date(`${value}T00:00:00+08:00`));
+}
+
+function formatStaffRoleForSchedule(role: StaffRole) {
+  if (role === "lead_coach") {
+    return "Lead coach";
+  }
+
+  return role.charAt(0).toUpperCase() + role.slice(1);
 }
