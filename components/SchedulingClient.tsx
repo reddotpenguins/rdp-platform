@@ -308,8 +308,11 @@ function ScheduleToolbar({
   viewMode: ViewMode;
   weekDays: string[];
 }) {
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+  const activeFilterCount = Object.values(filters).filter(Boolean).length;
+
   return (
-    <section className="rounded-lg border border-line bg-paper p-4 shadow-panel">
+    <section className="rounded-lg border border-line bg-paper p-3 shadow-panel sm:p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <span className="flex size-9 items-center justify-center rounded-lg bg-teal/10 text-teal">
@@ -317,7 +320,7 @@ function ScheduleToolbar({
           </span>
           <h2 className="text-lg font-semibold text-ink">Roster Filters</h2>
         </div>
-        <div className="grid grid-cols-3 rounded-md border border-line bg-field p-1 text-sm font-semibold">
+        <div className="grid w-full grid-cols-3 rounded-md border border-line bg-field p-1 text-sm font-semibold sm:w-auto">
           {(["week", "day", "staff"] as ViewMode[]).map((mode) => (
             <button
               className={clsx(
@@ -334,7 +337,24 @@ function ScheduleToolbar({
         </div>
       </div>
 
-      <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-6">
+      <button
+        aria-controls="schedule-filters"
+        aria-expanded={mobileFiltersOpen}
+        className="mt-3 flex h-10 w-full items-center justify-between rounded-md border border-line bg-field px-3 text-sm font-semibold text-slate-700 transition hover:border-teal hover:text-teal md:hidden"
+        onClick={() => setMobileFiltersOpen((current) => !current)}
+        type="button"
+      >
+        <span>{activeFilterCount ? `Filters (${activeFilterCount})` : "Filters"}</span>
+        <ChevronRight aria-hidden="true" className={clsx("size-4 transition", mobileFiltersOpen && "rotate-90")} />
+      </button>
+
+      <div
+        className={clsx(
+          "mt-3 gap-3 md:mt-4 md:grid md:grid-cols-2 xl:grid-cols-6",
+          mobileFiltersOpen ? "grid" : "hidden"
+        )}
+        id="schedule-filters"
+      >
         <SelectField
           label="Location"
           onChange={(locationId) => onFilterChange({ locationId })}
@@ -395,13 +415,13 @@ function WeekRosterGrid({
   weekDays: string[];
 }) {
   return (
-    <section className="overflow-x-auto rounded-lg border border-line bg-paper shadow-panel">
+    <section className="max-h-[72vh] overflow-auto rounded-lg border border-line bg-paper shadow-panel">
       <div className="grid min-w-[1240px] grid-cols-[220px_repeat(7,minmax(145px,1fr))]">
-        <div className="sticky left-0 top-0 z-20 border-b border-r border-line bg-paper p-3 text-xs font-semibold uppercase text-slate-500">
+        <div className="sticky left-0 top-0 z-30 border-b border-r border-line bg-paper p-3 text-xs font-semibold uppercase text-slate-500 shadow-[1px_0_0_rgba(15,23,42,0.08)]">
           Staff
         </div>
         {weekDays.map((date) => (
-          <div className="border-b border-r border-line bg-paper p-3" key={date}>
+          <div className="sticky top-0 z-20 border-b border-r border-line bg-paper p-3 shadow-[0_1px_0_rgba(15,23,42,0.08)]" key={date}>
             <p className="text-sm font-semibold text-ink">{formatDayLabel(date)}</p>
             <p className="text-xs text-slate-500">{date}</p>
           </div>
@@ -471,7 +491,7 @@ function RosterRow({
 }) {
   return (
     <>
-      <div className="sticky left-0 z-10 border-b border-r border-line bg-paper p-3">
+      <div className="sticky left-0 z-10 border-b border-r border-line bg-paper p-3 shadow-[1px_0_0_rgba(15,23,42,0.08)]">
         <p className="truncate text-sm font-semibold text-ink">{label}</p>
         {meta ? <p className="mt-1 text-xs text-slate-500">{meta}</p> : null}
       </div>
