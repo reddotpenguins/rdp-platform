@@ -194,6 +194,7 @@ export function TrainingDashboardClient() {
 
         <div className="flex flex-wrap items-center gap-2 sm:w-auto">
           <HeaderLink href="/admin" icon={ArrowLeft} label="Admin home" />
+          <HeaderLink href="/training/resources" icon={BookOpenCheck} label="Resources" />
           <SignOutButton className="flex-1 sm:flex-none" />
         </div>
       </header>

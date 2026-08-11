@@ -7,11 +7,22 @@ export const trainingResourceProgrammes = [
 
 export const trainingResourceStatuses = ["draft", "published", "archived"] as const;
 
+export const trainingResourceCategories = [
+  "Skill Videos",
+  "Lesson Plans",
+  "Assessment Criteria",
+  "Coach Onboarding",
+  "Safety & SOP",
+  "Programme Guides"
+] as const;
+
 export type TrainingResourceProgramme = (typeof trainingResourceProgrammes)[number];
 export type TrainingResourceStatus = (typeof trainingResourceStatuses)[number];
+export type TrainingResourceCategory = (typeof trainingResourceCategories)[number];
 
 export type TrainingResource = {
   assessmentCriteria: string | null;
+  category: TrainingResourceCategory;
   commonMistakes: string | null;
   createdAt: string;
   description: string | null;
@@ -33,6 +44,10 @@ export function isTrainingResourceProgramme(value: string): value is TrainingRes
 
 export function isTrainingResourceStatus(value: string): value is TrainingResourceStatus {
   return trainingResourceStatuses.includes(value as TrainingResourceStatus);
+}
+
+export function isTrainingResourceCategory(value: string): value is TrainingResourceCategory {
+  return trainingResourceCategories.includes(value as TrainingResourceCategory);
 }
 
 export function getTrainingResourceVideoEmbedUrl(videoUrl: string | null) {

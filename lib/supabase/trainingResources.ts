@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import {
+  isTrainingResourceCategory,
   isTrainingResourceProgramme,
   isTrainingResourceStatus,
   type TrainingResource
@@ -7,6 +8,7 @@ import {
 
 type TrainingResourceRow = {
   assessment_criteria: string | null;
+  category: string | null;
   common_mistakes: string | null;
   created_at: string;
   description: string | null;
@@ -30,6 +32,7 @@ export type TrainingResourcesResult = {
 export const trainingResourceColumns = [
   "id",
   "title",
+  "category",
   "programme",
   "level_label",
   "skill_type",
@@ -49,6 +52,7 @@ export async function getTrainingResources(canManage: boolean): Promise<Training
   let query = supabase
     .from("training_resources")
     .select(trainingResourceColumns)
+    .order("category", { ascending: true })
     .order("programme", { ascending: true })
     .order("level_label", { ascending: true })
     .order("sort_order", { ascending: true })
@@ -77,9 +81,12 @@ export async function getTrainingResources(canManage: boolean): Promise<Training
 export function mapTrainingResource(row: TrainingResourceRow): TrainingResource {
   const programme = isTrainingResourceProgramme(row.programme) ? row.programme : "Learn to Swim";
   const status = isTrainingResourceStatus(row.status) ? row.status : "draft";
+  const rawCategory = row.category ?? "";
+  const category = isTrainingResourceCategory(rawCategory) ? rawCategory : "Skill Videos";
 
   return {
     assessmentCriteria: row.assessment_criteria,
+    category,
     commonMistakes: row.common_mistakes,
     createdAt: row.created_at,
     description: row.description,

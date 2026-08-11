@@ -7,6 +7,7 @@ import {
   type StaffProfile
 } from "@/lib/staffRoles";
 import {
+  isTrainingResourceCategory,
   isTrainingResourceProgramme,
   isTrainingResourceStatus
 } from "@/lib/trainingResources";
@@ -21,6 +22,7 @@ export async function saveTrainingResourceAction(formData: FormData) {
   const values = getTrainingResourceFormValues(formData);
   const payload = {
     assessment_criteria: values.assessmentCriteria || null,
+    category: values.category,
     common_mistakes: values.commonMistakes || null,
     description: values.description || null,
     level_label: values.levelLabel || null,
@@ -109,8 +111,13 @@ async function getOrganisationId() {
 }
 
 function getTrainingResourceFormValues(formData: FormData) {
+  const category = getRequiredText(formData, "category");
   const programme = getRequiredText(formData, "programme");
   const status = getRequiredText(formData, "status");
+
+  if (!isTrainingResourceCategory(category)) {
+    throw new Error("Choose a valid category.");
+  }
 
   if (!isTrainingResourceProgramme(programme)) {
     throw new Error("Choose a valid programme.");
@@ -122,6 +129,7 @@ function getTrainingResourceFormValues(formData: FormData) {
 
   return {
     assessmentCriteria: getOptionalText(formData, "assessmentCriteria"),
+    category,
     commonMistakes: getOptionalText(formData, "commonMistakes"),
     description: getOptionalText(formData, "description"),
     levelLabel: getOptionalText(formData, "levelLabel"),

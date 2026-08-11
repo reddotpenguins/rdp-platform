@@ -70,6 +70,7 @@ create table if not exists public.training_resources (
   id uuid primary key default gen_random_uuid(),
   organisation_id uuid not null references public.organisations(id) on delete cascade,
   title text not null,
+  category text not null default 'Skill Videos',
   programme text not null check (programme in ('Learn to Swim', 'Race Team', 'Baby Class', 'Social Swim Club')),
   level_label text,
   skill_type text,
@@ -86,11 +87,28 @@ create table if not exists public.training_resources (
   updated_at timestamptz not null default now()
 );
 
+alter table public.training_resources
+  add column if not exists category text not null default 'Skill Videos';
+
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'training_resources_category_check'
+  ) then
+    alter table public.training_resources
+      add constraint training_resources_category_check
+      check (category in ('Skill Videos', 'Lesson Plans', 'Assessment Criteria', 'Coach Onboarding', 'Safety & SOP', 'Programme Guides'));
+  end if;
+end;
+$$;
+
 create index if not exists training_resources_org_status_idx
-  on public.training_resources (organisation_id, status, programme, level_label, sort_order);
+  on public.training_resources (organisation_id, status, category, programme, level_label, sort_order);
 
 create index if not exists training_resources_title_idx
-  on public.training_resources using gin (to_tsvector('english', coalesce(title, '') || ' ' || coalesce(description, '')));
+  on public.training_resources using gin (to_tsvector('english', coalesce(title, '') || ' ' || coalesce(category, '') || ' ' || coalesce(description, '')));
 
 alter table public.training_resources enable row level security;
 

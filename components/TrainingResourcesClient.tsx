@@ -27,6 +27,7 @@ import type { StaffProfile } from "@/lib/staffRoles";
 import {
   getTrainingResourceVideoEmbedUrl,
   splitTrainingResourceText,
+  trainingResourceCategories,
   trainingResourceProgrammes,
   trainingResourceStatuses,
   type TrainingResource
@@ -44,6 +45,7 @@ type TrainingResourcesClientProps = {
 };
 
 type ResourceFilters = {
+  category: string;
   level: string;
   programme: string;
   query: string;
@@ -51,6 +53,7 @@ type ResourceFilters = {
 };
 
 const emptyFilters: ResourceFilters = {
+  category: "All",
   level: "All",
   programme: "All",
   query: "",
@@ -73,7 +76,7 @@ export function TrainingResourcesClient({
   );
   const selectedResource = useMemo(
     () =>
-      resources.find((resource) => resource.id === selectedResourceId) ??
+      visibleResources.find((resource) => resource.id === selectedResourceId) ??
       visibleResources[0] ??
       resources[0] ??
       null,
@@ -102,7 +105,14 @@ export function TrainingResourcesClient({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <HeaderLink href={canManage ? "/admin" : "/dashboard"} icon={ArrowLeft} label={canManage ? "Admin home" : "Dashboard"} />
+          {canManage ? (
+            <>
+              <HeaderLink href="/training" icon={GraduationCap} label="Training dept" />
+              <HeaderLink href="/admin" icon={ArrowLeft} label="Admin home" />
+            </>
+          ) : (
+            <HeaderLink href="/dashboard" icon={ArrowLeft} label="Dashboard" />
+          )}
           <SignOutButton className="flex-1 sm:flex-none" />
         </div>
       </header>
@@ -113,11 +123,11 @@ export function TrainingResourcesClient({
       <section className="grid gap-3 md:grid-cols-3">
         <MetricCard icon={Library} label="Resources" value={resources.length} />
         <MetricCard icon={Video} label="Published" value={publishedCount} />
-        <MetricCard icon={GraduationCap} label="Programmes" value={trainingResourceProgrammes.length} />
+        <MetricCard icon={GraduationCap} label="Categories" value={trainingResourceCategories.length} />
       </section>
 
       <section className="rounded-lg border border-line bg-paper p-3 shadow-panel sm:p-4">
-        <div className="grid gap-3 lg:grid-cols-[minmax(240px,1.2fr)_repeat(3,minmax(150px,0.8fr))]">
+        <div className="grid gap-3 lg:grid-cols-[minmax(220px,1.2fr)_repeat(4,minmax(140px,0.8fr))]">
           <label className="block">
             <span className="mb-1 block text-sm font-medium text-slate-600">Search</span>
             <span className="flex h-10 items-center gap-2 rounded-md border border-line bg-field px-3">
@@ -130,6 +140,12 @@ export function TrainingResourcesClient({
               />
             </span>
           </label>
+          <SelectField
+            label="Category"
+            onChange={(category) => setFilters((current) => ({ ...current, category }))}
+            options={["All", ...trainingResourceCategories]}
+            value={filters.category}
+          />
           <SelectField
             label="Programme"
             onChange={(programme) => setFilters((current) => ({ ...current, programme }))}
@@ -182,33 +198,48 @@ function ResourceList({
   resources: TrainingResource[];
   selectedResourceId: string;
 }) {
+  const groupedResources = trainingResourceCategories
+    .map((category) => ({
+      category,
+      resources: resources.filter((resource) => resource.category === category)
+    }))
+    .filter((group) => group.resources.length > 0);
+
   return (
     <section className="rounded-lg border border-line bg-paper shadow-panel">
       <PanelHeader icon={BookOpen} title="Resource Library" subtitle={`${resources.length} shown`} />
       <div className="max-h-[720px] overflow-y-auto p-3">
         {resources.length > 0 ? (
-          <div className="grid gap-2">
-            {resources.map((resource) => (
-              <button
-                className={clsx(
-                  "rounded-md border p-3 text-left transition hover:border-teal hover:bg-teal/5",
-                  selectedResourceId === resource.id ? "border-teal bg-teal/10" : "border-line bg-field"
-                )}
-                key={resource.id}
-                onClick={() => onSelect(resource.id)}
-                type="button"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <span className="min-w-0">
-                    <span className="block break-words text-sm font-semibold text-ink">{resource.title}</span>
-                    <span className="mt-1 block text-xs text-slate-500">
-                      {resource.programme}{resource.levelLabel ? ` · ${resource.levelLabel}` : ""}
-                    </span>
-                  </span>
-                  <StatusPill status={resource.status} />
+          <div className="grid gap-4">
+            {groupedResources.map((group) => (
+              <section className="grid gap-2" key={group.category}>
+                <div className="flex items-center justify-between gap-2 px-1">
+                  <h3 className="text-xs font-semibold uppercase text-slate-500">{group.category}</h3>
+                  <span className="rounded-full bg-field px-2 py-1 text-xs font-semibold text-slate-500">{group.resources.length}</span>
                 </div>
-                {resource.skillType ? <span className="mt-2 inline-flex rounded-full bg-paper px-2 py-1 text-xs font-semibold text-teal">{resource.skillType}</span> : null}
-              </button>
+                {group.resources.map((resource) => (
+                  <button
+                    className={clsx(
+                      "rounded-md border p-3 text-left transition hover:border-teal hover:bg-teal/5",
+                      selectedResourceId === resource.id ? "border-teal bg-teal/10" : "border-line bg-field"
+                    )}
+                    key={resource.id}
+                    onClick={() => onSelect(resource.id)}
+                    type="button"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="min-w-0">
+                        <span className="block break-words text-sm font-semibold text-ink">{resource.title}</span>
+                        <span className="mt-1 block text-xs text-slate-500">
+                          {resource.programme}{resource.levelLabel ? ` · ${resource.levelLabel}` : ""}
+                        </span>
+                      </span>
+                      <StatusPill status={resource.status} />
+                    </div>
+                    {resource.skillType ? <span className="mt-2 inline-flex rounded-full bg-paper px-2 py-1 text-xs font-semibold text-teal">{resource.skillType}</span> : null}
+                  </button>
+                ))}
+              </section>
             ))}
           </div>
         ) : (
@@ -238,10 +269,10 @@ function ResourceDetail({ resource }: { resource: TrainingResource | null }) {
       <div className="border-b border-line p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-sm font-semibold uppercase text-teal">{resource.programme}</p>
+            <p className="text-sm font-semibold uppercase text-teal">{resource.category}</p>
             <h2 className="mt-1 break-words text-2xl font-semibold text-ink">{resource.title}</h2>
             <p className="mt-2 text-sm text-slate-500">
-              {[resource.levelLabel, resource.skillType].filter(Boolean).join(" · ") || "General skill"}
+              {[resource.programme, resource.levelLabel, resource.skillType].filter(Boolean).join(" · ") || "General skill"}
             </p>
           </div>
           <StatusPill status={resource.status} />
@@ -338,6 +369,12 @@ function ResourceEditor({
         <input name="resourceId" type="hidden" value={resource?.id ?? ""} />
         <div className="grid gap-3 lg:grid-cols-2">
           <TextField defaultValue={resource?.title ?? ""} label="Skill name" name="title" required />
+          <SelectField
+            label="Category"
+            name="category"
+            options={[...trainingResourceCategories]}
+            value={resource?.category ?? "Skill Videos"}
+          />
           <SelectField
             label="Programme"
             name="programme"
@@ -569,6 +606,10 @@ function TextAreaField({
 function resourceMatchesFilters(resource: TrainingResource, filters: ResourceFilters) {
   const query = filters.query.trim().toLowerCase();
 
+  if (filters.category !== "All" && resource.category !== filters.category) {
+    return false;
+  }
+
   if (filters.programme !== "All" && resource.programme !== filters.programme) {
     return false;
   }
@@ -587,6 +628,7 @@ function resourceMatchesFilters(resource: TrainingResource, filters: ResourceFil
 
   return [
     resource.title,
+    resource.category,
     resource.programme,
     resource.levelLabel,
     resource.skillType,

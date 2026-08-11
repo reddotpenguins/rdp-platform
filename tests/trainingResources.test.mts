@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   getTrainingResourceVideoEmbedUrl,
+  isTrainingResourceCategory,
   splitTrainingResourceText
 } from "../lib/trainingResources.ts";
 
@@ -31,5 +32,10 @@ describe("training resource helpers", () => {
       "Kick small",
       "Streamline"
     ]);
+  });
+
+  it("validates supported training resource categories", () => {
+    assert.equal(isTrainingResourceCategory("Skill Videos"), true);
+    assert.equal(isTrainingResourceCategory("Random Folder"), false);
   });
 });
