@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   BarChart3,
+  BookOpen,
   CalendarCheck,
   ChevronDown,
   ClipboardList,
@@ -50,6 +51,7 @@ type DashboardClientProps = {
   canManageStaff?: boolean;
   canManageStudentLifecycle?: boolean;
   canViewStudentLifecycle?: boolean;
+  canViewTrainingResources?: boolean;
   centreFilterAccess: CentreFilterAccess;
   view?: "coach" | "quarter";
 };
@@ -62,6 +64,7 @@ export function DashboardClient({
   canManageStaff = false,
   canManageStudentLifecycle = false,
   canViewStudentLifecycle = false,
+  canViewTrainingResources = false,
   centreFilterAccess,
   view = "coach"
 }: DashboardClientProps) {
@@ -129,10 +132,14 @@ export function DashboardClient({
               canManageStudentLifecycle={canManageStudentLifecycle}
               canUpload={canUpload}
               canViewStudentLifecycle={canViewStudentLifecycle}
+              canViewTrainingResources={canViewTrainingResources}
             />
           ) : null}
           {canAccessScheduling ? (
             <HeaderLink href="/schedule" icon={CalendarCheck} label="Schedule" />
+          ) : null}
+          {canViewTrainingResources ? (
+            <HeaderLink href="/training/resources" icon={BookOpen} label="Training" />
           ) : null}
           <button
             type="button"
@@ -189,7 +196,8 @@ function AdminToolsMenu({
   canManageStaff,
   canManageStudentLifecycle,
   canUpload,
-  canViewStudentLifecycle
+  canViewStudentLifecycle,
+  canViewTrainingResources
 }: {
   canAccessScheduling: boolean;
   canManageEnquiries: boolean;
@@ -197,6 +205,7 @@ function AdminToolsMenu({
   canManageStudentLifecycle: boolean;
   canUpload: boolean;
   canViewStudentLifecycle: boolean;
+  canViewTrainingResources: boolean;
 }) {
   return (
     <details className="group relative flex-1 sm:flex-none">
@@ -228,6 +237,7 @@ function AdminToolsMenu({
         </AdminToolGroup>
         <AdminToolGroup label="Operations">
           <AdminToolLink href="/claims" icon={Receipt} label="Claims" />
+          {canViewTrainingResources ? <AdminToolLink href="/training/resources" icon={BookOpen} label="Training resources" /> : null}
           {canAccessScheduling ? <AdminToolLink href="/schedule" icon={CalendarCheck} label="Schedule" /> : null}
           {canManageStaff ? <AdminToolLink href="/rba" icon={ShieldCheck} label="RBA" /> : null}
         </AdminToolGroup>

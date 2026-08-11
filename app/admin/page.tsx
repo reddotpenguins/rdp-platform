@@ -3,6 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import {
   BarChart3,
+  BookOpen,
   CalendarCheck,
   ClipboardList,
   FileUp,
@@ -115,6 +116,12 @@ export default async function AdminPage() {
           icon={GraduationCap}
           title="Training department"
           description="Review coach readiness, hierarchy, feedback, and trainee attachment hours."
+        />
+        <AdminCard
+          href="/training/resources"
+          icon={BookOpen}
+          title="Training resources"
+          description="Manage coach-facing videos, skill notes, teaching cues, and assessment criteria."
         />
         <AdminCard
           href="/rba"

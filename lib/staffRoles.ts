@@ -20,6 +20,8 @@ export const staffPermissions = [
   "claims.settings.manage",
   "training.view",
   "training.manage",
+  "training.resources.view",
+  "training.resources.manage",
   "schedule.viewOwn",
   "schedule.clock",
   "schedule.leaveRequest",
@@ -68,9 +70,10 @@ const rolePermissionMap: Record<StaffRole, readonly StaffPermission[]> = {
   admin: staffPermissions,
   lead_coach: [
     "assessments.viewOwn",
-    "assessments.viewTeam"
+    "assessments.viewTeam",
+    "training.resources.view"
   ],
-  coach: ["assessments.viewOwn"]
+  coach: ["assessments.viewOwn", "training.resources.view"]
 };
 
 export function hasRolePermission(role: StaffRole, permission: StaffPermission) {
@@ -125,6 +128,14 @@ export function canAccessClaims(profile: StaffProfile) {
 
 export function canViewTrainingDepartment(profile: StaffProfile) {
   return hasStaffPermission(profile, "training.view");
+}
+
+export function canViewTrainingResources(profile: StaffProfile) {
+  return hasStaffPermission(profile, "training.resources.view");
+}
+
+export function canManageTrainingResources(profile: StaffProfile) {
+  return hasStaffPermission(profile, "training.resources.manage");
 }
 
 export function canAccessScheduling(profile: StaffProfile) {
