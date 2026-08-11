@@ -139,7 +139,7 @@ export function DashboardClient({
             <HeaderLink href="/schedule" icon={CalendarCheck} label="Schedule" />
           ) : null}
           {canViewTrainingResources ? (
-            <HeaderLink href="/training/resources" icon={BookOpen} label="Training" />
+            <HeaderLink href="/training?tab=resources" icon={BookOpen} label="Training" />
           ) : null}
           <button
             type="button"
@@ -237,7 +237,7 @@ function AdminToolsMenu({
         </AdminToolGroup>
         <AdminToolGroup label="Operations">
           <AdminToolLink href="/claims" icon={Receipt} label="Claims" />
-          {canViewTrainingResources ? <AdminToolLink href="/training/resources" icon={BookOpen} label="Training resources" /> : null}
+          {canViewTrainingResources ? <AdminToolLink href="/training?tab=resources" icon={BookOpen} label="Training resources" /> : null}
           {canAccessScheduling ? <AdminToolLink href="/schedule" icon={CalendarCheck} label="Schedule" /> : null}
           {canManageStaff ? <AdminToolLink href="/rba" icon={ShieldCheck} label="RBA" /> : null}
         </AdminToolGroup>

@@ -118,7 +118,7 @@ export default async function AdminPage() {
           description="Review coach readiness, hierarchy, feedback, and trainee attachment hours."
         />
         <AdminCard
-          href="/training/resources"
+          href="/training?tab=resources"
           icon={BookOpen}
           title="Training resources"
           description="Manage coach-facing videos, skill notes, teaching cues, and assessment criteria."

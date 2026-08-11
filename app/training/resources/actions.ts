@@ -49,6 +49,7 @@ export async function saveTrainingResourceAction(formData: FormData) {
       redirectWithTrainingResourceError(error.message);
     }
 
+    revalidatePath("/training");
     revalidatePath("/training/resources");
     redirectWithTrainingResourceMessage("Training resource updated.");
   }
@@ -62,6 +63,7 @@ export async function saveTrainingResourceAction(formData: FormData) {
     redirectWithTrainingResourceError(error.message);
   }
 
+  revalidatePath("/training");
   revalidatePath("/training/resources");
   redirectWithTrainingResourceMessage("Training resource added.");
 }
@@ -81,6 +83,7 @@ export async function deleteTrainingResourceAction(formData: FormData) {
     redirectWithTrainingResourceError(error.message);
   }
 
+  revalidatePath("/training");
   revalidatePath("/training/resources");
   redirectWithTrainingResourceMessage("Training resource deleted.");
 }
@@ -164,11 +167,11 @@ function getPositiveInteger(formData: FormData, key: string) {
 }
 
 function redirectWithTrainingResourceMessage(message: string): never {
-  redirect(`/training/resources?message=${encodeURIComponent(message)}`);
+  redirect(`/training?tab=resources&message=${encodeURIComponent(message)}`);
 }
 
 function redirectWithTrainingResourceError(error: string): never {
-  redirect(`/training/resources?error=${encodeURIComponent(normalizeSupabaseError(error))}`);
+  redirect(`/training?tab=resources&error=${encodeURIComponent(normalizeSupabaseError(error))}`);
 }
 
 function normalizeSupabaseError(error: string) {

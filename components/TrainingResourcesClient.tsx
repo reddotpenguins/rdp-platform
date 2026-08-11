@@ -44,6 +44,8 @@ type TrainingResourcesClientProps = {
   staffProfile: StaffProfile;
 };
 
+type TrainingResourcesSectionProps = Omit<TrainingResourcesClientProps, "staffProfile">;
+
 type ResourceFilters = {
   category: string;
   level: string;
@@ -67,30 +69,6 @@ export function TrainingResourcesClient({
   resources,
   staffProfile
 }: TrainingResourcesClientProps) {
-  const [filters, setFilters] = useState<ResourceFilters>(emptyFilters);
-  const [formMode, setFormMode] = useState<"selected" | "new">("selected");
-  const [selectedResourceId, setSelectedResourceId] = useState(resources[0]?.id ?? "");
-  const visibleResources = useMemo(
-    () => resources.filter((resource) => resourceMatchesFilters(resource, filters)),
-    [filters, resources]
-  );
-  const selectedResource = useMemo(
-    () =>
-      visibleResources.find((resource) => resource.id === selectedResourceId) ??
-      visibleResources[0] ??
-      resources[0] ??
-      null,
-    [resources, selectedResourceId, visibleResources]
-  );
-  const levels = useMemo(() => getUniqueOptions(resources.map((resource) => resource.levelLabel)), [resources]);
-  const skillTypes = useMemo(() => getUniqueOptions(resources.map((resource) => resource.skillType)), [resources]);
-  const publishedCount = resources.filter((resource) => resource.status === "published").length;
-
-  function selectResource(resourceId: string) {
-    setSelectedResourceId(resourceId);
-    setFormMode("selected");
-  }
-
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-[1500px] flex-col gap-5 px-4 py-5 sm:px-6 lg:px-8">
       <header className="flex min-w-0 flex-col gap-4 rounded-lg border border-line bg-paper p-4 shadow-panel lg:flex-row lg:items-center lg:justify-between">
@@ -117,6 +95,48 @@ export function TrainingResourcesClient({
         </div>
       </header>
 
+      <TrainingResourcesSection
+        canManage={canManage}
+        dataError={dataError}
+        flash={flash}
+        resources={resources}
+      />
+    </main>
+  );
+}
+
+export function TrainingResourcesSection({
+  canManage,
+  dataError,
+  flash,
+  resources
+}: TrainingResourcesSectionProps) {
+  const [filters, setFilters] = useState<ResourceFilters>(emptyFilters);
+  const [formMode, setFormMode] = useState<"selected" | "new">("selected");
+  const [selectedResourceId, setSelectedResourceId] = useState(resources[0]?.id ?? "");
+  const visibleResources = useMemo(
+    () => resources.filter((resource) => resourceMatchesFilters(resource, filters)),
+    [filters, resources]
+  );
+  const selectedResource = useMemo(
+    () =>
+      visibleResources.find((resource) => resource.id === selectedResourceId) ??
+      visibleResources[0] ??
+      resources[0] ??
+      null,
+    [resources, selectedResourceId, visibleResources]
+  );
+  const levels = useMemo(() => getUniqueOptions(resources.map((resource) => resource.levelLabel)), [resources]);
+  const skillTypes = useMemo(() => getUniqueOptions(resources.map((resource) => resource.skillType)), [resources]);
+  const publishedCount = resources.filter((resource) => resource.status === "published").length;
+
+  function selectResource(resourceId: string) {
+    setSelectedResourceId(resourceId);
+    setFormMode("selected");
+  }
+
+  return (
+    <>
       {dataError ? <StatusMessage message={dataError} tone="error" /> : null}
       {flash ? <StatusMessage message={flash.text} tone={flash.tone} /> : null}
 
@@ -185,7 +205,7 @@ export function TrainingResourcesClient({
           ) : null}
         </div>
       </section>
-    </main>
+    </>
   );
 }
 

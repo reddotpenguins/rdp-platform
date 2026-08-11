@@ -19,6 +19,8 @@ import {
   type LucideIcon
 } from "lucide-react";
 import { SignOutButton } from "@/components/SignOutButton";
+import { TrainingResourcesSection } from "@/components/TrainingResourcesClient";
+import type { StaffProfile } from "@/lib/staffRoles";
 import {
   attachmentRequiredHours,
   formatTraineeStage,
@@ -37,8 +39,23 @@ import {
   type TrainingCoachProfile,
   type TrainingTrainee
 } from "@/lib/trainingDashboard";
+import type { TrainingResource } from "@/lib/trainingResources";
 
 type SignalFilter = "all" | CoachSignal | "attachment" | "shadowing";
+type TrainingTab = "overview" | "coach-development" | "trainees" | "resources";
+
+type TrainingDashboardClientProps = {
+  canManageResources: boolean;
+  canViewDepartment: boolean;
+  dataError?: string;
+  flash: {
+    text: string;
+    tone: "error" | "success";
+  } | null;
+  initialTab: TrainingTab;
+  resources: TrainingResource[];
+  staffProfile: StaffProfile;
+};
 
 const storageKey = "rdp-platform-training.v1";
 const roleOrder: Record<TrainingCoachProfile["role"], number> = {
@@ -51,8 +68,26 @@ const roleOrder: Record<TrainingCoachProfile["role"], number> = {
 const sessionOptions = ["Saturday AM", "Saturday PM", "Sunday AM", "Sunday PM", "Weekday PM"];
 const attendanceStatuses: AttendanceStatus[] = ["attended", "makeup_required", "absent"];
 const traineeStages: TraineeStage[] = ["attachment", "second_interview", "shadowing", "cleared"];
+const departmentTabs: Array<{ label: string; value: TrainingTab }> = [
+  { label: "Overview", value: "overview" },
+  { label: "Coach Development", value: "coach-development" },
+  { label: "Trainees", value: "trainees" },
+  { label: "Resources", value: "resources" }
+];
 
-export function TrainingDashboardClient() {
+export function TrainingDashboardClient({
+  canManageResources,
+  canViewDepartment,
+  dataError,
+  flash,
+  initialTab,
+  resources,
+  staffProfile
+}: TrainingDashboardClientProps) {
+  const allowedTabs = canViewDepartment ? departmentTabs : departmentTabs.filter((tab) => tab.value === "resources");
+  const [activeTab, setActiveTab] = useState<TrainingTab>(
+    allowedTabs.some((tab) => tab.value === initialTab) ? initialTab : allowedTabs[0]?.value ?? "resources"
+  );
   const [ready, setReady] = useState(false);
   const [trainees, setTrainees] = useState<TrainingTrainee[]>(initialTrainingTrainees);
   const [centreFilter, setCentreFilter] = useState("All");
@@ -70,6 +105,11 @@ export function TrainingDashboardClient() {
   }));
 
   useEffect(() => {
+    if (!canViewDepartment) {
+      setReady(true);
+      return;
+    }
+
     const stored = window.localStorage.getItem(storageKey);
 
     if (stored) {
@@ -85,13 +125,13 @@ export function TrainingDashboardClient() {
     }
 
     setReady(true);
-  }, []);
+  }, [canViewDepartment]);
 
   useEffect(() => {
-    if (ready) {
+    if (ready && canViewDepartment) {
       window.localStorage.setItem(storageKey, JSON.stringify({ trainees }));
     }
-  }, [ready, trainees]);
+  }, [canViewDepartment, ready, trainees]);
 
   const centreOptions = useMemo(() => getCentreOptions(trainees), [trainees]);
   const visibleCoaches = useMemo(
@@ -188,83 +228,153 @@ export function TrainingDashboardClient() {
         <div className="min-w-0">
           <p className="text-sm font-semibold uppercase text-teal">Red Dot Penguins</p>
           <h1 className="mt-1 break-words text-2xl font-semibold text-ink sm:text-3xl">
-            Training Department
+            Training
           </h1>
+          <p className="mt-2 text-sm text-slate-500">
+            {staffProfile.fullName} · {formatStaffRole(staffProfile.role)}
+          </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2 sm:w-auto">
-          <HeaderLink href="/admin" icon={ArrowLeft} label="Admin home" />
-          <HeaderLink href="/training/resources" icon={BookOpenCheck} label="Resources" />
+          <HeaderLink href={canViewDepartment ? "/admin" : "/dashboard"} icon={ArrowLeft} label={canViewDepartment ? "Admin home" : "Dashboard"} />
           <SignOutButton className="flex-1 sm:flex-none" />
         </div>
       </header>
 
-      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-        <MetricCard icon={ShieldAlert} label="Needs attention" value={totals.attention} />
-        <MetricCard icon={Award} label="Celebrate" value={totals.celebration} />
-        <MetricCard icon={UserCheck} label="Host ready" value={totals.hostReady} />
-        <MetricCard icon={GraduationCap} label="Trainees" value={totals.trainees} />
-        <MetricCard icon={ClipboardCheck} label="Interview ready" value={totals.interviewReady} />
-      </section>
+      <nav className="flex flex-wrap gap-2 rounded-lg border border-line bg-paper p-2 shadow-panel">
+        {allowedTabs.map((tab) => (
+          <button
+            className={clsx(
+              "inline-flex h-10 flex-1 items-center justify-center rounded-md px-3 text-sm font-semibold transition sm:flex-none",
+              activeTab === tab.value ? "bg-teal text-white" : "text-slate-600 hover:bg-teal/10 hover:text-teal"
+            )}
+            key={tab.value}
+            onClick={() => setActiveTab(tab.value)}
+            type="button"
+          >
+            {tab.label}
+          </button>
+        ))}
+      </nav>
 
       {message ? <StatusMessage tone={message.tone} message={message.text} /> : null}
 
-      <section className="rounded-lg border border-line bg-paper p-4 shadow-panel">
-        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_220px_220px]">
-          <label className="block">
-            <span className="mb-1 block text-sm font-medium text-slate-600">Search coaches</span>
-            <span className="relative block">
-              <Search aria-hidden="true" className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
-              <input
-                className="h-10 w-full rounded-md border border-line bg-field pl-9 pr-3 text-sm outline-none transition focus:border-teal focus:ring-2 focus:ring-teal/20"
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Coach, centre, programme"
-                value={search}
-              />
-            </span>
-          </label>
-          <SelectField
-            label="Centre"
-            onChange={setCentreFilter}
-            options={centreOptions}
-            value={centreFilter}
-          />
-          <SelectField
-            label="View"
-            onChange={(value) => setSignalFilter(value as SignalFilter)}
-            options={[
-              { label: "All coaches", value: "all" },
-              { label: "Needs attention", value: "attention" },
-              { label: "Celebrate", value: "celebrate" },
-              { label: "Attachment hosts", value: "attachment" },
-              { label: "Shadowing hosts", value: "shadowing" }
-            ]}
-            value={signalFilter}
-          />
-        </div>
-      </section>
+      {canViewDepartment && activeTab === "overview" ? (
+        <>
+          <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+            <MetricCard icon={ShieldAlert} label="Needs attention" value={totals.attention} />
+            <MetricCard icon={Award} label="Celebrate" value={totals.celebration} />
+            <MetricCard icon={UserCheck} label="Host ready" value={totals.hostReady} />
+            <MetricCard icon={GraduationCap} label="Trainees" value={totals.trainees} />
+            <MetricCard icon={ClipboardCheck} label="Interview ready" value={totals.interviewReady} />
+          </section>
+          <section className="grid gap-5 xl:grid-cols-[420px_minmax(0,1fr)]">
+            <HierarchyPanel coaches={visibleCoaches.slice(0, 6)} />
+            <CoachReadinessPanel coaches={visibleCoaches.slice(0, 4)} />
+          </section>
+        </>
+      ) : null}
 
-      <section className="grid gap-5 xl:grid-cols-[420px_minmax(0,1fr)]">
-        <HierarchyPanel coaches={visibleCoaches} />
-        <CoachReadinessPanel coaches={visibleCoaches} />
-      </section>
+      {canViewDepartment && activeTab === "coach-development" ? (
+        <>
+          <TrainingFilters
+            centreFilter={centreFilter}
+            centreOptions={centreOptions}
+            search={search}
+            setCentreFilter={setCentreFilter}
+            setSearch={setSearch}
+            setSignalFilter={setSignalFilter}
+            signalFilter={signalFilter}
+          />
+          <section className="grid gap-5 xl:grid-cols-[420px_minmax(0,1fr)]">
+            <HierarchyPanel coaches={visibleCoaches} />
+            <CoachReadinessPanel coaches={visibleCoaches} />
+          </section>
+        </>
+      ) : null}
 
-      <section className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
-        <TraineeTrackerPanel
-          coaches={trainingCoaches}
-          onUpdateTrainee={updateTrainee}
-          trainees={trainees}
+      {canViewDepartment && activeTab === "trainees" ? (
+        <section className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
+          <TraineeTrackerPanel
+            coaches={trainingCoaches}
+            onUpdateTrainee={updateTrainee}
+            trainees={trainees}
+          />
+          <AttendancePanel
+            attendanceForm={attendanceForm}
+            coaches={trainingCoaches}
+            onFormChange={(patch) => setAttendanceForm((current) => ({ ...current, ...patch }))}
+            onSubmit={addAttendance}
+            recentAttendance={recentAttendance}
+            trainees={trainees}
+          />
+        </section>
+      ) : null}
+
+      {activeTab === "resources" ? (
+        <TrainingResourcesSection
+          canManage={canManageResources}
+          dataError={dataError}
+          flash={flash}
+          resources={resources}
         />
-        <AttendancePanel
-          attendanceForm={attendanceForm}
-          coaches={trainingCoaches}
-          onFormChange={(patch) => setAttendanceForm((current) => ({ ...current, ...patch }))}
-          onSubmit={addAttendance}
-          recentAttendance={recentAttendance}
-          trainees={trainees}
-        />
-      </section>
+      ) : null}
     </main>
+  );
+}
+
+function TrainingFilters({
+  centreFilter,
+  centreOptions,
+  search,
+  setCentreFilter,
+  setSearch,
+  setSignalFilter,
+  signalFilter
+}: {
+  centreFilter: string;
+  centreOptions: string[];
+  search: string;
+  setCentreFilter: (value: string) => void;
+  setSearch: (value: string) => void;
+  setSignalFilter: (value: SignalFilter) => void;
+  signalFilter: SignalFilter;
+}) {
+  return (
+    <section className="rounded-lg border border-line bg-paper p-4 shadow-panel">
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_220px_220px]">
+        <label className="block">
+          <span className="mb-1 block text-sm font-medium text-slate-600">Search coaches</span>
+          <span className="relative block">
+            <Search aria-hidden="true" className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
+            <input
+              className="h-10 w-full rounded-md border border-line bg-field pl-9 pr-3 text-sm outline-none transition focus:border-teal focus:ring-2 focus:ring-teal/20"
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Coach, centre, programme"
+              value={search}
+            />
+          </span>
+        </label>
+        <SelectField
+          label="Centre"
+          onChange={setCentreFilter}
+          options={centreOptions}
+          value={centreFilter}
+        />
+        <SelectField
+          label="View"
+          onChange={(value) => setSignalFilter(value as SignalFilter)}
+          options={[
+            { label: "All coaches", value: "all" },
+            { label: "Needs attention", value: "attention" },
+            { label: "Celebrate", value: "celebrate" },
+            { label: "Attachment hosts", value: "attachment" },
+            { label: "Shadowing hosts", value: "shadowing" }
+          ]}
+          value={signalFilter}
+        />
+      </div>
+    </section>
   );
 }
 
@@ -702,6 +812,14 @@ function formatAttendanceStatus(status: AttendanceStatus) {
     case "absent":
       return "Absent";
   }
+}
+
+function formatStaffRole(role: StaffProfile["role"]) {
+  if (role === "lead_coach") {
+    return "Lead coach";
+  }
+
+  return role.charAt(0).toUpperCase() + role.slice(1);
 }
 
 function createClientId() {

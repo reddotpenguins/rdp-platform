@@ -1,11 +1,4 @@
 import { redirect } from "next/navigation";
-import { TrainingResourcesClient } from "@/components/TrainingResourcesClient";
-import {
-  canManageTrainingResources,
-  canViewTrainingResources
-} from "@/lib/staffRoles";
-import { getTrainingResources } from "@/lib/supabase/trainingResources";
-import { requireActiveStaffSession } from "@/lib/supabase/staffProfile";
 
 export const dynamic = "force-dynamic";
 
@@ -16,29 +9,16 @@ type TrainingResourcesPageProps = {
   };
 };
 
-export default async function TrainingResourcesPage({ searchParams }: TrainingResourcesPageProps) {
-  const { profile } = await requireActiveStaffSession();
+export default function TrainingResourcesPage({ searchParams }: TrainingResourcesPageProps) {
+  const params = new URLSearchParams({ tab: "resources" });
 
-  if (!canViewTrainingResources(profile)) {
-    redirect("/dashboard");
+  if (searchParams?.error) {
+    params.set("error", searchParams.error);
   }
 
-  const canManage = canManageTrainingResources(profile);
-  const result = await getTrainingResources(canManage);
+  if (searchParams?.message) {
+    params.set("message", searchParams.message);
+  }
 
-  return (
-    <TrainingResourcesClient
-      canManage={canManage}
-      dataError={result.error}
-      flash={
-        searchParams?.error
-          ? { text: searchParams.error, tone: "error" }
-          : searchParams?.message
-            ? { text: searchParams.message, tone: "success" }
-            : null
-      }
-      resources={result.resources}
-      staffProfile={profile}
-    />
-  );
+  redirect(`/training?${params.toString()}`);
 }
