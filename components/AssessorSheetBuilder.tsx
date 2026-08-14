@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, DragEvent, useEffect, useMemo, useState } from "react";
 import Papa from "papaparse";
 import { Download, FileSpreadsheet, Printer, RefreshCcw } from "lucide-react";
 import {
@@ -65,8 +65,7 @@ export function AssessorSheetBuilder() {
     }
   }, [selectedSession, sessionOptions]);
 
-  function updateFile(key: keyof UploadedFiles, event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0] ?? null;
+  function updateFile(key: keyof UploadedFiles, file: File | null) {
     setFiles((currentFiles) => ({ ...currentFiles, [key]: file }));
   }
 
@@ -159,21 +158,21 @@ export function AssessorSheetBuilder() {
           label="Assessment file"
           description="Use the RDP_LTS assessment or mapped upload-ready file for coach and level data."
           file={files.assessment}
-          onChange={(event) => updateFile("assessment", event)}
+          onFileChange={(file) => updateFile("assessment", file)}
         />
         <FilePicker
           key={`regular-${resetNonce}`}
           label="Regular student list"
           description="Use Custom_Student_List here. This is the file with Event Name class timings."
           file={files.regular}
-          onChange={(event) => updateFile("regular", event)}
+          onFileChange={(file) => updateFile("regular", file)}
         />
         <FilePicker
           key={`make-up-${resetNonce}`}
           label="Special enrolments"
           description="Adds make-up students for the printed session sheet."
           file={files.makeUp}
-          onChange={(event) => updateFile("makeUp", event)}
+          onFileChange={(file) => updateFile("makeUp", file)}
         />
       </div>
 
@@ -300,28 +299,65 @@ function FilePicker({
   description,
   file,
   label,
-  onChange
+  onFileChange
 }: {
   description: string;
   file: File | null;
   label: string;
-  onChange: (event: ChangeEvent<HTMLInputElement>) => void;
+  onFileChange: (file: File | null) => void;
 }) {
+  const [isDragging, setIsDragging] = useState(false);
+
+  function onInputChange(event: ChangeEvent<HTMLInputElement>) {
+    onFileChange(event.target.files?.[0] ?? null);
+  }
+
+  function onDragOver(event: DragEvent<HTMLLabelElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+    setIsDragging(true);
+  }
+
+  function onDragLeave(event: DragEvent<HTMLLabelElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+    setIsDragging(false);
+  }
+
+  function onDrop(event: DragEvent<HTMLLabelElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+    setIsDragging(false);
+    onFileChange(event.dataTransfer.files?.[0] ?? null);
+  }
+
   return (
-    <label className="flex min-h-32 cursor-pointer flex-col justify-between rounded-lg border border-dashed border-slate-300 bg-field p-4 transition hover:border-teal hover:bg-teal/5">
+    <label
+      onDragOver={onDragOver}
+      onDragEnter={onDragOver}
+      onDragLeave={onDragLeave}
+      onDrop={onDrop}
+      className={`flex min-h-32 cursor-pointer flex-col justify-between rounded-lg border border-dashed p-4 transition ${
+        isDragging
+          ? "border-teal bg-teal/10"
+          : "border-slate-300 bg-field hover:border-teal hover:bg-teal/5"
+      }`}
+    >
       <span>
         <span className="block text-sm font-semibold text-ink">{label}</span>
         <span className="mt-1 block text-xs leading-5 text-slate-500">{description}</span>
       </span>
       <span className="mt-4 inline-flex items-center justify-between gap-3 rounded-md border border-line bg-paper px-3 py-2 text-sm text-slate-600">
-        <span className="truncate">{file?.name ?? "Choose CSV, XLS, or XLSX"}</span>
+        <span className="truncate">
+          {file?.name ?? "Drop file here or choose CSV, XLS, or XLSX"}
+        </span>
         <span className="shrink-0 font-semibold text-teal">Browse</span>
       </span>
       <input
         type="file"
         accept=".csv,.xls,.xlsx,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         className="sr-only"
-        onChange={onChange}
+        onChange={onInputChange}
       />
     </label>
   );

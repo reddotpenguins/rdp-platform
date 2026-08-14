@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ChangeEvent, useMemo, useState } from "react";
+import { ChangeEvent, DragEvent, useMemo, useState } from "react";
 import { CheckCircle2, Download, FileSpreadsheet, Upload } from "lucide-react";
 import { parseUploadFile } from "@/lib/parseFile";
 import {
@@ -21,6 +21,7 @@ type UploadedDataset = {
 
 export function FileUpload() {
   const [isParsing, setIsParsing] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dataset, setDataset] = useState<UploadedDataset | null>(null);
 
@@ -80,6 +81,31 @@ export function FileUpload() {
     void handleFile(event.target.files?.[0]);
   }
 
+  function onDragOver(event: DragEvent<HTMLLabelElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (!isParsing) {
+      setIsDragging(true);
+    }
+  }
+
+  function onDragLeave(event: DragEvent<HTMLLabelElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+    setIsDragging(false);
+  }
+
+  function onDrop(event: DragEvent<HTMLLabelElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+    setIsDragging(false);
+
+    if (!isParsing) {
+      void handleFile(event.dataTransfer.files?.[0]);
+    }
+  }
+
   return (
     <section className="grid gap-5 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
       <div className="rounded-lg border border-line bg-paper p-5 shadow-panel">
@@ -93,11 +119,22 @@ export function FileUpload() {
           </div>
         </div>
 
-        <label className="mt-5 flex min-h-48 cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-slate-300 bg-field px-4 py-8 text-center transition hover:border-teal hover:bg-teal/5">
+        <label
+          onDragOver={onDragOver}
+          onDragEnter={onDragOver}
+          onDragLeave={onDragLeave}
+          onDrop={onDrop}
+          className={`mt-5 flex min-h-48 cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed px-4 py-8 text-center transition ${
+            isDragging
+              ? "border-teal bg-teal/10"
+              : "border-slate-300 bg-field hover:border-teal hover:bg-teal/5"
+          }`}
+        >
           <Upload aria-hidden="true" className="size-8 text-teal" />
           <span className="mt-3 text-sm font-semibold text-ink">
-            {isParsing ? "Parsing file..." : "Choose assessment file"}
+            {isParsing ? "Parsing file..." : "Drop file here or choose assessment file"}
           </span>
+          <span className="mt-1 text-xs text-slate-500">CSV, XLS, or XLSX</span>
           <input
             type="file"
             accept=".csv,.xls,.xlsx,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"

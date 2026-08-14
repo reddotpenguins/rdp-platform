@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent, useState } from "react";
+import { ChangeEvent, DragEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import Papa from "papaparse";
 import { CalendarDays, CheckCircle2, Upload } from "lucide-react";
@@ -35,6 +35,7 @@ export function CurrentClassMappingUpload() {
   const router = useRouter();
   const [file, setFile] = useState<File | null>(null);
   const [isApplying, setIsApplying] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ApplyResult | null>(null);
 
@@ -130,9 +131,38 @@ export function CurrentClassMappingUpload() {
   }
 
   function onInputChange(event: ChangeEvent<HTMLInputElement>) {
-    setFile(event.target.files?.[0] ?? null);
+    setSelectedFile(event.target.files?.[0] ?? null);
+  }
+
+  function setSelectedFile(nextFile: File | null) {
+    setFile(nextFile);
     setError(null);
     setResult(null);
+  }
+
+  function onDragOver(event: DragEvent<HTMLLabelElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (!isApplying) {
+      setIsDragging(true);
+    }
+  }
+
+  function onDragLeave(event: DragEvent<HTMLLabelElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+    setIsDragging(false);
+  }
+
+  function onDrop(event: DragEvent<HTMLLabelElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+    setIsDragging(false);
+
+    if (!isApplying) {
+      setSelectedFile(event.dataTransfer.files?.[0] ?? null);
+    }
   }
 
   return (
@@ -159,10 +189,20 @@ export function CurrentClassMappingUpload() {
         </button>
       </div>
 
-      <label className="mt-5 flex min-h-32 cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-slate-300 bg-field px-4 py-6 text-center transition hover:border-teal hover:bg-teal/5">
+      <label
+        onDragOver={onDragOver}
+        onDragEnter={onDragOver}
+        onDragLeave={onDragLeave}
+        onDrop={onDrop}
+        className={`mt-5 flex min-h-32 cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed px-4 py-6 text-center transition ${
+          isDragging
+            ? "border-teal bg-teal/10"
+            : "border-slate-300 bg-field hover:border-teal hover:bg-teal/5"
+        }`}
+      >
         <Upload aria-hidden="true" className="size-7 text-teal" />
         <span className="mt-3 text-sm font-semibold text-ink">
-          {file ? file.name : "Choose current regular student list"}
+          {file ? file.name : "Drop file here or choose current regular student list"}
         </span>
         <span className="mt-1 text-xs text-slate-500">
           Expected columns: Student Name and Event Name
