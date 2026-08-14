@@ -6,12 +6,12 @@ import {
   getSessionPeriod,
   normalizeAssessmentQuarter,
   normalizeAssessmentResult
-} from "@/lib/assessmentLogic";
+} from "./assessmentLogic.ts";
 import type {
   AssessmentQuarter,
   QuarterAssessmentDetails,
   StudentAssessmentRecord
-} from "@/types/assessment";
+} from "../types/assessment.ts";
 
 type RawAssessmentRow = Record<string, unknown>;
 
@@ -31,7 +31,7 @@ const aliases = {
   studentName: ["Student Name", "Name", "Student"],
   coachName: ["Current Coach", "Coach", "Coach Name"],
   centre: ["Centre", "Center", "Location", "Current Centre"],
-  level: ["Level", "Current Level"],
+  level: ["Current Level", "Q3 Assessed Level", "Q2 Current Level", "Q1 Current Level", "Level"],
   session: [
     "Session",
     "Session Time",
@@ -51,7 +51,7 @@ const aliases = {
 const quarterFieldNames = {
   coachName: ["Coach", "Coach Name"],
   centre: ["Centre", "Center", "Location"],
-  level: ["Current Level", "Level"],
+  level: ["Current Level", "Assessed Level", "Tested Level", "Level"],
   session: [
     "Session",
     "Session Time",
@@ -167,6 +167,12 @@ function textValue(value: unknown) {
   return String(value ?? "").replace(/\uFEFF/g, "").trim();
 }
 
+function isClassBandLevel(value: unknown) {
+  return /^(baby class|toddler|foundation|intermediate|mini squad|race team|squad|learn to swim|social swim club)(?:\s*\([^)]*\))?$/i.test(
+    textValue(value)
+  );
+}
+
 function normalizeSessionDayLabel(value: string) {
   return getSessionDay(value) || value;
 }
@@ -270,14 +276,7 @@ function buildQuarterDetail(
       quarterFieldNames.centre
     )
   );
-  const level = textValue(
-    pickQuarterField(
-      row,
-      quarter,
-      buildQuarterHeaders(quarter, quarterFieldNames.level),
-      quarterFieldNames.level
-    )
-  );
+  const level = getQuarterLevelValue(row, quarter);
   const quarterSessionDay = textValue(
     pickQuarterField(
       row,
@@ -330,6 +329,70 @@ function buildQuarterDetail(
       ) || undefined,
     result
   };
+}
+
+function getQuarterLevelValue(row: RawAssessmentRow, quarter: AssessmentQuarter) {
+  return getExactQuarterLevel(row, quarter) || getQuarterClassBandLevel(row, quarter);
+}
+
+function getExactQuarterLevel(row: RawAssessmentRow, quarter: AssessmentQuarter) {
+  const preferredFieldNames =
+    quarter === "Q3"
+      ? ["Assessed Level", "Current Level", "Tested Level"]
+      : ["Current Level", "Assessed Level", "Tested Level"];
+  const value = textValue(
+    pickQuarterField(
+      row,
+      quarter,
+      buildQuarterHeaders(quarter, preferredFieldNames),
+      preferredFieldNames
+    )
+  );
+
+  return value && !isClassBandLevel(value) ? value : "";
+}
+
+function getQuarterClassBandLevel(row: RawAssessmentRow, quarter: AssessmentQuarter) {
+  return textValue(pickQuarterField(row, quarter, [`${quarter} Level`], ["Level"]));
+}
+
+function applyExactLevelFallbacks(
+  row: RawAssessmentRow,
+  quarterDetails: Partial<Record<AssessmentQuarter, QuarterAssessmentDetails>>
+) {
+  const quarters = Object.keys(quarterDetails).sort(
+    (first, second) =>
+      compareAssessmentQuarters(first as AssessmentQuarter, second as AssessmentQuarter)
+  ) as AssessmentQuarter[];
+
+  for (const quarter of quarters) {
+    const detail = quarterDetails[quarter];
+
+    if (!detail || (detail.level && !isClassBandLevel(detail.level))) {
+      continue;
+    }
+
+    const fallbackLevel = getExactQuarterLevel(row, quarter) || getPreviousExactLevel(row, quarter);
+
+    if (fallbackLevel) {
+      detail.level = fallbackLevel;
+    }
+  }
+}
+
+function getPreviousExactLevel(row: RawAssessmentRow, quarter: AssessmentQuarter) {
+  const currentQuarterNumber = Number(quarter.replace(/^Q/i, ""));
+
+  for (let quarterNumber = currentQuarterNumber - 1; quarterNumber >= 1; quarterNumber -= 1) {
+    const previousQuarter = `Q${quarterNumber}` as AssessmentQuarter;
+    const level = getExactQuarterLevel(row, previousQuarter);
+
+    if (level) {
+      return level;
+    }
+  }
+
+  return "";
 }
 
 function getLatestQuarterDetail(
@@ -387,6 +450,7 @@ export function parseAssessmentRows(
 
         return details;
       }, {});
+      applyExactLevelFallbacks(row, quarterDetails);
       const latestQuarterDetail = getLatestQuarterDetail(quarterDetails);
       const q1Detail = quarterDetails.Q1;
       const q2Detail = quarterDetails.Q2;
@@ -397,7 +461,7 @@ export function parseAssessmentRows(
       const centre =
         textValue(pickValue(row, aliases.centre)) || latestQuarterDetail?.centre || undefined;
       const level =
-        textValue(pickValue(row, aliases.level)) || latestQuarterDetail?.level || undefined;
+        latestQuarterDetail?.level || textValue(pickValue(row, aliases.level)) || undefined;
       const combinedSession =
         combineSessionParts(session, sessionDay, sessionPeriod) ||
         latestQuarterDetail?.session ||

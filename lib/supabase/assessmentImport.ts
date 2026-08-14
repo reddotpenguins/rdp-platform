@@ -10,12 +10,12 @@ import {
   normalizeAssessmentQuarter,
   normalizeAssessmentResult,
   recordHasQuarter
-} from "@/lib/assessmentLogic";
+} from "../assessmentLogic.ts";
 import type {
   AssessmentQuarter,
   QuarterAssessmentDetails,
   StudentAssessmentRecord
-} from "@/types/assessment";
+} from "../../types/assessment.ts";
 
 type AssessmentImportRow = {
   id?: string;

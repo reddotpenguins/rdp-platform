@@ -17,7 +17,6 @@ type AssessmentImportMappingRow = {
   id: string;
   student_name: string;
   centre_name: string | null;
-  level: string | null;
   session_label: string | null;
 };
 
@@ -75,12 +74,10 @@ export function CurrentClassMappingUpload() {
             if (mapping) {
               matchedRows += 1;
               const nextCentre = mapping.centreName || row.centre_name;
-              const nextLevel = mapping.level || row.level;
               const nextSession = mapping.session || row.session_label;
 
               if (
                 nextCentre === row.centre_name &&
-                nextLevel === row.level &&
                 nextSession === row.session_label
               ) {
                 return "skipped" as const;
@@ -88,7 +85,6 @@ export function CurrentClassMappingUpload() {
 
               await updateAssessmentImportRow(supabase, row.id, {
                 centre_name: nextCentre,
-                level: nextLevel,
                 session_label: nextSession
               });
               return "updated" as const;
@@ -97,7 +93,6 @@ export function CurrentClassMappingUpload() {
             if (shouldClearStaleAssessedDay(row.session_label, mappedDays)) {
               await updateAssessmentImportRow(supabase, row.id, {
                 centre_name: row.centre_name,
-                level: row.level,
                 session_label: null
               });
               return "cleared" as const;
@@ -175,7 +170,7 @@ export function CurrentClassMappingUpload() {
           <div>
             <h2 className="text-xl font-semibold text-ink">Update current class data</h2>
             <p className="text-sm text-slate-500">
-              Use the regular student list to update dashboard session days and current levels.
+              Use the regular student list to update dashboard centres and session times.
             </p>
           </div>
         </div>
@@ -232,8 +227,8 @@ export function CurrentClassMappingUpload() {
         </div>
       ) : (
         <div className="mt-5 rounded-lg border border-line bg-field p-4 text-sm text-slate-600">
-          This updates only the dashboard class fields. Assessment results, quarters, and coach names
-          are kept as they are.
+          This updates only class centre and session fields. Assessment results, exact levels,
+          quarters, and coach names are kept as they are.
         </div>
       )}
     </section>
@@ -287,7 +282,7 @@ async function fetchAssessmentImportRows(supabase: ReturnType<typeof createClien
   while (true) {
     const { data, error } = await supabase
       .from("assessment_import_rows")
-      .select("id, student_name, centre_name, level, session_label")
+      .select("id, student_name, centre_name, session_label")
       .range(from, from + pageSize - 1)
       .order("student_name", { ascending: true });
 
@@ -310,7 +305,7 @@ async function fetchAssessmentImportRows(supabase: ReturnType<typeof createClien
 async function updateAssessmentImportRow(
   supabase: ReturnType<typeof createClient>,
   id: string,
-  values: Partial<Pick<AssessmentImportMappingRow, "centre_name" | "level" | "session_label">>
+  values: Partial<Pick<AssessmentImportMappingRow, "centre_name" | "session_label">>
 ) {
   const { error } = await supabase.from("assessment_import_rows").update(values).eq("id", id);
 
