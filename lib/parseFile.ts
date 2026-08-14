@@ -177,6 +177,11 @@ function normalizeSessionPeriodLabel(value: string) {
 
 function combineSessionParts(session: string, day: string, period: string) {
   const cleanedSession = textValue(session);
+
+  if (!cleanedSession) {
+    return "";
+  }
+
   const cleanedDay = normalizeSessionDayLabel(textValue(day));
   const cleanedPeriod = normalizeSessionPeriodLabel(textValue(period));
   const parts: string[] = [];
