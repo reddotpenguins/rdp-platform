@@ -110,6 +110,7 @@ export function buildAssessorSheetRows({
     const className = textValue(getValue(row, ["Class Name", "Event Name"]));
     const classSchedule = textValue(getValue(row, ["Class Schedule", "Session", "Session Time"]));
     const sessionTime = normalizeSessionLabel(classSchedule) || parseSessionFromClassText(className);
+    const lookup = assessmentLookup.get(normalizeStudentKey(studentName));
 
     rows.push({
       id: `make-up-${index}-${normalizeStudentKey(studentName) || "student"}`,
@@ -122,7 +123,7 @@ export function buildAssessorSheetRows({
       studentName,
       instructorName: formatInstructorNames(textValue(getValue(row, ["Instructors", "Instructor"]))),
       classType: "Make Up",
-      currentLevel: parseLevelFromClassText(className),
+      currentLevel: lookup?.currentLevel || parseLevelFromClassText(className),
       passFail: ""
     });
   });
@@ -272,12 +273,12 @@ function getLevelFromRegularRow(row: RawSheetRow) {
     getValue(row, [
       "Current Level",
       "Q3 Current Level",
-      "Q2 Current Level",
-      "Q1 Current Level",
       "Q3 Assessed Level",
       "Q3 Tested Level",
+      "Q2 Current Level",
       "Q2 Assessed Level",
       "Q2 Tested Level",
+      "Q1 Current Level",
       "Q1 Assessed Level",
       "Q1 Tested Level",
       "Current Class Level",
@@ -524,12 +525,12 @@ function getSpecificAssessmentLevel(row: RawSheetRow) {
   const candidateHeaders = [
     "Current Level",
     "Q3 Current Level",
-    "Q2 Current Level",
-    "Q1 Current Level",
     "Q3 Assessed Level",
     "Q3 Tested Level",
+    "Q2 Current Level",
     "Q2 Assessed Level",
     "Q2 Tested Level",
+    "Q1 Current Level",
     "Q1 Assessed Level",
     "Q1 Tested Level",
     "Q3 Level",

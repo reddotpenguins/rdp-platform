@@ -55,6 +55,7 @@ describe("assessor sheet helpers", () => {
       assessmentRows: [
         {
           "Student Name": "Bryan Xu",
+          "Q3 Assessed Level": "Water Movement 3",
           "Q2 Current Level": "Water Confidence 2",
           Level: "Toddler (WD1, WC2, WM3)"
         }
@@ -68,7 +69,30 @@ describe("assessor sheet helpers", () => {
       makeUpRows: []
     });
 
-    assert.equal(rows[0].currentLevel, "Water Confidence 2");
+    assert.equal(rows[0].currentLevel, "Water Movement 3");
+  });
+
+  it("uses assessment levels for make-up students when an assessment file is supplied", () => {
+    const rows = buildAssessorSheetRows({
+      assessmentRows: [
+        {
+          "Student Name": "Noah Seow",
+          "Q2 Current Level": "Breaststroke 6",
+          Level: "Intermediate (Br4, Br5, Br6)"
+        }
+      ],
+      regularRows: [],
+      makeUpRows: [
+        {
+          "Class Name": "YMCA @ Orchard Intermediate (Br4, Br5, Br6) - Fri: 4:45 - 5:30",
+          "Class Schedule": "Fri-4:45PM-5:30PM",
+          Student: "Noah Seow",
+          Instructors: "Lai, Joyce"
+        }
+      ]
+    });
+
+    assert.equal(rows[0].currentLevel, "Breaststroke 6");
   });
 
   it("uses direct session columns when regular rows come from a mapped upload file", () => {
