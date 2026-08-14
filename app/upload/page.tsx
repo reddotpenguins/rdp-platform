@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
+import { AssessorSheetBuilder } from "@/components/AssessorSheetBuilder";
 import { FileUpload } from "@/components/FileUpload";
 import { SignOutButton } from "@/components/SignOutButton";
 import { canUploadAssessmentData } from "@/lib/staffRoles";
@@ -35,6 +36,7 @@ export default async function UploadPage() {
       </header>
 
       <FileUpload />
+      <AssessorSheetBuilder />
     </main>
   );
 }
