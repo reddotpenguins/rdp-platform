@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent, useMemo, useState } from "react";
+import { ChangeEvent, useEffect, useMemo, useState } from "react";
 import Papa from "papaparse";
 import { Download, FileSpreadsheet, Printer, RefreshCcw } from "lucide-react";
 import {
@@ -28,6 +28,8 @@ const emptyFiles: UploadedFiles = {
 export function AssessorSheetBuilder() {
   const [files, setFiles] = useState<UploadedFiles>(emptyFiles);
   const [rows, setRows] = useState<AssessorSheetRow[]>([]);
+  const [selectedDay, setSelectedDay] = useState("all");
+  const [selectedLocation, setSelectedLocation] = useState("all");
   const [selectedSession, setSelectedSession] = useState("all");
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -35,13 +37,33 @@ export function AssessorSheetBuilder() {
 
   const summary = useMemo(() => getAssessorSheetSummary(rows), [rows]);
   const columns = useMemo(() => getAssessorSheetColumns(), []);
+  const rowsMatchingDayAndLocation = useMemo(
+    () =>
+      rows.filter((row) => {
+        const matchesDay = selectedDay === "all" || row.sessionDay === selectedDay;
+        const matchesLocation = selectedLocation === "all" || row.location === selectedLocation;
+
+        return matchesDay && matchesLocation;
+      }),
+    [rows, selectedDay, selectedLocation]
+  );
+  const sessionOptions = useMemo(
+    () => getAssessorSheetSummary(rowsMatchingDayAndLocation).sessions,
+    [rowsMatchingDayAndLocation]
+  );
   const visibleRows = useMemo(
     () =>
       selectedSession === "all"
-        ? rows
-        : rows.filter((row) => row.sessionTime === selectedSession),
-    [rows, selectedSession]
+        ? rowsMatchingDayAndLocation
+        : rowsMatchingDayAndLocation.filter((row) => row.sessionTime === selectedSession),
+    [rowsMatchingDayAndLocation, selectedSession]
   );
+
+  useEffect(() => {
+    if (selectedSession !== "all" && !sessionOptions.includes(selectedSession)) {
+      setSelectedSession("all");
+    }
+  }, [selectedSession, sessionOptions]);
 
   function updateFile(key: keyof UploadedFiles, event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0] ?? null;
@@ -74,6 +96,8 @@ export function AssessorSheetBuilder() {
       }
 
       setRows(nextRows);
+      setSelectedDay("all");
+      setSelectedLocation("all");
       setSelectedSession("all");
     } catch (generateError) {
       setRows([]);
@@ -90,6 +114,8 @@ export function AssessorSheetBuilder() {
   function resetBuilder() {
     setFiles(emptyFiles);
     setRows([]);
+    setSelectedDay("all");
+    setSelectedLocation("all");
     setSelectedSession("all");
     setError(null);
     setResetNonce((currentNonce) => currentNonce + 1);
@@ -162,21 +188,27 @@ export function AssessorSheetBuilder() {
         </button>
         {rows.length > 0 ? (
           <>
-            <label className="text-sm font-semibold text-slate-600">
-              <span className="mr-2">Session</span>
-              <select
-                value={selectedSession}
-                onChange={(event) => setSelectedSession(event.target.value)}
-                className="h-10 rounded-md border border-line bg-paper px-3 text-sm font-semibold text-ink outline-none transition focus:border-teal focus:ring-2 focus:ring-teal/20"
-              >
-                <option value="all">All sessions</option>
-                {summary.sessions.map((session) => (
-                  <option key={session} value={session}>
-                    {session}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <FilterSelect
+              label="Day"
+              value={selectedDay}
+              onChange={setSelectedDay}
+              allLabel="All days"
+              options={summary.days}
+            />
+            <FilterSelect
+              label="Location"
+              value={selectedLocation}
+              onChange={setSelectedLocation}
+              allLabel="All locations"
+              options={summary.locations}
+            />
+            <FilterSelect
+              label="Session"
+              value={selectedSession}
+              onChange={setSelectedSession}
+              allLabel="All sessions"
+              options={sessionOptions}
+            />
             <button
               type="button"
               onClick={downloadVisibleRows}
@@ -193,6 +225,9 @@ export function AssessorSheetBuilder() {
               <Printer aria-hidden="true" className="size-4" />
               Print
             </button>
+            <span className="text-sm font-semibold text-slate-500">
+              Showing {visibleRows.length.toLocaleString()} of {rows.length.toLocaleString()}
+            </span>
           </>
         ) : null}
       </div>
@@ -298,6 +333,38 @@ function SummaryCard({ label, value }: { label: string; value: string }) {
       <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
       <p className="mt-2 text-2xl font-semibold text-ink">{value}</p>
     </div>
+  );
+}
+
+function FilterSelect({
+  allLabel,
+  label,
+  onChange,
+  options,
+  value
+}: {
+  allLabel: string;
+  label: string;
+  onChange: (value: string) => void;
+  options: string[];
+  value: string;
+}) {
+  return (
+    <label className="text-sm font-semibold text-slate-600">
+      <span className="mr-2">{label}</span>
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="h-10 max-w-[220px] rounded-md border border-line bg-paper px-3 text-sm font-semibold text-ink outline-none transition focus:border-teal focus:ring-2 focus:ring-teal/20"
+      >
+        <option value="all">{allLabel}</option>
+        {options.map((option) => (
+          <option key={option} value={option}>
+            {option}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }
 
@@ -464,7 +531,9 @@ function groupRowsBySession(rows: AssessorSheetRow[]) {
 
   for (const row of rows) {
     const session = row.sessionTime || "Unassigned session";
-    groups.set(session, [...(groups.get(session) ?? []), row]);
+    const groupLabel = row.location ? `${row.location} - ${session}` : session;
+
+    groups.set(groupLabel, [...(groups.get(groupLabel) ?? []), row]);
   }
 
   return Array.from(groups.entries());

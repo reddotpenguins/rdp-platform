@@ -6,7 +6,9 @@ import {
   getAssessorSheetSummary,
   normalizeSessionLabel,
   normalizeStudentNameForDisplay,
+  parseDayFromSessionLabel,
   parseLevelFromClassText,
+  parseLocationFromClassText,
   parseSessionFromClassText
 } from "../lib/assessorSheets.ts";
 
@@ -33,6 +35,8 @@ describe("assessor sheet helpers", () => {
       {
         id: "regular-0-aadi",
         sessionTime: "Sat 3:45PM - 4:30PM",
+        sessionDay: "Sat",
+        location: "ACS(BR) @ Bt Timah",
         studentName: "Aadi",
         instructorName: "Tyrone Peh",
         classType: "Regular",
@@ -58,6 +62,8 @@ describe("assessor sheet helpers", () => {
     });
 
     assert.equal(rows[0].sessionTime, "Fri 4:45PM - 5:30PM");
+    assert.equal(rows[0].sessionDay, "Fri");
+    assert.equal(rows[0].location, "YMCA @ Orchard");
     assert.equal(rows[0].studentName, "Noah Seow");
     assert.equal(rows[0].instructorName, "Joyce Lai");
     assert.equal(rows[0].classType, "Make Up");
@@ -70,6 +76,8 @@ describe("assessor sheet helpers", () => {
       {
         id: "1",
         sessionTime: "Sun 1:00PM - 1:45PM",
+        sessionDay: "Sun",
+        location: "SAAC @ Siglap",
         studentName: "First Student",
         instructorName: "",
         classType: "Regular",
@@ -79,6 +87,8 @@ describe("assessor sheet helpers", () => {
       {
         id: "2",
         sessionTime: "",
+        sessionDay: "",
+        location: "YMCA @ Orchard",
         studentName: "Second Student",
         instructorName: "Coach",
         classType: "Make Up",
@@ -92,6 +102,8 @@ describe("assessor sheet helpers", () => {
     assert.equal(summary.makeUpRows, 1);
     assert.equal(summary.missingInstructorRows, 1);
     assert.equal(summary.missingSessionRows, 1);
+    assert.deepEqual(summary.days, ["Sun"]);
+    assert.deepEqual(summary.locations, ["SAAC @ Siglap", "YMCA @ Orchard"]);
     assert.deepEqual(summary.sessions, ["Sun 1:00PM - 1:45PM"]);
   });
 
@@ -102,6 +114,16 @@ describe("assessor sheet helpers", () => {
     assert.equal(normalizeSessionLabel("Fri-4:45PM-5:30PM"), "Fri 4:45PM - 5:30PM");
     assert.equal(parseSessionFromClassText("SAAC Foundation - Sat: 11:00 - 11:45"), "Sat 11:00AM - 11:45AM");
     assert.equal(parseLevelFromClassText("SAAC @ Siglap Foundation (F1, F2, F3)"), "Foundation (F1, F2, F3)");
+    assert.equal(parseLocationFromClassText("SAAC @ Siglap Foundation (F1, F2, F3) - Sat: 11:00 - 11:45"), "SAAC @ Siglap");
+    assert.equal(
+      parseLevelFromClassText("Fundamental Squad, SAAC @ Siglap Mini Squad (Ba7, Ba8) - Sun: 2:00 - 3:00"),
+      "Mini Squad (Ba7, Ba8)"
+    );
+    assert.equal(
+      parseLocationFromClassText("Fundamental Squad, SAAC @ Siglap Mini Squad (Ba7, Ba8) - Sun: 2:00 - 3:00"),
+      "SAAC @ Siglap"
+    );
+    assert.equal(parseDayFromSessionLabel("Sun 4:00PM - 5:00PM"), "Sun");
     assert.equal(formatInstructorNames("Lai, Joyce; Tan, Alex"), "Joyce Lai, Alex Tan");
   });
 });

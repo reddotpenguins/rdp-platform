@@ -3,6 +3,8 @@ export type AssessorSheetClassType = "Regular" | "Make Up";
 export type AssessorSheetRow = {
   id: string;
   sessionTime: string;
+  sessionDay: string;
+  location: string;
   studentName: string;
   instructorName: string;
   classType: AssessorSheetClassType;
@@ -16,6 +18,8 @@ export type AssessorSheetSummary = {
   makeUpRows: number;
   missingInstructorRows: number;
   missingSessionRows: number;
+  days: string[];
+  locations: string[];
   sessions: string[];
 };
 
@@ -46,8 +50,8 @@ const dayOrder = new Map([
   ["sunday", 7]
 ]);
 
-const levelPattern =
-  /\b(Baby\s+Class|Toddler|Foundation|Intermediate|Mini\s+Squad|Race\s+Team|Squad|Learn\s+to\s+Swim|Social\s+Swim\s+Club)\s*(\([^)]*\))?/i;
+const levelSearchPattern =
+  /\b(Baby\s+Class|Toddler|Foundation|Intermediate|Mini\s+Squad|Race\s+Team|Squad|Learn\s+to\s+Swim|Social\s+Swim\s+Club)\s*(\([^)]*\))?/gi;
 
 export function buildAssessorSheetRows({
   assessmentRows,
@@ -72,10 +76,15 @@ export function buildAssessorSheetRows({
 
     const eventName = textValue(getValue(row, ["Event Name", "Class Name", "Programme"]));
     const lookup = assessmentLookup.get(normalizeStudentKey(studentName));
+    const sessionTime = parseSessionFromClassText(eventName);
 
     rows.push({
       id: `regular-${index}-${normalizeStudentKey(studentName) || "student"}`,
-      sessionTime: parseSessionFromClassText(eventName),
+      sessionTime,
+      sessionDay: parseDayFromSessionLabel(sessionTime),
+      location:
+        parseLocationFromClassText(eventName) ||
+        textValue(getValue(row, ["Centre", "Center", "Location"])),
       studentName,
       instructorName: lookup?.instructorName ?? "",
       classType: "Regular",
@@ -93,10 +102,15 @@ export function buildAssessorSheetRows({
 
     const className = textValue(getValue(row, ["Class Name", "Event Name"]));
     const classSchedule = textValue(getValue(row, ["Class Schedule", "Session", "Session Time"]));
+    const sessionTime = normalizeSessionLabel(classSchedule) || parseSessionFromClassText(className);
 
     rows.push({
       id: `make-up-${index}-${normalizeStudentKey(studentName) || "student"}`,
-      sessionTime: normalizeSessionLabel(classSchedule) || parseSessionFromClassText(className),
+      sessionTime,
+      sessionDay: parseDayFromSessionLabel(sessionTime),
+      location:
+        parseLocationFromClassText(className) ||
+        textValue(getValue(row, ["Centre", "Center", "Location"])),
       studentName,
       instructorName: formatInstructorNames(textValue(getValue(row, ["Instructors", "Instructor"]))),
       classType: "Make Up",
@@ -109,6 +123,12 @@ export function buildAssessorSheetRows({
 }
 
 export function getAssessorSheetSummary(rows: AssessorSheetRow[]): AssessorSheetSummary {
+  const days = Array.from(
+    new Set(rows.map((row) => row.sessionDay).filter((day) => day.trim() !== ""))
+  ).sort(compareDayLabels);
+  const locations = Array.from(
+    new Set(rows.map((row) => row.location).filter((location) => location.trim() !== ""))
+  ).sort((first, second) => first.localeCompare(second, undefined, { sensitivity: "base" }));
   const sessions = Array.from(
     new Set(rows.map((row) => row.sessionTime).filter((session) => session.trim() !== ""))
   ).sort(compareSessionLabels);
@@ -119,6 +139,8 @@ export function getAssessorSheetSummary(rows: AssessorSheetRow[]): AssessorSheet
     makeUpRows: rows.filter((row) => row.classType === "Make Up").length,
     missingInstructorRows: rows.filter((row) => row.instructorName.trim() === "").length,
     missingSessionRows: rows.filter((row) => row.sessionTime.trim() === "").length,
+    days,
+    locations,
     sessions
   };
 }
@@ -217,13 +239,40 @@ export function normalizeSessionLabel(value: unknown) {
 }
 
 export function parseLevelFromClassText(value: unknown) {
-  const match = textValue(value).match(levelPattern);
+  const match = findLastLevelMatch(textValue(value));
 
   if (!match) {
     return "";
   }
 
   return `${toTitleCase(match[1])}${match[2] ? ` ${match[2].trim()}` : ""}`.trim();
+}
+
+export function parseLocationFromClassText(value: unknown) {
+  const text = textValue(value);
+
+  if (!text) {
+    return "";
+  }
+
+  const withoutSession = text
+    .replace(
+      /\s+-\s+\b(?:mon(?:day)?|tue(?:s|sday)?|wed(?:nesday)?|thu(?:r|rs|rsday|rday)?|fri(?:day)?|sat(?:urday)?|sun(?:day)?)\s*:?\s+\d{1,2}:\d{2}.*$/i,
+      ""
+    )
+    .trim();
+  const levelMatch = findLastLevelMatch(withoutSession);
+  const location = levelMatch
+    ? withoutSession.slice(0, levelMatch.index).trim()
+    : withoutSession.trim();
+
+  return location.replace(/^Fundamental\s+Squad,\s*/i, "").replace(/\s+/g, " ");
+}
+
+export function parseDayFromSessionLabel(value: unknown) {
+  const match = textValue(value).match(/^([A-Za-z]+)/);
+
+  return match ? normalizeDayLabel(match[1]) : "";
 }
 
 export function formatInstructorNames(value: unknown) {
@@ -280,11 +329,19 @@ function buildAssessmentLookup(rows: RawSheetRow[]) {
 
 function compareAssessorRows(first: AssessorSheetRow, second: AssessorSheetRow) {
   return (
+    first.location.localeCompare(second.location, undefined, { sensitivity: "base" }) ||
     compareSessionLabels(first.sessionTime, second.sessionTime) ||
     first.instructorName.localeCompare(second.instructorName, undefined, { sensitivity: "base" }) ||
     first.classType.localeCompare(second.classType, undefined, { sensitivity: "base" }) ||
     first.studentName.localeCompare(second.studentName, undefined, { sensitivity: "base" })
   );
+}
+
+function compareDayLabels(first: string, second: string) {
+  const firstDay = dayOrder.get(first.toLowerCase()) ?? 99;
+  const secondDay = dayOrder.get(second.toLowerCase()) ?? 99;
+
+  return firstDay - secondDay || first.localeCompare(second, undefined, { sensitivity: "base" });
 }
 
 function compareSessionLabels(first: string, second: string) {
@@ -424,6 +481,10 @@ function toTitleCase(value: string) {
     .toLowerCase()
     .replace(/\b[a-z]/g, (letter) => letter.toUpperCase())
     .replace(/\bLts\b/g, "LTS");
+}
+
+function findLastLevelMatch(value: string) {
+  return Array.from(value.matchAll(levelSearchPattern)).at(-1);
 }
 
 function textValue(value: unknown) {
