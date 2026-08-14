@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { getFilterOptions } from "../lib/assessmentLogic.ts";
+import { getBestAvailableLevel, getFilterOptions, getQuarterLevel } from "../lib/assessmentLogic.ts";
 import type { StudentAssessmentRecord } from "../types/assessment.ts";
 
 describe("assessment filter options", () => {
@@ -70,6 +70,34 @@ describe("assessment filter options", () => {
       "SJII",
       "YMCA"
     ]);
+  });
+
+  it("prefers exact quarter levels over broad class bands for current display", () => {
+    const record = buildRecord({
+      id: "student-1",
+      studentName: "Aaron Tranter",
+      level: "Squad",
+      quarterDetails: {
+        Q2: {
+          centre: "ACS(BR)",
+          coachName: "Taro Saito",
+          level: "Backstroke 7",
+          result: "",
+          session: "Sat 3:00PM - 4:00PM"
+        },
+        Q3: {
+          centre: "ACS(BR)",
+          coachName: "Taro Saito",
+          level: "Squad",
+          result: "",
+          session: "Sat 3:00PM - 4:00PM"
+        }
+      }
+    });
+
+    assert.equal(getQuarterLevel(record, "Q3"), "Backstroke 7");
+    assert.equal(getBestAvailableLevel(record), "Backstroke 7");
+    assert.deepEqual(getFilterOptions([record], "All").levels, ["Backstroke 7"]);
   });
 });
 

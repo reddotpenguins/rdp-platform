@@ -5,6 +5,7 @@ import { Download, Printer, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 import {
   compareSessionLabels,
+  getBestAvailableLevel,
   getDisplayedQuarters,
   getQuarterCentre,
   getQuarterCoachName,
@@ -308,7 +309,7 @@ function getDisplayLevel(
   selectedQuarter: "All" | AssessmentQuarter
 ) {
   return selectedQuarter === "All"
-    ? record.level || "-"
+    ? getBestAvailableLevel(record) || "-"
     : getQuarterLevel(record, selectedQuarter) || "-";
 }
 

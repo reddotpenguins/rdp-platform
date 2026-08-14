@@ -49,6 +49,8 @@ const sessionDayPatterns = [
   { day: "Saturday", pattern: /\bsat(?:urday)?\b/i },
   { day: "Sunday", pattern: /\bsun(?:day)?\b/i }
 ];
+const classBandLevelPattern =
+  /^(baby class|toddler|foundation|intermediate|mini squad|race team|squad|learn to swim|social swim club)(?:\s*\([^)]*\))?$/i;
 
 type QuarterFilter = "All" | AssessmentQuarter;
 
@@ -107,6 +109,10 @@ export function normalizeAssessmentQuarter(value: unknown): AssessmentQuarter | 
     cleaned.match(/^(?:20\d{2} )?QUARTER ([1-9]\d*)$/);
 
   return match ? (`Q${match[1]}` as AssessmentQuarter) : "";
+}
+
+export function isClassBandLevel(value: unknown) {
+  return classBandLevelPattern.test(String(value ?? "").trim());
 }
 
 export function compareAssessmentQuarters(first: AssessmentQuarter, second: AssessmentQuarter) {
@@ -644,7 +650,7 @@ function getCurrentValue(
   }
 
   if (field === "level") {
-    return record.level || "";
+    return getBestAvailableLevel(record);
   }
 
   return record.session || missingSessionLabel;
@@ -677,7 +683,33 @@ export function getQuarterCentre(record: StudentAssessmentRecord, quarter: Asses
 }
 
 export function getQuarterLevel(record: StudentAssessmentRecord, quarter: AssessmentQuarter) {
-  return getQuarterDetail(record, quarter)?.level || record.level || "";
+  const directLevel = getRawQuarterLevel(record, quarter);
+
+  if (isExactLevel(directLevel)) {
+    return directLevel;
+  }
+
+  const fallbackLevel = getLatestExactQuarterLevel(record, quarter);
+
+  if (fallbackLevel) {
+    return fallbackLevel;
+  }
+
+  if (!directLevel && isExactLevel(record.level)) {
+    return record.level ?? "";
+  }
+
+  return directLevel || record.level || "";
+}
+
+export function getBestAvailableLevel(record: StudentAssessmentRecord) {
+  return (
+    getLatestExactQuarterLevel(record) ||
+    (isExactLevel(record.level) ? record.level : "") ||
+    getLatestQuarterLevel(record) ||
+    record.level ||
+    ""
+  );
 }
 
 export function getQuarterSession(record: StudentAssessmentRecord, quarter: AssessmentQuarter) {
@@ -716,6 +748,48 @@ function getQuarterDetail(record: StudentAssessmentRecord, quarter: AssessmentQu
   }
 
   return undefined;
+}
+
+function getRawQuarterLevel(record: StudentAssessmentRecord, quarter: AssessmentQuarter) {
+  return getQuarterDetail(record, quarter)?.level || "";
+}
+
+function getLatestExactQuarterLevel(
+  record: StudentAssessmentRecord,
+  upToQuarter?: AssessmentQuarter
+) {
+  const quarters = getRecordQuarters(record)
+    .filter((quarter) => !upToQuarter || compareAssessmentQuarters(quarter, upToQuarter) <= 0)
+    .sort(compareAssessmentQuarters)
+    .reverse();
+
+  for (const quarter of quarters) {
+    const level = getRawQuarterLevel(record, quarter);
+
+    if (isExactLevel(level)) {
+      return level;
+    }
+  }
+
+  return "";
+}
+
+function getLatestQuarterLevel(record: StudentAssessmentRecord) {
+  const quarters = getRecordQuarters(record).slice().sort(compareAssessmentQuarters).reverse();
+
+  for (const quarter of quarters) {
+    const level = getRawQuarterLevel(record, quarter);
+
+    if (level) {
+      return level;
+    }
+  }
+
+  return "";
+}
+
+function isExactLevel(value: string | undefined) {
+  return Boolean(value && !isClassBandLevel(value));
 }
 
 export function toQuarterAssessmentRows(
@@ -1019,7 +1093,7 @@ export function getFilterOptions(
     centres: allCentres,
     levels: uniqueSorted(
       records.flatMap((record) => [
-        record.level,
+        getBestAvailableLevel(record),
         ...getRecordQuarters(record).map((quarter) => getQuarterLevel(record, quarter))
       ])
     ),

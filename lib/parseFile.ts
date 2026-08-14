@@ -4,6 +4,7 @@ import {
   compareAssessmentQuarters,
   getSessionDay,
   getSessionPeriod,
+  isClassBandLevel,
   normalizeAssessmentQuarter,
   normalizeAssessmentResult
 } from "./assessmentLogic.ts";
@@ -165,12 +166,6 @@ function buildQuarterHeaders(quarter: AssessmentQuarter, fieldNames: string[]) {
 
 function textValue(value: unknown) {
   return String(value ?? "").replace(/\uFEFF/g, "").trim();
-}
-
-function isClassBandLevel(value: unknown) {
-  return /^(baby class|toddler|foundation|intermediate|mini squad|race team|squad|learn to swim|social swim club)(?:\s*\([^)]*\))?$/i.test(
-    textValue(value)
-  );
 }
 
 function normalizeSessionDayLabel(value: string) {
