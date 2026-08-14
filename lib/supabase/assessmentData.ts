@@ -8,6 +8,10 @@ import {
   type StaffProfile
 } from "@/lib/staffRoles";
 
+const assessmentImportColumns =
+  "id, student_code, student_name, year, quarter, coach_name, coach_email, centre_name, level, session_label, session_start, session_end, result, notes, imported_at";
+const pageSize = 1000;
+
 export type AssessmentDataset = {
   records: Awaited<ReturnType<typeof getDefaultAssessmentRecords>>;
   datasetName: string;
@@ -19,12 +23,7 @@ export async function getInitialAssessmentDataset(
   staffProfile?: StaffProfile
 ): Promise<AssessmentDataset> {
   const supabase = createClient();
-  const { data, error } = await supabase
-    .from("assessment_import_rows")
-    .select(
-      "id, student_code, student_name, year, quarter, coach_name, coach_email, centre_name, level, session_label, session_start, session_end, result, notes, imported_at"
-    )
-    .order("imported_at", { ascending: true });
+  const { data, error } = await fetchAssessmentImportRows(supabase);
 
   if (!error && data) {
     const visibleRows = filterRowsForStaffProfile(data as AssessmentImportRow[], staffProfile);
@@ -51,6 +50,35 @@ export async function getInitialAssessmentDataset(
     importedAt: null,
     source: "demo"
   };
+}
+
+async function fetchAssessmentImportRows(supabase: ReturnType<typeof createClient>) {
+  const rows: AssessmentImportRow[] = [];
+  let from = 0;
+
+  while (true) {
+    const { data, error } = await supabase
+      .from("assessment_import_rows")
+      .select(assessmentImportColumns)
+      .order("imported_at", { ascending: true })
+      .order("student_name", { ascending: true })
+      .order("quarter", { ascending: true })
+      .range(from, from + pageSize - 1);
+
+    if (error) {
+      return { data: null, error };
+    }
+
+    rows.push(...((data ?? []) as AssessmentImportRow[]));
+
+    if (!data || data.length < pageSize) {
+      break;
+    }
+
+    from += pageSize;
+  }
+
+  return { data: rows, error: null };
 }
 
 function filterRowsForStaffProfile(rows: AssessmentImportRow[], staffProfile?: StaffProfile) {
