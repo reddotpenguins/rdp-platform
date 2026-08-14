@@ -985,6 +985,7 @@ export function getFilterOptions(
   selectedQuarter: QuarterFilter = "All"
 ): FilterOptions {
   const quarters = getAvailableQuarters(records);
+  const allCentres = getAllCentreOptions(records);
 
   if (selectedQuarter !== "All") {
     const quarterRecords = records.filter((record) => recordHasQuarter(record, selectedQuarter));
@@ -992,7 +993,7 @@ export function getFilterOptions(
 
     return {
       coaches: uniqueSorted(quarterRecords.map((record) => getQuarterCoachName(record, selectedQuarter))),
-      centres: uniqueSorted(quarterRecords.map((record) => getQuarterCentre(record, selectedQuarter))),
+      centres: allCentres,
       levels: uniqueSorted(quarterRecords.map((record) => getQuarterLevel(record, selectedQuarter))),
       sessions: uniqueSorted(sessions),
       sessionDays: uniqueSessionDays(sessions),
@@ -1015,12 +1016,7 @@ export function getFilterOptions(
         ...getRecordQuarters(record).map((quarter) => getQuarterCoachName(record, quarter))
       ])
     ),
-    centres: uniqueSorted(
-      records.flatMap((record) => [
-        record.centre,
-        ...getRecordQuarters(record).map((quarter) => getQuarterCentre(record, quarter))
-      ])
-    ),
+    centres: allCentres,
     levels: uniqueSorted(
       records.flatMap((record) => [
         record.level,
@@ -1037,6 +1033,15 @@ export function getFilterOptions(
       )
     )
   };
+}
+
+function getAllCentreOptions(records: StudentAssessmentRecord[]) {
+  return uniqueSorted(
+    records.flatMap((record) => [
+      record.centre,
+      ...getRecordQuarters(record).map((quarter) => getQuarterCentre(record, quarter))
+    ])
+  );
 }
 
 export function formatPercent(rate: number) {
