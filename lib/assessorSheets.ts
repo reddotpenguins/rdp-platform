@@ -542,7 +542,7 @@ function getSpecificAssessmentLevel(row: RawSheetRow) {
   for (const header of candidateHeaders) {
     const value = textValue(lookup.get(normalizeHeader(header)));
 
-    if (value && !isClassBandLevel(value)) {
+    if (value && !isAssessorClassBandLevel(value)) {
       return value;
     }
   }
@@ -726,7 +726,7 @@ function findLastLevelMatch(value: string) {
   return Array.from(value.matchAll(levelSearchPattern)).at(-1);
 }
 
-function isClassBandLevel(value: unknown) {
+export function isAssessorClassBandLevel(value: unknown) {
   return /^(baby class|toddler|foundation|intermediate|mini squad|race team|squad|learn to swim|social swim club)(?:\s*\([^)]*\))?$/i.test(
     textValue(value)
   );

@@ -9,6 +9,7 @@ import {
   getAssessorSessionTiming,
   getAssessorSheetColumns,
   getAssessorSheetSummary,
+  isAssessorClassBandLevel,
   type AssessorSheetRow
 } from "@/lib/assessorSheets";
 import { downloadCsv } from "@/lib/tableExport";
@@ -40,6 +41,10 @@ export function AssessorSheetBuilder() {
 
   const summary = useMemo(() => getAssessorSheetSummary(rows), [rows]);
   const columns = useMemo(() => getAssessorSheetColumns(), []);
+  const classBandLevelCount = useMemo(
+    () => rows.filter((row) => isAssessorClassBandLevel(row.currentLevel)).length,
+    [rows]
+  );
   const rowsMatchingDayAndLocation = useMemo(
     () =>
       rows.filter((row) => {
@@ -267,6 +272,21 @@ export function AssessorSheetBuilder() {
       {error ? (
         <p className="mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
           {error}
+        </p>
+      ) : null}
+
+      {rows.length > 0 && !files.assessment ? (
+        <p className="mt-4 rounded-md border border-yellow-200 bg-yellow-50 px-3 py-2 text-sm font-medium text-yellow-800">
+          Current Level is using class bands only because no assessment file was included. Add the
+          upload-ready RDP_LTS assessment file, then generate again to show exact levels.
+        </p>
+      ) : null}
+
+      {rows.length > 0 && files.assessment && classBandLevelCount > 0 ? (
+        <p className="mt-4 rounded-md border border-yellow-200 bg-yellow-50 px-3 py-2 text-sm font-medium text-yellow-800">
+          {classBandLevelCount.toLocaleString()} row
+          {classBandLevelCount === 1 ? "" : "s"} still show class-band levels because those
+          students do not have an exact level match in the assessment file.
         </p>
       ) : null}
 
