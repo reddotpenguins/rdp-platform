@@ -16,6 +16,7 @@ type RawSheetRow = Record<string, unknown>;
 type AssessmentImportMappingRow = {
   id: string;
   student_name: string;
+  centre_name: string | null;
   level: string | null;
   session_label: string | null;
 };
@@ -72,14 +73,20 @@ export function CurrentClassMappingUpload() {
 
             if (mapping) {
               matchedRows += 1;
+              const nextCentre = mapping.centreName || row.centre_name;
               const nextLevel = mapping.level || row.level;
               const nextSession = mapping.session || row.session_label;
 
-              if (nextLevel === row.level && nextSession === row.session_label) {
+              if (
+                nextCentre === row.centre_name &&
+                nextLevel === row.level &&
+                nextSession === row.session_label
+              ) {
                 return "skipped" as const;
               }
 
               await updateAssessmentImportRow(supabase, row.id, {
+                centre_name: nextCentre,
                 level: nextLevel,
                 session_label: nextSession
               });
@@ -88,6 +95,7 @@ export function CurrentClassMappingUpload() {
 
             if (shouldClearStaleAssessedDay(row.session_label, mappedDays)) {
               await updateAssessmentImportRow(supabase, row.id, {
+                centre_name: row.centre_name,
                 level: row.level,
                 session_label: null
               });
@@ -239,7 +247,7 @@ async function fetchAssessmentImportRows(supabase: ReturnType<typeof createClien
   while (true) {
     const { data, error } = await supabase
       .from("assessment_import_rows")
-      .select("id, student_name, level, session_label")
+      .select("id, student_name, centre_name, level, session_label")
       .range(from, from + pageSize - 1)
       .order("student_name", { ascending: true });
 
@@ -262,7 +270,7 @@ async function fetchAssessmentImportRows(supabase: ReturnType<typeof createClien
 async function updateAssessmentImportRow(
   supabase: ReturnType<typeof createClient>,
   id: string,
-  values: Pick<AssessmentImportMappingRow, "level" | "session_label">
+  values: Partial<Pick<AssessmentImportMappingRow, "centre_name" | "level" | "session_label">>
 ) {
   const { error } = await supabase.from("assessment_import_rows").update(values).eq("id", id);
 

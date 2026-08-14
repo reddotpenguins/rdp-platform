@@ -181,7 +181,7 @@ export function canViewTeamAssessments(profile: StaffProfile) {
 }
 
 export function getCentreFilterAccess(profile: StaffProfile): CentreFilterAccess {
-  if (!canViewTeamAssessments(profile)) {
+  if (canViewAllAssessments(profile) || !canViewTeamAssessments(profile)) {
     return {
       allowAllCentres: true,
       centres: []

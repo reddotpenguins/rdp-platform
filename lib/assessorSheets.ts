@@ -76,7 +76,7 @@ export function buildAssessorSheetRows({
 
     const eventName = textValue(getValue(row, ["Event Name", "Class Name", "Programme"]));
     const lookup = assessmentLookup.get(normalizeStudentKey(studentName));
-    const sessionTime = parseSessionFromClassText(eventName);
+    const sessionTime = getSessionFromRegularRow(row, eventName);
 
     rows.push({
       id: `regular-${index}-${normalizeStudentKey(studentName) || "student"}`,
@@ -84,11 +84,12 @@ export function buildAssessorSheetRows({
       sessionDay: parseDayFromSessionLabel(sessionTime),
       location:
         parseLocationFromClassText(eventName) ||
-        textValue(getValue(row, ["Centre", "Center", "Location"])),
+        textValue(getValue(row, ["Class Centre", "Centre", "Center", "Location"])),
       studentName,
-      instructorName: lookup?.instructorName ?? "",
+      instructorName: lookup?.instructorName ?? getInstructorFromRegularRow(row),
       classType: "Regular",
-      currentLevel: parseLevelFromClassText(eventName) || lookup?.currentLevel || "",
+      currentLevel:
+        parseLevelFromClassText(eventName) || lookup?.currentLevel || getLevelFromRegularRow(row),
       passFail: ""
     });
   });
@@ -154,6 +155,44 @@ export function getAssessorSheetColumns() {
     { header: "Current Level", value: (row: AssessorSheetRow) => row.currentLevel },
     { header: "Pass/Fail", value: (row: AssessorSheetRow) => row.passFail }
   ];
+}
+
+function getSessionFromRegularRow(row: RawSheetRow, eventName: string) {
+  return (
+    normalizeSessionLabel(
+      getValue(row, [
+        "Current Class Session",
+        "Session",
+        "Session Time",
+        "Q3 Session",
+        "Q2 Session",
+        "Q1 Session",
+        "Class Schedule"
+      ])
+    ) || parseSessionFromClassText(eventName)
+  );
+}
+
+function getInstructorFromRegularRow(row: RawSheetRow) {
+  return textValue(
+    getValue(row, ["Current Coach", "Q3 Coach", "Q2 Coach", "Q1 Coach", "Coach", "Instructor"])
+  );
+}
+
+function getLevelFromRegularRow(row: RawSheetRow) {
+  return textValue(
+    getValue(row, [
+      "Current Class Level",
+      "Current Level",
+      "Level",
+      "Q3 Current Level",
+      "Q3 Level",
+      "Q2 Current Level",
+      "Q2 Level",
+      "Q1 Current Level",
+      "Q1 Level"
+    ])
+  );
 }
 
 export function normalizeStudentNameForDisplay(value: unknown) {

@@ -157,14 +157,14 @@ export function AssessorSheetBuilder() {
         <FilePicker
           key={`assessment-${resetNonce}`}
           label="Assessment file"
-          description="Maps regular students to current coach or instructor."
+          description="Use the RDP_LTS assessment or mapped upload-ready file for coach and level data."
           file={files.assessment}
           onChange={(event) => updateFile("assessment", event)}
         />
         <FilePicker
           key={`regular-${resetNonce}`}
           label="Regular student list"
-          description="Uses Event Name for current class time and level."
+          description="Use Custom_Student_List here. This is the file with Event Name class timings."
           file={files.regular}
           onChange={(event) => updateFile("regular", event)}
         />

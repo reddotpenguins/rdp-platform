@@ -46,6 +46,36 @@ describe("assessor sheet helpers", () => {
     ]);
   });
 
+  it("uses direct session columns when regular rows come from a mapped upload file", () => {
+    const rows = buildAssessorSheetRows({
+      assessmentRows: [],
+      regularRows: [
+        {
+          "Student Name": "Aadi",
+          "Current Coach": "Ci Hui Jiang",
+          Centre: "ACS(BR)",
+          Level: "Intermediate (Br4, Br5, Br6)",
+          Session: "Sat 3:45PM - 4:30PM"
+        }
+      ],
+      makeUpRows: []
+    });
+
+    assert.deepEqual(rows, [
+      {
+        id: "regular-0-aadi",
+        sessionTime: "Sat 3:45PM - 4:30PM",
+        sessionDay: "Sat",
+        location: "ACS(BR)",
+        studentName: "Aadi",
+        instructorName: "Ci Hui Jiang",
+        classType: "Regular",
+        currentLevel: "Intermediate (Br4, Br5, Br6)",
+        passFail: ""
+      }
+    ]);
+  });
+
   it("adds make-up students with instructor names and class schedule", () => {
     const rows = buildAssessorSheetRows({
       assessmentRows: [],

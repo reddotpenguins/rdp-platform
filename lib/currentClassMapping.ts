@@ -2,6 +2,7 @@ import {
   normalizeStudentKey,
   normalizeStudentNameForDisplay,
   parseLevelFromClassText,
+  parseLocationFromClassText,
   parseSessionFromClassText
 } from "./assessorSheets.ts";
 
@@ -10,6 +11,7 @@ type RawSheetRow = Record<string, unknown>;
 export type CurrentClassMapping = {
   studentName: string;
   studentKey: string;
+  centreName: string;
   session: string;
   level: string;
   eventName: string;
@@ -24,6 +26,7 @@ export function parseCurrentClassMappings(rows: RawSheetRow[]) {
     );
     const studentKey = normalizeStudentKey(studentName);
     const eventName = textValue(getValue(row, ["Event Name", "Class Name", "Programme"]));
+    const centreName = getCentreNameFromRegularRow(row, eventName);
     const session = parseSessionFromClassText(eventName);
     const level = parseLevelFromClassText(eventName);
 
@@ -35,6 +38,7 @@ export function parseCurrentClassMappings(rows: RawSheetRow[]) {
       mappings.set(studentKey, {
         studentName,
         studentKey,
+        centreName,
         session,
         level,
         eventName
@@ -45,6 +49,32 @@ export function parseCurrentClassMappings(rows: RawSheetRow[]) {
   return Array.from(mappings.values()).sort((first, second) =>
     first.studentName.localeCompare(second.studentName, undefined, { sensitivity: "base" })
   );
+}
+
+function getCentreNameFromRegularRow(row: RawSheetRow, eventName: string) {
+  const directCentre = textValue(
+    getValue(row, ["Centre", "Center", "Class Centre", "Location", "Venue"])
+  );
+
+  if (directCentre) {
+    return normalizeCentreName(directCentre);
+  }
+
+  const location = parseLocationFromClassText(eventName);
+
+  return normalizeCentreName(location);
+}
+
+function normalizeCentreName(value: string) {
+  const cleaned = value.replace(/^Fundamental\s+Squad,\s*/i, "").replace(/\s+/g, " ").trim();
+
+  if (!cleaned) {
+    return "";
+  }
+
+  const centre = cleaned.split("@")[0]?.trim() ?? cleaned;
+
+  return centre.replace(/\s+/g, " ");
 }
 
 function getValue(row: RawSheetRow, candidateHeaders: string[]) {

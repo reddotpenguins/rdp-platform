@@ -19,6 +19,7 @@ describe("current class mapping", () => {
       {
         studentName: "Aadi",
         studentKey: "aadi",
+        centreName: "ACS(BR)",
         session: "Sat 3:45PM - 4:30PM",
         level: "Intermediate (Br4, Br5, Br6)",
         eventName: "ACS(BR) @ Bt Timah Intermediate (Br4, Br5, Br6) - Sat: 3:45 - 4:30"
@@ -26,6 +27,7 @@ describe("current class mapping", () => {
       {
         studentName: "Meghan Johnston",
         studentKey: "meghan johnston",
+        centreName: "SAAC",
         session: "Sun 2:00PM - 3:00PM",
         level: "Mini Squad (Ba7, Ba8, Fl1, Fl2)",
         eventName:
@@ -47,6 +49,7 @@ describe("current class mapping", () => {
     ]);
 
     assert.equal(mappings.length, 1);
+    assert.equal(mappings[0].centreName, "YMCA");
     assert.equal(mappings[0].session, "Fri 4:45PM - 5:30PM");
     assert.equal(mappings[0].level, "Intermediate (Br4, Br5, Br6)");
   });

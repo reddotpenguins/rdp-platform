@@ -36,6 +36,18 @@ describe("staff permission model", () => {
     assert.equal(canManageTrainingResources(admin), true);
   });
 
+  it("does not restrict admin centre filters to assigned-centre rows", () => {
+    const admin = buildProfile({
+      assignedCentres: ["ACS(BR)", "SAAC"],
+      role: "admin"
+    });
+
+    assert.deepEqual(getCentreFilterAccess(admin), {
+      allowAllCentres: true,
+      centres: []
+    });
+  });
+
   it("lets lead coaches view team assessments without staff-management access", () => {
     const leadCoach = buildProfile({
       assignedCentres: ["SJII", "ACSBR"],
