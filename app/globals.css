@@ -31,3 +31,50 @@ select {
 ::selection {
   background: rgba(239, 86, 45, 0.24);
 }
+
+@media print {
+  body.assessor-print-preview-open {
+    background: #ffffff;
+  }
+
+  body.assessor-print-preview-open * {
+    visibility: hidden;
+  }
+
+  body.assessor-print-preview-open .assessor-print-preview,
+  body.assessor-print-preview-open .assessor-print-preview * {
+    visibility: visible;
+  }
+
+  body.assessor-print-preview-open .assessor-print-preview {
+    background: #ffffff;
+    inset: 0 auto auto 0;
+    position: absolute;
+    width: 100%;
+  }
+
+  body.assessor-print-preview-open .assessor-print-toolbar {
+    display: none;
+  }
+
+  body.assessor-print-preview-open .assessor-print-scroll {
+    height: auto;
+    overflow: visible;
+    padding: 0;
+  }
+
+  body.assessor-print-preview-open .assessor-print-page {
+    border-radius: 0;
+    box-shadow: none;
+    max-width: none;
+    padding: 0;
+  }
+
+  body.assessor-print-preview-open .assessor-print-section {
+    break-after: page;
+  }
+
+  body.assessor-print-preview-open .assessor-print-section:last-child {
+    break-after: auto;
+  }
+}
