@@ -47,6 +47,27 @@ describe("assessor sheet helpers", () => {
     ]);
   });
 
+  it("uses the student's individual assessed level before the broad class band", () => {
+    const rows = buildAssessorSheetRows({
+      assessmentRows: [
+        {
+          "Student Name": "Bryan Xu",
+          "Q2 Current Level": "Water Confidence 2",
+          Level: "Toddler (WD1, WC2, WM3)"
+        }
+      ],
+      regularRows: [
+        {
+          "Student Name": "Bryan Xu",
+          "Event Name": "ACS(BR) @ Bt Timah Toddler (WD1, WC2, WM3) - Sat: 4:30 - 5:15"
+        }
+      ],
+      makeUpRows: []
+    });
+
+    assert.equal(rows[0].currentLevel, "Water Confidence 2");
+  });
+
   it("uses direct session columns when regular rows come from a mapped upload file", () => {
     const rows = buildAssessorSheetRows({
       assessmentRows: [],
@@ -56,6 +77,7 @@ describe("assessor sheet helpers", () => {
           "Current Coach": "Ci Hui Jiang",
           Centre: "ACS(BR)",
           Level: "Intermediate (Br4, Br5, Br6)",
+          "Q2 Current Level": "Breaststroke 5",
           Session: "Sat 3:45PM - 4:30PM"
         }
       ],
@@ -71,7 +93,7 @@ describe("assessor sheet helpers", () => {
         studentName: "Aadi",
         instructorName: "Ci Hui Jiang",
         classType: "Regular",
-        currentLevel: "Intermediate (Br4, Br5, Br6)",
+        currentLevel: "Breaststroke 5",
         passFail: ""
       }
     ]);

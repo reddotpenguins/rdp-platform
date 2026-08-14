@@ -91,8 +91,7 @@ export function buildAssessorSheetRows({
         studentName,
         instructorName: getInstructorFromRegularRow(row, lookup, classIndex, classTexts.length),
         classType: "Regular",
-        currentLevel:
-          parseLevelFromClassText(classText) || lookup?.currentLevel || getLevelFromRegularRow(row),
+        currentLevel: getCurrentLevelFromRegularRow(row, lookup, classText),
         passFail: ""
       });
     });
@@ -248,18 +247,32 @@ function getInstructorNamesFromRegularRow(row: RawSheetRow) {
   );
 }
 
+function getCurrentLevelFromRegularRow(
+  row: RawSheetRow,
+  lookup: AssessmentLookupValue | undefined,
+  classText: string
+) {
+  return lookup?.currentLevel || getLevelFromRegularRow(row) || parseLevelFromClassText(classText);
+}
+
 function getLevelFromRegularRow(row: RawSheetRow) {
   return textValue(
     getValue(row, [
-      "Current Class Level",
       "Current Level",
-      "Level",
       "Q3 Current Level",
-      "Q3 Level",
       "Q2 Current Level",
-      "Q2 Level",
       "Q1 Current Level",
-      "Q1 Level"
+      "Q3 Assessed Level",
+      "Q3 Tested Level",
+      "Q2 Assessed Level",
+      "Q2 Tested Level",
+      "Q1 Assessed Level",
+      "Q1 Tested Level",
+      "Current Class Level",
+      "Q3 Level",
+      "Q2 Level",
+      "Q1 Level",
+      "Level"
     ])
   );
 }
@@ -440,18 +453,7 @@ function buildAssessmentLookup(rows: RawSheetRow[]) {
     const instructorName = textValue(
       getValue(row, ["Current Coach", "Q3 Coach", "Q2 Coach", "Q1 Coach", "Coach", "Instructor"])
     );
-    const currentLevel = textValue(
-      getValue(row, [
-        "Current Level",
-        "Level",
-        "Q3 Current Level",
-        "Q3 Level",
-        "Q2 Current Level",
-        "Q2 Level",
-        "Q1 Current Level",
-        "Q1 Level"
-      ])
-    );
+    const currentLevel = getSpecificAssessmentLevel(row);
 
     lookup.set(studentKey, {
       instructorName,
@@ -460,6 +462,36 @@ function buildAssessmentLookup(rows: RawSheetRow[]) {
   }
 
   return lookup;
+}
+
+function getSpecificAssessmentLevel(row: RawSheetRow) {
+  const lookup = rowLookup(row);
+  const candidateHeaders = [
+    "Current Level",
+    "Q3 Current Level",
+    "Q2 Current Level",
+    "Q1 Current Level",
+    "Q3 Assessed Level",
+    "Q3 Tested Level",
+    "Q2 Assessed Level",
+    "Q2 Tested Level",
+    "Q1 Assessed Level",
+    "Q1 Tested Level",
+    "Q3 Level",
+    "Q2 Level",
+    "Q1 Level",
+    "Level"
+  ];
+
+  for (const header of candidateHeaders) {
+    const value = textValue(lookup.get(normalizeHeader(header)));
+
+    if (value && !isClassBandLevel(value)) {
+      return value;
+    }
+  }
+
+  return "";
 }
 
 function compareAssessorRows(first: AssessorSheetRow, second: AssessorSheetRow) {
@@ -623,6 +655,12 @@ function toTitleCase(value: string) {
 
 function findLastLevelMatch(value: string) {
   return Array.from(value.matchAll(levelSearchPattern)).at(-1);
+}
+
+function isClassBandLevel(value: unknown) {
+  return /^(baby class|toddler|foundation|intermediate|mini squad|race team|squad|learn to swim|social swim club)(?:\s*\([^)]*\))?$/i.test(
+    textValue(value)
+  );
 }
 
 function textValue(value: unknown) {
