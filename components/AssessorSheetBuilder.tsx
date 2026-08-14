@@ -533,10 +533,76 @@ function printAssessorSheets(
     <meta charset="utf-8" />
     <title>${escapeHtml(title)}</title>
     <style>
+      * {
+        box-sizing: border-box;
+      }
+
       body {
+        background: #f8fafc;
         color: #1f2937;
         font-family: Arial, sans-serif;
-        margin: 20px;
+        margin: 0;
+      }
+
+      .print-toolbar {
+        align-items: center;
+        background: #ffffff;
+        border-bottom: 1px solid #e5e7eb;
+        box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+        display: flex;
+        gap: 12px;
+        justify-content: space-between;
+        padding: 12px 20px;
+        position: sticky;
+        top: 0;
+        z-index: 10;
+      }
+
+      .print-toolbar strong {
+        color: #3d2115;
+        display: block;
+        font-size: 14px;
+      }
+
+      .print-toolbar span {
+        color: #64748b;
+        display: block;
+        font-size: 12px;
+        margin-top: 2px;
+      }
+
+      .toolbar-actions {
+        display: flex;
+        gap: 8px;
+      }
+
+      button {
+        border: 1px solid #d1d5db;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: 700;
+        height: 36px;
+        padding: 0 14px;
+      }
+
+      .print-button {
+        background: #ea580c;
+        border-color: #ea580c;
+        color: #ffffff;
+      }
+
+      .close-button {
+        background: #ffffff;
+        color: #334155;
+      }
+
+      .print-content {
+        background: #ffffff;
+        margin: 0 auto;
+        max-width: 1200px;
+        min-height: 100vh;
+        padding: 20px;
       }
 
       h1 {
@@ -594,6 +660,20 @@ function printAssessorSheets(
       }
 
       @media print {
+        body {
+          background: #ffffff;
+        }
+
+        .print-toolbar {
+          display: none;
+        }
+
+        .print-content {
+          margin: 0;
+          max-width: none;
+          padding: 0;
+        }
+
         .session-section {
           break-after: page;
         }
@@ -605,13 +685,24 @@ function printAssessorSheets(
     </style>
   </head>
   <body>
-    <h1>${escapeHtml(title)}</h1>
-    ${sections}
+    <div class="print-toolbar">
+      <div>
+        <strong>${escapeHtml(title)}</strong>
+        <span>${groupedRows.length} session sheet${groupedRows.length === 1 ? "" : "s"} ready to print</span>
+      </div>
+      <div class="toolbar-actions">
+        <button type="button" class="close-button" onclick="window.close()">Close</button>
+        <button type="button" class="print-button" onclick="window.print()">Print</button>
+      </div>
+    </div>
+    <main class="print-content">
+      <h1>${escapeHtml(title)}</h1>
+      ${sections}
+    </main>
   </body>
 </html>`);
   printWindow.document.close();
   printWindow.focus();
-  printWindow.print();
 }
 
 function groupRowsBySession(rows: AssessorSheetRow[]) {
