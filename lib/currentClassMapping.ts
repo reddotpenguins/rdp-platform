@@ -3,7 +3,8 @@ import {
   normalizeStudentNameForDisplay,
   parseLevelFromClassText,
   parseLocationFromClassText,
-  parseSessionFromClassText
+  parseSessionFromClassText,
+  splitClassTextsFromEventName
 } from "./assessorSheets.ts";
 
 type RawSheetRow = Record<string, unknown>;
@@ -26,9 +27,10 @@ export function parseCurrentClassMappings(rows: RawSheetRow[]) {
     );
     const studentKey = normalizeStudentKey(studentName);
     const eventName = textValue(getValue(row, ["Event Name", "Class Name", "Programme"]));
-    const centreName = getCentreNameFromRegularRow(row, eventName);
-    const session = parseSessionFromClassText(eventName);
-    const level = parseLevelFromClassText(eventName);
+    const firstClassText = splitClassTextsFromEventName(eventName)[0] ?? eventName;
+    const centreName = getCentreNameFromRegularRow(row, firstClassText);
+    const session = parseSessionFromClassText(firstClassText);
+    const level = parseLevelFromClassText(firstClassText);
 
     if (!studentName || !studentKey || (!session && !level)) {
       continue;
@@ -41,7 +43,7 @@ export function parseCurrentClassMappings(rows: RawSheetRow[]) {
         centreName,
         session,
         level,
-        eventName
+        eventName: firstClassText
       });
     }
   }

@@ -53,4 +53,19 @@ describe("current class mapping", () => {
     assert.equal(mappings[0].session, "Fri 4:45PM - 5:30PM");
     assert.equal(mappings[0].level, "Intermediate (Br4, Br5, Br6)");
   });
+
+  it("uses the first class when one current-list row contains multiple classes", () => {
+    const mappings = parseCurrentClassMappings([
+      {
+        "Student Name": "Dual Class Student",
+        "Event Name":
+          "ACS(BR) @ Bt Timah Mini Squad (Ba7, Ba8, Fl1, Fl2) - Sat: 4:00 - 5:00, SJII @ Caldecott Mini Squad (Ba7, Ba8, Fl1, Fl2) - Sun: 9:00 - 10:00"
+      }
+    ]);
+
+    assert.equal(mappings.length, 1);
+    assert.equal(mappings[0].centreName, "ACS(BR)");
+    assert.equal(mappings[0].session, "Sat 4:00PM - 5:00PM");
+    assert.equal(mappings[0].eventName, "ACS(BR) @ Bt Timah Mini Squad (Ba7, Ba8, Fl1, Fl2) - Sat: 4:00 - 5:00");
+  });
 });

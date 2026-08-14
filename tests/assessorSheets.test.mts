@@ -9,7 +9,8 @@ import {
   parseDayFromSessionLabel,
   parseLevelFromClassText,
   parseLocationFromClassText,
-  parseSessionFromClassText
+  parseSessionFromClassText,
+  splitClassTextsFromEventName
 } from "../lib/assessorSheets.ts";
 
 describe("assessor sheet helpers", () => {
@@ -28,12 +29,12 @@ describe("assessor sheet helpers", () => {
           "Event Name": "ACS(BR) @ Bt Timah Intermediate (Br4, Br5, Br6) - Sat: 3:45 - 4:30"
         }
       ],
-      makeUpRows: []
-    });
+        makeUpRows: []
+      });
 
     assert.deepEqual(rows, [
       {
-        id: "regular-0-aadi",
+        id: "regular-0-0-aadi",
         sessionTime: "Sat 3:45PM - 4:30PM",
         sessionDay: "Sat",
         location: "ACS(BR) @ Bt Timah",
@@ -63,7 +64,7 @@ describe("assessor sheet helpers", () => {
 
     assert.deepEqual(rows, [
       {
-        id: "regular-0-aadi",
+        id: "regular-0-0-aadi",
         sessionTime: "Sat 3:45PM - 4:30PM",
         sessionDay: "Sat",
         location: "ACS(BR)",
@@ -74,6 +75,44 @@ describe("assessor sheet helpers", () => {
         passFail: ""
       }
     ]);
+  });
+
+  it("splits regular students with multiple class events and assigns matching instructors", () => {
+    const rows = buildAssessorSheetRows({
+      assessmentRows: [],
+      regularRows: [
+        {
+          "Student Name": "Mersey",
+          "Event Name":
+            "SAAC @ Siglap Intermediate (Br4, Br5, Br6) - Sat: 8:45 - 9:30, SAAC @ Siglap Intermediate (Br4, Br5, Br6) - Sat: 9:30 - 10:15",
+          Instructors: "Khoo, Julia,Tan, Louis"
+        }
+      ],
+      makeUpRows: []
+    });
+
+    assert.deepEqual(
+      rows.map((row) => ({
+        instructorName: row.instructorName,
+        location: row.location,
+        sessionTime: row.sessionTime,
+        studentName: row.studentName
+      })),
+      [
+        {
+          instructorName: "Julia Khoo",
+          location: "SAAC @ Siglap",
+          sessionTime: "Sat 8:45AM - 9:30AM",
+          studentName: "Mersey"
+        },
+        {
+          instructorName: "Louis Tan",
+          location: "SAAC @ Siglap",
+          sessionTime: "Sat 9:30AM - 10:15AM",
+          studentName: "Mersey"
+        }
+      ]
+    );
   });
 
   it("adds make-up students with instructor names and class schedule", () => {
@@ -155,5 +194,16 @@ describe("assessor sheet helpers", () => {
     );
     assert.equal(parseDayFromSessionLabel("Sun 4:00PM - 5:00PM"), "Sun");
     assert.equal(formatInstructorNames("Lai, Joyce; Tan, Alex"), "Joyce Lai, Alex Tan");
+    assert.equal(formatInstructorNames("Jiang, Ci Hui"), "Ci Hui Jiang");
+    assert.equal(formatInstructorNames("Lim, Samuel, Sen, Lionel,Tan, Louis"), "Samuel Lim, Lionel Sen, Louis Tan");
+    assert.deepEqual(
+      splitClassTextsFromEventName(
+        "ACS(BR) @ Bt Timah Mini Squad (Ba7, Ba8, Fl1, Fl2) - Sat: 4:00 - 5:00, SJII @ Caldecott Mini Squad (Ba7, Ba8, Fl1, Fl2) - Sun: 9:00 - 10:00"
+      ),
+      [
+        "ACS(BR) @ Bt Timah Mini Squad (Ba7, Ba8, Fl1, Fl2) - Sat: 4:00 - 5:00",
+        "SJII @ Caldecott Mini Squad (Ba7, Ba8, Fl1, Fl2) - Sun: 9:00 - 10:00"
+      ]
+    );
   });
 });

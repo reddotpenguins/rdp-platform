@@ -75,22 +75,26 @@ export function buildAssessorSheetRows({
     }
 
     const eventName = textValue(getValue(row, ["Event Name", "Class Name", "Programme"]));
+    const classTexts = getRegularClassTexts(eventName);
     const lookup = assessmentLookup.get(normalizeStudentKey(studentName));
-    const sessionTime = getSessionFromRegularRow(row, eventName);
 
-    rows.push({
-      id: `regular-${index}-${normalizeStudentKey(studentName) || "student"}`,
-      sessionTime,
-      sessionDay: parseDayFromSessionLabel(sessionTime),
-      location:
-        parseLocationFromClassText(eventName) ||
-        textValue(getValue(row, ["Class Centre", "Centre", "Center", "Location"])),
-      studentName,
-      instructorName: lookup?.instructorName ?? getInstructorFromRegularRow(row),
-      classType: "Regular",
-      currentLevel:
-        parseLevelFromClassText(eventName) || lookup?.currentLevel || getLevelFromRegularRow(row),
-      passFail: ""
+    classTexts.forEach((classText, classIndex) => {
+      const sessionTime = getSessionFromRegularRow(row, classText);
+
+      rows.push({
+        id: `regular-${index}-${classIndex}-${normalizeStudentKey(studentName) || "student"}`,
+        sessionTime,
+        sessionDay: parseDayFromSessionLabel(sessionTime),
+        location:
+          parseLocationFromClassText(classText) ||
+          textValue(getValue(row, ["Class Centre", "Centre", "Center", "Location"])),
+        studentName,
+        instructorName: getInstructorFromRegularRow(row, lookup, classIndex, classTexts.length),
+        classType: "Regular",
+        currentLevel:
+          parseLevelFromClassText(classText) || lookup?.currentLevel || getLevelFromRegularRow(row),
+        passFail: ""
+      });
     });
   });
 
@@ -157,7 +161,41 @@ export function getAssessorSheetColumns() {
   ];
 }
 
-function getSessionFromRegularRow(row: RawSheetRow, eventName: string) {
+function getRegularClassTexts(eventName: string) {
+  const classTexts = splitClassTextsFromEventName(eventName);
+
+  return classTexts.length > 0 ? classTexts : [""];
+}
+
+export function splitClassTextsFromEventName(value: unknown) {
+  const text = textValue(value);
+
+  if (!text) {
+    return [];
+  }
+
+  const sessionPattern =
+    /\b(?:mon(?:day)?|tue(?:s|sday)?|wed(?:nesday)?|thu(?:r|rs|rsday|rday)?|fri(?:day)?|sat(?:urday)?|sun(?:day)?)\s*:?\s+\d{1,2}:\d{2}\s*(?:am|pm)?\s*(?:-|to)\s*\d{1,2}:\d{2}\s*(?:am|pm)?\b/gi;
+  const matches = Array.from(text.matchAll(sessionPattern));
+
+  if (matches.length <= 1) {
+    return [text];
+  }
+
+  return matches
+    .map((match, index) => {
+      const start =
+        index === 0
+          ? 0
+          : (matches[index - 1].index ?? 0) + matches[index - 1][0].length;
+      const end = (match.index ?? text.length) + match[0].length;
+
+      return text.slice(start, end).replace(/^,\s*/, "").trim();
+    })
+    .filter(Boolean);
+}
+
+function getSessionFromRegularRow(row: RawSheetRow, classText: string) {
   return (
     normalizeSessionLabel(
       getValue(row, [
@@ -169,13 +207,44 @@ function getSessionFromRegularRow(row: RawSheetRow, eventName: string) {
         "Q1 Session",
         "Class Schedule"
       ])
-    ) || parseSessionFromClassText(eventName)
+    ) || parseSessionFromClassText(classText)
   );
 }
 
-function getInstructorFromRegularRow(row: RawSheetRow) {
-  return textValue(
-    getValue(row, ["Current Coach", "Q3 Coach", "Q2 Coach", "Q1 Coach", "Coach", "Instructor"])
+function getInstructorFromRegularRow(
+  row: RawSheetRow,
+  lookup: AssessmentLookupValue | undefined,
+  classIndex: number,
+  classCount: number
+) {
+  const instructorNames = getInstructorNamesFromRegularRow(row);
+
+  if (instructorNames.length === classCount) {
+    return instructorNames[classIndex] ?? "";
+  }
+
+  if (instructorNames.length === 1) {
+    return instructorNames[0];
+  }
+
+  if (instructorNames.length > 1) {
+    return instructorNames[classIndex] ?? instructorNames.join(", ");
+  }
+
+  return lookup?.instructorName ?? "";
+}
+
+function getInstructorNamesFromRegularRow(row: RawSheetRow) {
+  return parseInstructorNames(
+    getValue(row, [
+      "Instructors",
+      "Instructor",
+      "Current Coach",
+      "Q3 Coach",
+      "Q2 Coach",
+      "Q1 Coach",
+      "Coach"
+    ])
   );
 }
 
@@ -315,17 +384,44 @@ export function parseDayFromSessionLabel(value: unknown) {
 }
 
 export function formatInstructorNames(value: unknown) {
+  return parseInstructorNames(value).join(", ");
+}
+
+function parseInstructorNames(value: unknown): string[] {
   const text = textValue(value);
 
   if (!text) {
-    return "";
+    return [];
   }
 
-  return text
+  const groupedParts = text
     .split(/\s*(?:;|\|)\s*/)
-    .map((name) => formatCommaName(name))
-    .filter(Boolean)
-    .join(", ");
+    .map((name) => name.trim())
+    .filter(Boolean);
+
+  if (groupedParts.length > 1) {
+    return groupedParts.flatMap(parseInstructorNames);
+  }
+
+  const commaParts = text
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  if (commaParts.length >= 2) {
+    const names: string[] = [];
+
+    for (let index = 0; index < commaParts.length; index += 2) {
+      const surname = commaParts[index];
+      const givenName = commaParts[index + 1];
+
+      names.push(givenName ? `${givenName} ${surname}`.trim() : surname);
+    }
+
+    return names.filter(Boolean);
+  }
+
+  return [formatCommaName(text)].filter(Boolean);
 }
 
 function buildAssessmentLookup(rows: RawSheetRow[]) {
