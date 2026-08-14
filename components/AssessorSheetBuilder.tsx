@@ -5,6 +5,8 @@ import Papa from "papaparse";
 import { Download, FileSpreadsheet, Printer, RefreshCcw } from "lucide-react";
 import {
   buildAssessorSheetRows,
+  getAssessorSessionPeriod,
+  getAssessorSessionTiming,
   getAssessorSheetColumns,
   getAssessorSheetSummary,
   type AssessorSheetRow
@@ -30,7 +32,8 @@ export function AssessorSheetBuilder() {
   const [rows, setRows] = useState<AssessorSheetRow[]>([]);
   const [selectedDay, setSelectedDay] = useState("all");
   const [selectedLocation, setSelectedLocation] = useState("all");
-  const [selectedSession, setSelectedSession] = useState("all");
+  const [selectedPeriod, setSelectedPeriod] = useState("all");
+  const [selectedTiming, setSelectedTiming] = useState("all");
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [resetNonce, setResetNonce] = useState(0);
@@ -47,23 +50,44 @@ export function AssessorSheetBuilder() {
       }),
     [rows, selectedDay, selectedLocation]
   );
-  const sessionOptions = useMemo(
-    () => getAssessorSheetSummary(rowsMatchingDayAndLocation).sessions,
+  const periodOptions = useMemo(
+    () => getAssessorSheetSummary(rowsMatchingDayAndLocation).sessionPeriods,
     [rowsMatchingDayAndLocation]
+  );
+  const rowsMatchingPeriod = useMemo(
+    () =>
+      selectedPeriod === "all"
+        ? rowsMatchingDayAndLocation
+        : rowsMatchingDayAndLocation.filter(
+            (row) => getAssessorSessionPeriod(row.sessionTime) === selectedPeriod
+          ),
+    [rowsMatchingDayAndLocation, selectedPeriod]
+  );
+  const timingOptions = useMemo(
+    () => getAssessorSheetSummary(rowsMatchingPeriod).timings,
+    [rowsMatchingPeriod]
   );
   const visibleRows = useMemo(
     () =>
-      selectedSession === "all"
-        ? rowsMatchingDayAndLocation
-        : rowsMatchingDayAndLocation.filter((row) => row.sessionTime === selectedSession),
-    [rowsMatchingDayAndLocation, selectedSession]
+      selectedTiming === "all"
+        ? rowsMatchingPeriod
+        : rowsMatchingPeriod.filter(
+            (row) => getAssessorSessionTiming(row.sessionTime) === selectedTiming
+          ),
+    [rowsMatchingPeriod, selectedTiming]
   );
 
   useEffect(() => {
-    if (selectedSession !== "all" && !sessionOptions.includes(selectedSession)) {
-      setSelectedSession("all");
+    if (selectedPeriod !== "all" && !periodOptions.includes(selectedPeriod)) {
+      setSelectedPeriod("all");
     }
-  }, [selectedSession, sessionOptions]);
+  }, [selectedPeriod, periodOptions]);
+
+  useEffect(() => {
+    if (selectedTiming !== "all" && !timingOptions.includes(selectedTiming)) {
+      setSelectedTiming("all");
+    }
+  }, [selectedTiming, timingOptions]);
 
   function updateFile(key: keyof UploadedFiles, file: File | null) {
     setFiles((currentFiles) => ({ ...currentFiles, [key]: file }));
@@ -97,7 +121,8 @@ export function AssessorSheetBuilder() {
       setRows(nextRows);
       setSelectedDay("all");
       setSelectedLocation("all");
-      setSelectedSession("all");
+      setSelectedPeriod("all");
+      setSelectedTiming("all");
     } catch (generateError) {
       setRows([]);
       setError(
@@ -115,7 +140,8 @@ export function AssessorSheetBuilder() {
     setRows([]);
     setSelectedDay("all");
     setSelectedLocation("all");
-    setSelectedSession("all");
+    setSelectedPeriod("all");
+    setSelectedTiming("all");
     setError(null);
     setResetNonce((currentNonce) => currentNonce + 1);
   }
@@ -195,18 +221,25 @@ export function AssessorSheetBuilder() {
               options={summary.days}
             />
             <FilterSelect
-              label="Location"
+              label="Centre"
               value={selectedLocation}
               onChange={setSelectedLocation}
-              allLabel="All locations"
+              allLabel="All centres"
               options={summary.locations}
             />
             <FilterSelect
-              label="Session"
-              value={selectedSession}
-              onChange={setSelectedSession}
-              allLabel="All sessions"
-              options={sessionOptions}
+              label="AM/PM"
+              value={selectedPeriod}
+              onChange={setSelectedPeriod}
+              allLabel="All AM/PM"
+              options={periodOptions}
+            />
+            <FilterSelect
+              label="Timing"
+              value={selectedTiming}
+              onChange={setSelectedTiming}
+              allLabel="All timings"
+              options={timingOptions}
             />
             <button
               type="button"

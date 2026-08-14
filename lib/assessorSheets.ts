@@ -20,7 +20,9 @@ export type AssessorSheetSummary = {
   missingSessionRows: number;
   days: string[];
   locations: string[];
+  sessionPeriods: string[];
   sessions: string[];
+  timings: string[];
 };
 
 type RawSheetRow = Record<string, unknown>;
@@ -85,9 +87,10 @@ export function buildAssessorSheetRows({
         id: `regular-${index}-${classIndex}-${normalizeStudentKey(studentName) || "student"}`,
         sessionTime,
         sessionDay: parseDayFromSessionLabel(sessionTime),
-        location:
+        location: normalizeAssessorLocation(
           parseLocationFromClassText(classText) ||
-          textValue(getValue(row, ["Class Centre", "Centre", "Center", "Location"])),
+            textValue(getValue(row, ["Class Centre", "Centre", "Center", "Location"]))
+        ),
         studentName,
         instructorName: getInstructorFromRegularRow(row, lookup, classIndex, classTexts.length),
         classType: "Regular",
@@ -112,9 +115,10 @@ export function buildAssessorSheetRows({
       id: `make-up-${index}-${normalizeStudentKey(studentName) || "student"}`,
       sessionTime,
       sessionDay: parseDayFromSessionLabel(sessionTime),
-      location:
+      location: normalizeAssessorLocation(
         parseLocationFromClassText(className) ||
-        textValue(getValue(row, ["Centre", "Center", "Location"])),
+          textValue(getValue(row, ["Centre", "Center", "Location"]))
+      ),
       studentName,
       instructorName: formatInstructorNames(textValue(getValue(row, ["Instructors", "Instructor"]))),
       classType: "Make Up",
@@ -136,6 +140,12 @@ export function getAssessorSheetSummary(rows: AssessorSheetRow[]): AssessorSheet
   const sessions = Array.from(
     new Set(rows.map((row) => row.sessionTime).filter((session) => session.trim() !== ""))
   ).sort(compareSessionLabels);
+  const sessionPeriods = Array.from(
+    new Set(rows.map((row) => getAssessorSessionPeriod(row.sessionTime)).filter(Boolean))
+  ).sort(compareSessionPeriods);
+  const timings = Array.from(
+    new Set(rows.map((row) => getAssessorSessionTiming(row.sessionTime)).filter(Boolean))
+  ).sort(compareTimingLabels);
 
   return {
     totalRows: rows.length,
@@ -145,7 +155,9 @@ export function getAssessorSheetSummary(rows: AssessorSheetRow[]): AssessorSheet
     missingSessionRows: rows.filter((row) => row.sessionTime.trim() === "").length,
     days,
     locations,
-    sessions
+    sessionPeriods,
+    sessions,
+    timings
   };
 }
 
@@ -390,10 +402,53 @@ export function parseLocationFromClassText(value: unknown) {
   return location.replace(/^Fundamental\s+Squad,\s*/i, "").replace(/\s+/g, " ");
 }
 
+export function normalizeAssessorLocation(value: unknown) {
+  const cleaned = textValue(value).replace(/^Fundamental\s+Squad,\s*/i, "");
+
+  if (!cleaned) {
+    return "";
+  }
+
+  if (/\bflexi\s*pass\b/i.test(cleaned)) {
+    return "Flexi Pass";
+  }
+
+  if (/\bymca\b/i.test(cleaned)) {
+    return "YMCA";
+  }
+
+  if (/\bsaac\b/i.test(cleaned)) {
+    return "SAAC";
+  }
+
+  if (/\bsjii\b/i.test(cleaned)) {
+    return "SJII";
+  }
+
+  if (/\bacs\s*\(?\s*br\s*\)?\b/i.test(cleaned)) {
+    return "ACS(BR)";
+  }
+
+  return cleaned.split("@")[0]?.trim().replace(/\s+/g, " ") || cleaned;
+}
+
 export function parseDayFromSessionLabel(value: unknown) {
   const match = textValue(value).match(/^([A-Za-z]+)/);
 
   return match ? normalizeDayLabel(match[1]) : "";
+}
+
+export function getAssessorSessionPeriod(value: unknown) {
+  const timing = getAssessorSessionTiming(value);
+  const match = timing.match(/(AM|PM)/i);
+
+  return match ? match[1].toUpperCase() : "";
+}
+
+export function getAssessorSessionTiming(value: unknown) {
+  return textValue(value)
+    .replace(/^(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+/i, "")
+    .trim();
 }
 
 export function formatInstructorNames(value: unknown) {
@@ -521,6 +576,19 @@ function compareSessionLabels(first: string, second: string) {
     firstParts.startMinutes - secondParts.startMinutes ||
     first.localeCompare(second, undefined, { numeric: true, sensitivity: "base" })
   );
+}
+
+function compareTimingLabels(first: string, second: string) {
+  return compareSessionLabels(`Mon ${first}`, `Mon ${second}`);
+}
+
+function compareSessionPeriods(first: string, second: string) {
+  const order = new Map([
+    ["AM", 1],
+    ["PM", 2]
+  ]);
+
+  return (order.get(first) ?? 99) - (order.get(second) ?? 99) || first.localeCompare(second);
 }
 
 function getSessionSortParts(value: string) {
