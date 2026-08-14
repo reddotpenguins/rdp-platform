@@ -8,6 +8,7 @@ import {
   getAssessorSheetSummary,
   normalizeAssessorLocation,
   normalizeSessionLabel,
+  parseClassBandFromClassText,
   normalizeStudentNameForDisplay,
   parseDayFromSessionLabel,
   parseLevelFromClassText,
@@ -44,7 +45,8 @@ describe("assessor sheet helpers", () => {
         studentName: "Aadi",
         instructorName: "Tyrone Peh",
         classType: "Regular",
-        currentLevel: "Intermediate (Br4, Br5, Br6)",
+        classBand: "Intermediate",
+        currentLevel: "",
         passFail: ""
       }
     ]);
@@ -70,6 +72,7 @@ describe("assessor sheet helpers", () => {
     });
 
     assert.equal(rows[0].currentLevel, "Water Movement 3");
+    assert.equal(rows[0].classBand, "Toddler");
   });
 
   it("uses assessment levels for make-up students when an assessment file is supplied", () => {
@@ -93,6 +96,7 @@ describe("assessor sheet helpers", () => {
     });
 
     assert.equal(rows[0].currentLevel, "Breaststroke 6");
+    assert.equal(rows[0].classBand, "Intermediate");
   });
 
   it("uses direct session columns when regular rows come from a mapped upload file", () => {
@@ -120,6 +124,7 @@ describe("assessor sheet helpers", () => {
         studentName: "Aadi",
         instructorName: "Ci Hui Jiang",
         classType: "Regular",
+        classBand: "Intermediate",
         currentLevel: "Breaststroke 5",
         passFail: ""
       }
@@ -218,8 +223,27 @@ describe("assessor sheet helpers", () => {
     assert.equal(rows[0].studentName, "Noah Seow");
     assert.equal(rows[0].instructorName, "Joyce Lai");
     assert.equal(rows[0].classType, "Make Up");
-    assert.equal(rows[0].currentLevel, "Intermediate (Br4, Br5, Br6)");
+    assert.equal(rows[0].classBand, "Intermediate");
+    assert.equal(rows[0].currentLevel, "");
     assert.equal(rows[0].passFail, "");
+  });
+
+  it("keeps current level blank for current-class-only students and shows the short class band", () => {
+    const rows = buildAssessorSheetRows({
+      assessmentRows: [],
+      regularRows: [
+        {
+          "Student Name": "Hirota, Kiko",
+          "Event Name": "YMCA @ Orchard Toddler (WD1, WC2, WM3) - Sat: 8:30 - 9:15",
+          Instructors: "Binte Isnin, Noraisah"
+        }
+      ],
+      makeUpRows: []
+    });
+
+    assert.equal(rows[0].studentName, "Kiko Hirota");
+    assert.equal(rows[0].classBand, "Toddler");
+    assert.equal(rows[0].currentLevel, "");
   });
 
   it("summarises generated rows and missing mapping values", () => {
@@ -232,6 +256,7 @@ describe("assessor sheet helpers", () => {
         studentName: "First Student",
         instructorName: "",
         classType: "Regular",
+        classBand: "Foundation",
         currentLevel: "Foundation",
         passFail: ""
       },
@@ -243,6 +268,7 @@ describe("assessor sheet helpers", () => {
         studentName: "Second Student",
         instructorName: "Coach",
         classType: "Make Up",
+        classBand: "Intermediate",
         currentLevel: "Intermediate",
         passFail: ""
       }
@@ -267,6 +293,7 @@ describe("assessor sheet helpers", () => {
     assert.equal(normalizeSessionLabel("Fri-4:45PM-5:30PM"), "Fri 4:45PM - 5:30PM");
     assert.equal(parseSessionFromClassText("SAAC Foundation - Sat: 11:00 - 11:45"), "Sat 11:00AM - 11:45AM");
     assert.equal(parseLevelFromClassText("SAAC @ Siglap Foundation (F1, F2, F3)"), "Foundation (F1, F2, F3)");
+    assert.equal(parseClassBandFromClassText("SAAC @ Siglap Foundation (F1, F2, F3)"), "Foundation");
     assert.equal(parseLocationFromClassText("SAAC @ Siglap Foundation (F1, F2, F3) - Sat: 11:00 - 11:45"), "SAAC @ Siglap");
     assert.equal(normalizeAssessorLocation("SAAC @ Siglap"), "SAAC");
     assert.equal(normalizeAssessorLocation("YMCA @ Orchard"), "YMCA");

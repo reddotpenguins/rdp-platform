@@ -9,7 +9,6 @@ import {
   getAssessorSessionTiming,
   getAssessorSheetColumns,
   getAssessorSheetSummary,
-  isAssessorClassBandLevel,
   type AssessorSheetRow
 } from "@/lib/assessorSheets";
 import { downloadCsv } from "@/lib/tableExport";
@@ -41,8 +40,8 @@ export function AssessorSheetBuilder() {
 
   const summary = useMemo(() => getAssessorSheetSummary(rows), [rows]);
   const columns = useMemo(() => getAssessorSheetColumns(), []);
-  const classBandLevelCount = useMemo(
-    () => rows.filter((row) => isAssessorClassBandLevel(row.currentLevel)).length,
+  const missingCurrentLevelCount = useMemo(
+    () => rows.filter((row) => row.currentLevel.trim() === "").length,
     [rows]
   );
   const rowsMatchingDayAndLocation = useMemo(
@@ -277,15 +276,15 @@ export function AssessorSheetBuilder() {
 
       {rows.length > 0 && !files.assessment ? (
         <p className="mt-4 rounded-md border border-yellow-200 bg-yellow-50 px-3 py-2 text-sm font-medium text-yellow-800">
-          Current Level is using class bands only because no assessment file was included. Add the
-          upload-ready RDP_LTS assessment file, then generate again to show exact levels.
+          Current Level is blank where no exact assessment level is available. Class Band still
+          shows the programme group from the class name.
         </p>
       ) : null}
 
-      {rows.length > 0 && files.assessment && classBandLevelCount > 0 ? (
+      {rows.length > 0 && files.assessment && missingCurrentLevelCount > 0 ? (
         <p className="mt-4 rounded-md border border-yellow-200 bg-yellow-50 px-3 py-2 text-sm font-medium text-yellow-800">
-          {classBandLevelCount.toLocaleString()} row
-          {classBandLevelCount === 1 ? "" : "s"} still show class-band levels because those
+          {missingCurrentLevelCount.toLocaleString()} row
+          {missingCurrentLevelCount === 1 ? "" : "s"} have blank Current Level because those
           students do not have an exact level match in the assessment file.
         </p>
       ) : null}

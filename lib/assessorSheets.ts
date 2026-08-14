@@ -8,6 +8,7 @@ export type AssessorSheetRow = {
   studentName: string;
   instructorName: string;
   classType: AssessorSheetClassType;
+  classBand: string;
   currentLevel: string;
   passFail: string;
 };
@@ -94,6 +95,7 @@ export function buildAssessorSheetRows({
         studentName,
         instructorName: getInstructorFromRegularRow(row, lookup, classIndex, classTexts.length),
         classType: "Regular",
+        classBand: getClassBandFromRegularRow(row, classText),
         currentLevel: getCurrentLevelFromRegularRow(row, lookup, classText),
         passFail: ""
       });
@@ -123,7 +125,8 @@ export function buildAssessorSheetRows({
       studentName,
       instructorName: formatInstructorNames(textValue(getValue(row, ["Instructors", "Instructor"]))),
       classType: "Make Up",
-      currentLevel: lookup?.currentLevel || parseLevelFromClassText(className),
+      classBand: parseClassBandFromClassText(className),
+      currentLevel: lookup?.currentLevel || getExactLevelFromRow(row),
       passFail: ""
     });
   });
@@ -168,6 +171,7 @@ export function getAssessorSheetColumns() {
     { header: "Name of Student", value: (row: AssessorSheetRow) => row.studentName },
     { header: "Name of Instructor", value: (row: AssessorSheetRow) => row.instructorName },
     { header: "Class Type", value: (row: AssessorSheetRow) => row.classType },
+    { header: "Class Band", value: (row: AssessorSheetRow) => row.classBand },
     { header: "Current Level", value: (row: AssessorSheetRow) => row.currentLevel },
     { header: "Pass/Fail", value: (row: AssessorSheetRow) => row.passFail }
   ];
@@ -263,31 +267,63 @@ function getInstructorNamesFromRegularRow(row: RawSheetRow) {
 function getCurrentLevelFromRegularRow(
   row: RawSheetRow,
   lookup: AssessmentLookupValue | undefined,
-  classText: string
+  _classText: string
 ) {
-  return lookup?.currentLevel || getLevelFromRegularRow(row) || parseLevelFromClassText(classText);
+  return lookup?.currentLevel || getExactLevelFromRow(row);
 }
 
-function getLevelFromRegularRow(row: RawSheetRow) {
-  return textValue(
-    getValue(row, [
-      "Current Level",
-      "Q3 Current Level",
-      "Q3 Assessed Level",
-      "Q3 Tested Level",
-      "Q2 Current Level",
-      "Q2 Assessed Level",
-      "Q2 Tested Level",
-      "Q1 Current Level",
-      "Q1 Assessed Level",
-      "Q1 Tested Level",
-      "Current Class Level",
-      "Q3 Level",
-      "Q2 Level",
-      "Q1 Level",
-      "Level"
-    ])
+function getClassBandFromRegularRow(row: RawSheetRow, classText: string) {
+  const directClassBand = textValue(
+    getValue(row, ["Class Band", "Class Group", "Programme Band", "Program Band"])
   );
+
+  if (directClassBand) {
+    return simplifyClassBand(directClassBand);
+  }
+
+  const lookup = rowLookup(row);
+  const levelHeaders = ["Current Class Level", "Q3 Level", "Q2 Level", "Q1 Level", "Level"];
+
+  for (const header of levelHeaders) {
+    const value = textValue(lookup.get(normalizeHeader(header)));
+
+    if (isAssessorClassBandLevel(value)) {
+      return simplifyClassBand(value);
+    }
+  }
+
+  return parseClassBandFromClassText(classText);
+}
+
+function getExactLevelFromRow(row: RawSheetRow) {
+  const lookup = rowLookup(row);
+  const candidateHeaders = [
+    "Current Level",
+    "Q3 Current Level",
+    "Q3 Assessed Level",
+    "Q3 Tested Level",
+    "Q2 Current Level",
+    "Q2 Assessed Level",
+    "Q2 Tested Level",
+    "Q1 Current Level",
+    "Q1 Assessed Level",
+    "Q1 Tested Level",
+    "Current Class Level",
+    "Q3 Level",
+    "Q2 Level",
+    "Q1 Level",
+    "Level"
+  ];
+
+  for (const header of candidateHeaders) {
+    const value = textValue(lookup.get(normalizeHeader(header)));
+
+    if (value && !isAssessorClassBandLevel(value)) {
+      return value;
+    }
+  }
+
+  return "";
 }
 
 export function normalizeStudentNameForDisplay(value: unknown) {
@@ -380,6 +416,12 @@ export function parseLevelFromClassText(value: unknown) {
   }
 
   return `${toTitleCase(match[1])}${match[2] ? ` ${match[2].trim()}` : ""}`.trim();
+}
+
+export function parseClassBandFromClassText(value: unknown) {
+  const match = findLastLevelMatch(textValue(value));
+
+  return match ? simplifyClassBand(match[1]) : "";
 }
 
 export function parseLocationFromClassText(value: unknown) {
@@ -521,33 +563,7 @@ function buildAssessmentLookup(rows: RawSheetRow[]) {
 }
 
 function getSpecificAssessmentLevel(row: RawSheetRow) {
-  const lookup = rowLookup(row);
-  const candidateHeaders = [
-    "Current Level",
-    "Q3 Current Level",
-    "Q3 Assessed Level",
-    "Q3 Tested Level",
-    "Q2 Current Level",
-    "Q2 Assessed Level",
-    "Q2 Tested Level",
-    "Q1 Current Level",
-    "Q1 Assessed Level",
-    "Q1 Tested Level",
-    "Q3 Level",
-    "Q2 Level",
-    "Q1 Level",
-    "Level"
-  ];
-
-  for (const header of candidateHeaders) {
-    const value = textValue(lookup.get(normalizeHeader(header)));
-
-    if (value && !isAssessorClassBandLevel(value)) {
-      return value;
-    }
-  }
-
-  return "";
+  return getExactLevelFromRow(row);
 }
 
 function compareAssessorRows(first: AssessorSheetRow, second: AssessorSheetRow) {
@@ -724,6 +740,16 @@ function toTitleCase(value: string) {
 
 function findLastLevelMatch(value: string) {
   return Array.from(value.matchAll(levelSearchPattern)).at(-1);
+}
+
+function simplifyClassBand(value: unknown) {
+  const cleaned = textValue(value).replace(/\([^)]*\)/g, "").trim();
+
+  if (!cleaned) {
+    return "";
+  }
+
+  return toTitleCase(cleaned);
 }
 
 export function isAssessorClassBandLevel(value: unknown) {
