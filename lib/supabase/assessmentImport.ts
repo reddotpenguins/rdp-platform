@@ -1,5 +1,21 @@
-import { applyAssessmentLogic, normalizeAssessmentResult } from "@/lib/assessmentLogic";
-import type { AssessmentQuarter, StudentAssessmentRecord } from "@/types/assessment";
+import {
+  applyAssessmentLogic,
+  compareAssessmentQuarters,
+  getAvailableQuarters,
+  getQuarterCentre,
+  getQuarterCoachName,
+  getQuarterLevel,
+  getQuarterResult,
+  getQuarterSession,
+  normalizeAssessmentQuarter,
+  normalizeAssessmentResult,
+  recordHasQuarter
+} from "@/lib/assessmentLogic";
+import type {
+  AssessmentQuarter,
+  QuarterAssessmentDetails,
+  StudentAssessmentRecord
+} from "@/types/assessment";
 
 type AssessmentImportRow = {
   id?: string;
@@ -19,16 +35,17 @@ type AssessmentImportRow = {
   imported_at?: string | null;
 };
 
-const supportedQuarters: AssessmentQuarter[] = ["Q1", "Q2"];
-
 export function assessmentImportRowsToRecords(rows: AssessmentImportRow[]) {
   const grouped = new Map<
     string,
-    Partial<StudentAssessmentRecord> & { studentName: string }
+    Partial<StudentAssessmentRecord> & {
+      quarterDetails: Partial<Record<AssessmentQuarter, QuarterAssessmentDetails>>;
+      studentName: string;
+    }
   >();
 
   for (const row of rows) {
-    const quarter = normalizeQuarter(row.quarter);
+    const quarter = normalizeAssessmentQuarter(row.quarter);
 
     if (!quarter || !row.student_name) {
       continue;
@@ -40,32 +57,47 @@ export function assessmentImportRowsToRecords(rows: AssessmentImportRow[]) {
     const existing =
       grouped.get(key) ??
       ({
-        id: slugId(year, studentKey),
-        studentCode: row.student_code?.trim() || undefined,
-        studentName: row.student_name.trim(),
         assessmentYear: year,
+        id: slugId(year, studentKey),
         q1Result: "",
-        q2Result: ""
-      } satisfies Partial<StudentAssessmentRecord> & { studentName: string });
+        q2Result: "",
+        quarterDetails: {},
+        studentCode: row.student_code?.trim() || undefined,
+        studentName: row.student_name.trim()
+      } satisfies Partial<StudentAssessmentRecord> & {
+        quarterDetails: Partial<Record<AssessmentQuarter, QuarterAssessmentDetails>>;
+        studentName: string;
+      });
+
+    existing.quarterDetails[quarter] = {
+      coachName: row.coach_name?.trim() || undefined,
+      centre: row.centre_name?.trim() || undefined,
+      level: row.level?.trim() || undefined,
+      session: row.session_label?.trim() || undefined,
+      result: normalizeAssessmentResult(row.result)
+    };
 
     if (quarter === "Q1") {
-      existing.q1CoachName = row.coach_name?.trim() || existing.q1CoachName;
-      existing.q1Centre = row.centre_name?.trim() || existing.q1Centre;
-      existing.q1Level = row.level?.trim() || existing.q1Level;
-      existing.q1Session = row.session_label?.trim() || existing.q1Session;
-      existing.q1Result = normalizeAssessmentResult(row.result);
-    } else {
-      existing.q2CoachName = row.coach_name?.trim() || existing.q2CoachName;
-      existing.q2Centre = row.centre_name?.trim() || existing.q2Centre;
-      existing.q2Level = row.level?.trim() || existing.q2Level;
-      existing.q2Session = row.session_label?.trim() || existing.q2Session;
-      existing.q2Result = normalizeAssessmentResult(row.result);
+      existing.q1CoachName = existing.quarterDetails[quarter]?.coachName;
+      existing.q1Centre = existing.quarterDetails[quarter]?.centre;
+      existing.q1Level = existing.quarterDetails[quarter]?.level;
+      existing.q1Session = existing.quarterDetails[quarter]?.session;
+      existing.q1Result = existing.quarterDetails[quarter]?.result ?? "";
     }
 
-    existing.coachName = existing.q2CoachName || existing.q1CoachName || "Unassigned";
-    existing.centre = existing.q2Centre || existing.q1Centre;
-    existing.level = existing.q2Level || existing.q1Level;
-    existing.session = existing.q2Session || existing.q1Session;
+    if (quarter === "Q2") {
+      existing.q2CoachName = existing.quarterDetails[quarter]?.coachName;
+      existing.q2Centre = existing.quarterDetails[quarter]?.centre;
+      existing.q2Level = existing.quarterDetails[quarter]?.level;
+      existing.q2Session = existing.quarterDetails[quarter]?.session;
+      existing.q2Result = existing.quarterDetails[quarter]?.result ?? "";
+    }
+
+    const latestDetail = getLatestDetail(existing.quarterDetails);
+    existing.coachName = latestDetail?.coachName || existing.coachName || "Unassigned";
+    existing.centre = latestDetail?.centre || existing.centre;
+    existing.level = latestDetail?.level || existing.level;
+    existing.session = latestDetail?.session || existing.session;
     grouped.set(key, existing);
   }
 
@@ -79,54 +111,56 @@ export function assessmentImportRowsToRecords(rows: AssessmentImportRow[]) {
       level: record.level,
       session: record.session,
       assessmentYear: record.assessmentYear,
-      q1CoachName: record.q1CoachName || record.coachName || "Unassigned",
-      q1Centre: record.q1Centre || record.centre,
-      q1Level: record.q1Level || record.level,
-      q1Session: record.q1Session || record.session,
+      q1CoachName: record.q1CoachName,
+      q1Centre: record.q1Centre,
+      q1Level: record.q1Level,
+      q1Session: record.q1Session,
       q1Result: record.q1Result ?? "",
-      q2CoachName: record.q2CoachName || record.coachName || "Unassigned",
-      q2Centre: record.q2Centre || record.centre,
-      q2Level: record.q2Level || record.level,
-      q2Session: record.q2Session || record.session,
-      q2Result: record.q2Result ?? ""
+      q2CoachName: record.q2CoachName,
+      q2Centre: record.q2Centre,
+      q2Level: record.q2Level,
+      q2Session: record.q2Session,
+      q2Result: record.q2Result ?? "",
+      quarterDetails: record.quarterDetails
     })
   );
 }
 
 export function recordsToAssessmentImportRows(records: StudentAssessmentRecord[]) {
   return records.flatMap((record) =>
-    supportedQuarters.map((quarter) => ({
-      student_code: record.studentCode || record.id,
-      student_name: record.studentName,
-      year: Number(record.assessmentYear ?? "2026"),
-      quarter,
-      coach_name:
-        quarter === "Q1"
-          ? record.q1CoachName ?? record.coachName
-          : record.q2CoachName ?? record.coachName,
-      centre_name:
-        quarter === "Q1" ? record.q1Centre ?? record.centre : record.q2Centre ?? record.centre,
-      level: quarter === "Q1" ? record.q1Level ?? record.level : record.q2Level ?? record.level,
-      session_label:
-        quarter === "Q1" ? record.q1Session ?? record.session : record.q2Session ?? record.session,
-      result: quarter === "Q1" ? record.q1Result || null : record.q2Result || null,
-      notes: record.originalActionRequired ?? null
-    }))
+    getAvailableQuarters([record])
+      .filter((quarter) => recordHasQuarter(record, quarter))
+      .map((quarter) => ({
+        student_code: record.studentCode || record.id,
+        student_name: record.studentName,
+        year: Number(record.assessmentYear ?? "2026"),
+        quarter,
+        coach_name: getQuarterCoachName(record, quarter),
+        centre_name: getQuarterCentre(record, quarter) || null,
+        level: getQuarterLevel(record, quarter) || null,
+        session_label: getQuarterSession(record, quarter) || null,
+        result: getQuarterResult(record, quarter) || null,
+        notes: record.originalActionRequired ?? null
+      }))
   );
 }
 
-function normalizeQuarter(value: string): AssessmentQuarter | "" {
-  const cleaned = String(value ?? "").trim().toUpperCase();
+function getLatestDetail(
+  quarterDetails: Partial<Record<AssessmentQuarter, QuarterAssessmentDetails>>
+) {
+  const quarters = (Object.keys(quarterDetails) as AssessmentQuarter[])
+    .slice()
+    .sort(compareAssessmentQuarters);
 
-  if (cleaned === "Q1" || cleaned === "1") {
-    return "Q1";
+  for (let index = quarters.length - 1; index >= 0; index -= 1) {
+    const detail = quarterDetails[quarters[index]];
+
+    if (detail) {
+      return detail;
+    }
   }
 
-  if (cleaned === "Q2" || cleaned === "2") {
-    return "Q2";
-  }
-
-  return "";
+  return undefined;
 }
 
 function slugId(year: string, value: string) {

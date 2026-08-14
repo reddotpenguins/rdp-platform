@@ -7,6 +7,7 @@ import type {
   DashboardMetrics,
   FilterOptions,
   FlagStatus,
+  QuarterAssessmentDetails,
   QuarterAssessmentRow,
   QuarterMetrics,
   QuarterSummary,
@@ -51,6 +52,14 @@ const sessionDayPatterns = [
 
 type QuarterFilter = "All" | AssessmentQuarter;
 
+const emptyQuarterMetrics: QuarterMetrics = {
+  assessedCount: 0,
+  failCount: 0,
+  passCount: 0,
+  passRate: 0,
+  totalCount: 0
+};
+
 export function normalizeAssessmentResult(value: unknown): AssessmentResult {
   const cleaned = String(value ?? "")
     .replace(/\uFEFF/g, "")
@@ -85,29 +94,77 @@ export function normalizeAssessmentResult(value: unknown): AssessmentResult {
   return "";
 }
 
+export function normalizeAssessmentQuarter(value: unknown): AssessmentQuarter | "" {
+  const cleaned = String(value ?? "")
+    .replace(/\uFEFF/g, "")
+    .trim()
+    .toUpperCase()
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ");
+  const match =
+    cleaned.match(/^(?:20\d{2} )?Q([1-9]\d*)$/) ??
+    cleaned.match(/^([1-9]\d*)$/) ??
+    cleaned.match(/^(?:20\d{2} )?QUARTER ([1-9]\d*)$/);
+
+  return match ? (`Q${match[1]}` as AssessmentQuarter) : "";
+}
+
+export function compareAssessmentQuarters(first: AssessmentQuarter, second: AssessmentQuarter) {
+  const firstNumber = getQuarterNumber(first);
+  const secondNumber = getQuarterNumber(second);
+
+  if (firstNumber !== secondNumber) {
+    return firstNumber - secondNumber;
+  }
+
+  return first.localeCompare(second);
+}
+
+export function getQuarterNumber(quarter: AssessmentQuarter) {
+  const match = quarter.match(/^Q([1-9]\d*)$/i);
+  return match ? Number(match[1]) : Number.MAX_SAFE_INTEGER;
+}
+
 export function getFlagStatus(
   q1Result: AssessmentResult,
   q2Result: AssessmentResult
 ): FlagStatus {
-  if (q1Result === "Fail" && q2Result === "Fail") {
-    return "Red";
-  }
-
-  if (getLatestAssessedResult([q1Result, q2Result]) === "Fail") {
-    return "Yellow";
-  }
-
-  return "None";
+  return getFlagStatusFromResults([q1Result, q2Result]);
 }
 
-function getLatestAssessedResult(results: AssessmentResult[]) {
+function getFlagStatusFromResults(results: AssessmentResult[]): FlagStatus {
+  const normalizedResults = results.map(normalizeAssessmentResult);
+  const latestIndex = findLatestPassFailIndex(normalizedResults);
+
+  if (latestIndex === -1) {
+    return "None";
+  }
+
+  if (normalizedResults[latestIndex] === "Pass") {
+    return "None";
+  }
+
+  let consecutiveFailCount = 1;
+
+  for (let index = latestIndex - 1; index >= 0; index -= 1) {
+    if (normalizedResults[index] !== "Fail") {
+      break;
+    }
+
+    consecutiveFailCount += 1;
+  }
+
+  return consecutiveFailCount >= 2 ? "Red" : "Yellow";
+}
+
+function findLatestPassFailIndex(results: AssessmentResult[]) {
   for (let index = results.length - 1; index >= 0; index -= 1) {
     if (results[index] === "Pass" || results[index] === "Fail") {
-      return results[index];
+      return index;
     }
   }
 
-  return "";
+  return -1;
 }
 
 export function getActionRequired(flagStatus: FlagStatus): ActionRequired {
@@ -132,36 +189,160 @@ export function applyAssessmentLogic(
     interventionRequired?: boolean;
   }
 ): StudentAssessmentRecord {
-  const q1Result = normalizeAssessmentResult(record.q1Result);
-  const q2Result = normalizeAssessmentResult(record.q2Result);
-
-  // CSV files may include existing flag columns, but the dashboard treats the
-  // explicit Q1/Q2 Fail results as the source of truth for intervention logic.
-  const flagStatus = getFlagStatus(q1Result, q2Result);
+  const quarterDetails = normalizeQuarterDetails(record);
+  const q1Result = quarterDetails.Q1?.result ?? normalizeAssessmentResult(record.q1Result);
+  const q2Result = quarterDetails.Q2?.result ?? normalizeAssessmentResult(record.q2Result);
+  const resultHistory = sortAssessmentQuarters(Object.keys(quarterDetails) as AssessmentQuarter[]).map(
+    (quarter) => quarterDetails[quarter]?.result ?? ""
+  );
+  const flagStatus = getFlagStatusFromResults(resultHistory);
   const actionRequired = getActionRequired(flagStatus);
 
   return {
     ...record,
     q1Result,
     q2Result,
+    quarterDetails,
     flagStatus,
     actionRequired,
     interventionRequired: flagStatus === "Red"
   };
 }
 
+function normalizeQuarterDetails(
+  record: Partial<StudentAssessmentRecord>
+): Partial<Record<AssessmentQuarter, QuarterAssessmentDetails>> {
+  const details: Partial<Record<AssessmentQuarter, QuarterAssessmentDetails>> = {};
+
+  for (const [quarter, value] of Object.entries(record.quarterDetails ?? {})) {
+    const normalizedQuarter = normalizeAssessmentQuarter(quarter);
+
+    if (!normalizedQuarter || !value) {
+      continue;
+    }
+
+    const detail = normalizeQuarterDetail(value);
+
+    if (quarterHasMeaningfulData(detail)) {
+      details[normalizedQuarter] = detail;
+    }
+  }
+
+  const q1Detail = normalizeQuarterDetail({
+    coachName: record.q1CoachName,
+    centre: record.q1Centre,
+    level: record.q1Level,
+    session: record.q1Session,
+    result: record.q1Result ?? ""
+  });
+  const q2Detail = normalizeQuarterDetail({
+    coachName: record.q2CoachName,
+    centre: record.q2Centre,
+    level: record.q2Level,
+    session: record.q2Session,
+    result: record.q2Result ?? ""
+  });
+
+  if (quarterHasMeaningfulData(q1Detail)) {
+    details.Q1 = {
+      ...q1Detail,
+      ...details.Q1,
+      result: details.Q1?.result ?? q1Detail.result
+    };
+  }
+
+  if (quarterHasMeaningfulData(q2Detail)) {
+    details.Q2 = {
+      ...q2Detail,
+      ...details.Q2,
+      result: details.Q2?.result ?? q2Detail.result
+    };
+  }
+
+  return details;
+}
+
+function normalizeQuarterDetail(
+  detail: Partial<QuarterAssessmentDetails>
+): QuarterAssessmentDetails {
+  return {
+    coachName: cleanOptionalText(detail.coachName),
+    centre: cleanOptionalText(detail.centre),
+    level: cleanOptionalText(detail.level),
+    session: cleanOptionalText(detail.session),
+    result: normalizeAssessmentResult(detail.result)
+  };
+}
+
+function cleanOptionalText(value: string | undefined) {
+  const cleaned = String(value ?? "").replace(/\uFEFF/g, "").trim();
+  return cleaned || undefined;
+}
+
+function quarterHasMeaningfulData(detail: Partial<QuarterAssessmentDetails> | undefined) {
+  return Boolean(
+    detail &&
+      (detail.coachName || detail.centre || detail.level || detail.session || detail.result)
+  );
+}
+
 function uniqueStudentKey(record: StudentAssessmentRecord) {
   return record.studentName.trim().toLowerCase();
 }
 
+export function getRecordQuarters(record: StudentAssessmentRecord): AssessmentQuarter[] {
+  const quarterSet = new Set<AssessmentQuarter>();
+
+  for (const quarter of Object.keys(record.quarterDetails ?? {})) {
+    const normalizedQuarter = normalizeAssessmentQuarter(quarter);
+
+    if (normalizedQuarter && recordHasQuarter(record, normalizedQuarter)) {
+      quarterSet.add(normalizedQuarter);
+    }
+  }
+
+  for (const quarter of assessmentQuarters) {
+    if (recordHasQuarter(record, quarter)) {
+      quarterSet.add(quarter);
+    }
+  }
+
+  return sortAssessmentQuarters(Array.from(quarterSet));
+}
+
+export function getAvailableQuarters(records: StudentAssessmentRecord[]) {
+  const quarterSet = new Set<AssessmentQuarter>();
+
+  records.forEach((record) => {
+    getRecordQuarters(record).forEach((quarter) => quarterSet.add(quarter));
+  });
+
+  const quarters = sortAssessmentQuarters(Array.from(quarterSet));
+  return quarters.length > 0 ? quarters : assessmentQuarters;
+}
+
+export function getDisplayedQuarters(
+  records: StudentAssessmentRecord[],
+  selectedQuarter: QuarterFilter
+) {
+  return selectedQuarter === "All" ? getAvailableQuarters(records) : [selectedQuarter];
+}
+
+function sortAssessmentQuarters(quarters: AssessmentQuarter[]) {
+  return Array.from(new Set(quarters)).sort(compareAssessmentQuarters);
+}
+
 function calculateQuarterMetrics(
   records: StudentAssessmentRecord[],
-  quarter: "q1" | "q2"
+  quarter: AssessmentQuarter
 ): QuarterMetrics {
-  const passCount = records.filter((record) => record[`${quarter}Result`] === "Pass").length;
-  const failCount = records.filter((record) => record[`${quarter}Result`] === "Fail").length;
+  const quarterRecords = records.filter((record) => recordHasQuarter(record, quarter));
+  const passCount = quarterRecords.filter((record) => getQuarterResult(record, quarter) === "Pass")
+    .length;
+  const failCount = quarterRecords.filter((record) => getQuarterResult(record, quarter) === "Fail")
+    .length;
   const assessedCount = passCount + failCount;
-  const totalCount = records.length;
+  const totalCount = quarterRecords.length;
 
   return {
     totalCount,
@@ -175,10 +356,18 @@ function calculateQuarterMetrics(
 export function calculateDashboardMetrics(
   records: StudentAssessmentRecord[]
 ): DashboardMetrics {
+  const quarters = getAvailableQuarters(records);
+  const quarterMetrics: Partial<Record<AssessmentQuarter, QuarterMetrics>> = {};
+
+  for (const quarter of quarters) {
+    quarterMetrics[quarter] = calculateQuarterMetrics(records, quarter);
+  }
+
   return {
     totalUniqueStudents: new Set(records.map(uniqueStudentKey).filter(Boolean)).size,
-    q1: calculateQuarterMetrics(records, "q1"),
-    q2: calculateQuarterMetrics(records, "q2"),
+    quarters: quarterMetrics,
+    q1: quarterMetrics.Q1 ?? emptyQuarterMetrics,
+    q2: quarterMetrics.Q2 ?? emptyQuarterMetrics,
     yellowFlagCount: records.filter((record) => record.flagStatus === "Yellow").length,
     redFlagCount: records.filter((record) => record.flagStatus === "Red").length,
     interventionRequiredCount: records.filter((record) => record.interventionRequired).length
@@ -193,8 +382,7 @@ export function calculateCoachSummaries(
     string,
     {
       studentKeys: Set<string>;
-      q1Records: StudentAssessmentRecord[];
-      q2Records: StudentAssessmentRecord[];
+      quarterRecords: Partial<Record<AssessmentQuarter, StudentAssessmentRecord[]>>;
       flaggedRecords: StudentAssessmentRecord[];
     }
   >();
@@ -204,8 +392,7 @@ export function calculateCoachSummaries(
       grouped.get(coachName) ??
       {
         studentKeys: new Set<string>(),
-        q1Records: [],
-        q2Records: [],
+        quarterRecords: {},
         flaggedRecords: []
       };
 
@@ -221,14 +408,11 @@ export function calculateCoachSummaries(
     const coachName = getQuarterCoachName(record, quarter);
     const studentKey = uniqueStudentKey(record);
     const group = ensureGroup(coachName);
+    const quarterRecords = group.quarterRecords[quarter] ?? [];
 
     group.studentKeys.add(studentKey);
-
-    if (quarter === "Q1") {
-      group.q1Records.push(record);
-    } else {
-      group.q2Records.push(record);
-    }
+    quarterRecords.push(record);
+    group.quarterRecords[quarter] = quarterRecords;
 
     if (includeConcern && record.flagStatus !== "None") {
       group.flaggedRecords.push(record);
@@ -238,13 +422,16 @@ export function calculateCoachSummaries(
   for (const record of records) {
     const studentKey = uniqueStudentKey(record);
 
-    if (selectedQuarter === "Q1" || selectedQuarter === "Q2") {
-      addQuarterRecord(record, selectedQuarter, true);
+    if (selectedQuarter !== "All") {
+      if (recordHasQuarter(record, selectedQuarter)) {
+        addQuarterRecord(record, selectedQuarter, true);
+      }
       continue;
     }
 
-    addQuarterRecord(record, "Q1", false);
-    addQuarterRecord(record, "Q2", false);
+    for (const quarter of getRecordQuarters(record)) {
+      addQuarterRecord(record, quarter, false);
+    }
 
     const flagOwner = getLatestCoachName(record);
     const flagGroup = ensureGroup(flagOwner);
@@ -257,8 +444,22 @@ export function calculateCoachSummaries(
 
   return Array.from(grouped.entries())
     .map(([coachName, coachGroup]) => {
-      const q1 = calculateQuarterMetrics(coachGroup.q1Records, "q1");
-      const q2 = calculateQuarterMetrics(coachGroup.q2Records, "q2");
+      const quarters: CoachSummary["quarters"] = {};
+
+      for (const [quarter, quarterRecords] of Object.entries(coachGroup.quarterRecords)) {
+        const normalizedQuarter = normalizeAssessmentQuarter(quarter);
+
+        if (!normalizedQuarter) {
+          continue;
+        }
+
+        const metrics = calculateQuarterMetrics(quarterRecords ?? [], normalizedQuarter);
+        quarters[normalizedQuarter] = {
+          ...metrics,
+          failRate: metrics.totalCount > 0 ? metrics.failCount / metrics.totalCount : 0
+        };
+      }
+
       const yellowFlagCount = coachGroup.flaggedRecords.filter(
         (record) => record.flagStatus === "Yellow"
       ).length;
@@ -275,18 +476,7 @@ export function calculateCoachSummaries(
       return {
         coachName,
         totalStudents: coachGroup.studentKeys.size,
-        q1TotalCount: q1.totalCount,
-        q1AssessedCount: q1.assessedCount,
-        q1PassCount: q1.passCount,
-        q1FailCount: q1.failCount,
-        q1FailRate: q1.totalCount > 0 ? q1.failCount / q1.totalCount : 0,
-        q1PassRate: q1.passRate,
-        q2TotalCount: q2.totalCount,
-        q2AssessedCount: q2.assessedCount,
-        q2PassCount: q2.passCount,
-        q2FailCount: q2.failCount,
-        q2FailRate: q2.totalCount > 0 ? q2.failCount / q2.totalCount : 0,
-        q2PassRate: q2.passRate,
+        quarters,
         yellowFlagCount,
         redFlagCount,
         suggestedAction
@@ -313,9 +503,9 @@ export function filterRecords(
 
   return records.filter((record) => {
     const searchableCoachNames =
-      filters.quarter === "Q1" || filters.quarter === "Q2"
-        ? [getQuarterCoachName(record, filters.quarter)]
-        : [record.coachName, getQuarterCoachName(record, "Q1"), getQuarterCoachName(record, "Q2")];
+      filters.quarter === "All"
+        ? [record.coachName, ...getRecordQuarters(record).map((quarter) => getQuarterCoachName(record, quarter))]
+        : [getQuarterCoachName(record, filters.quarter)];
     const matchesSearch =
       !search ||
       record.studentName.toLowerCase().includes(search) ||
@@ -372,14 +562,14 @@ function matchesQuarterAwareValue(
           ? getQuarterLevel
           : getQuarterSession;
 
-  if (filters.quarter === "Q1" || filters.quarter === "Q2") {
+  if (filters.quarter !== "All") {
     return valuesMatch(field, getter(record, filters.quarter), selectedValue);
   }
 
   return (
-    valuesMatch(field, getter(record, "Q1"), selectedValue) ||
-    valuesMatch(field, getter(record, "Q2"), selectedValue) ||
-    valuesMatch(field, getCurrentValue(record, field), selectedValue)
+    getRecordQuarters(record).some((quarter) =>
+      valuesMatch(field, getter(record, quarter), selectedValue)
+    ) || valuesMatch(field, getCurrentValue(record, field), selectedValue)
   );
 }
 
@@ -418,33 +608,33 @@ function matchesSelectedQuarterResult(
     return true;
   }
 
-  if (filters.quarter === "Q1") {
-    return record.q1Result === filters.result;
+  if (filters.quarter !== "All") {
+    return getQuarterResult(record, filters.quarter) === filters.result;
   }
 
-  if (filters.quarter === "Q2") {
-    return record.q2Result === filters.result;
-  }
-
-  return record.q1Result === filters.result || record.q2Result === filters.result;
+  return getRecordQuarters(record).some(
+    (quarter) => getQuarterResult(record, quarter) === filters.result
+  );
 }
 
 function getQuarterAwareSessionValues(
   record: StudentAssessmentRecord,
   selectedQuarter: QuarterFilter
 ) {
-  if (selectedQuarter === "Q1" || selectedQuarter === "Q2") {
+  if (selectedQuarter !== "All") {
     return [getQuarterSession(record, selectedQuarter)];
   }
 
   return uniqueSorted([
     record.session,
-    getQuarterSession(record, "Q1"),
-    getQuarterSession(record, "Q2")
+    ...getRecordQuarters(record).map((quarter) => getQuarterSession(record, quarter))
   ]);
 }
 
-function getCurrentValue(record: StudentAssessmentRecord, field: "coach" | "centre" | "level" | "session") {
+function getCurrentValue(
+  record: StudentAssessmentRecord,
+  field: "coach" | "centre" | "level" | "session"
+) {
   if (field === "coach") {
     return record.coachName || "Unassigned";
   }
@@ -461,42 +651,78 @@ function getCurrentValue(record: StudentAssessmentRecord, field: "coach" | "cent
 }
 
 export function getQuarterResult(record: StudentAssessmentRecord, quarter: AssessmentQuarter) {
-  return quarter === "Q1" ? record.q1Result : record.q2Result;
+  return getQuarterDetail(record, quarter)?.result ?? "";
 }
 
 export function getQuarterCoachName(record: StudentAssessmentRecord, quarter: AssessmentQuarter) {
-  return (
-    (quarter === "Q1" ? record.q1CoachName : record.q2CoachName) ||
-    record.coachName ||
-    "Unassigned"
-  );
+  return getQuarterDetail(record, quarter)?.coachName || record.coachName || "Unassigned";
 }
 
 export function getLatestCoachName(record: StudentAssessmentRecord) {
-  return record.q2CoachName || record.q1CoachName || record.coachName || "Unassigned";
+  const quarters = getRecordQuarters(record).slice().sort(compareAssessmentQuarters).reverse();
+
+  for (const quarter of quarters) {
+    const coachName = getQuarterDetail(record, quarter)?.coachName;
+
+    if (coachName) {
+      return coachName;
+    }
+  }
+
+  return record.coachName || "Unassigned";
 }
 
 export function getQuarterCentre(record: StudentAssessmentRecord, quarter: AssessmentQuarter) {
-  return (quarter === "Q1" ? record.q1Centre : record.q2Centre) || record.centre || "";
+  return getQuarterDetail(record, quarter)?.centre || record.centre || "";
 }
 
 export function getQuarterLevel(record: StudentAssessmentRecord, quarter: AssessmentQuarter) {
-  return (quarter === "Q1" ? record.q1Level : record.q2Level) || record.level || "";
+  return getQuarterDetail(record, quarter)?.level || record.level || "";
 }
 
 export function getQuarterSession(record: StudentAssessmentRecord, quarter: AssessmentQuarter) {
-  return (
-    (quarter === "Q1" ? record.q1Session : record.q2Session) ||
-    record.session ||
-    missingSessionLabel
-  );
+  return getQuarterDetail(record, quarter)?.session || record.session || missingSessionLabel;
+}
+
+export function recordHasQuarter(record: StudentAssessmentRecord, quarter: AssessmentQuarter) {
+  return quarterHasMeaningfulData(getQuarterDetail(record, quarter));
+}
+
+function getQuarterDetail(record: StudentAssessmentRecord, quarter: AssessmentQuarter) {
+  const detail = record.quarterDetails?.[quarter];
+
+  if (detail) {
+    return detail;
+  }
+
+  if (quarter === "Q1") {
+    return normalizeQuarterDetail({
+      coachName: record.q1CoachName,
+      centre: record.q1Centre,
+      level: record.q1Level,
+      session: record.q1Session,
+      result: record.q1Result
+    });
+  }
+
+  if (quarter === "Q2") {
+    return normalizeQuarterDetail({
+      coachName: record.q2CoachName,
+      centre: record.q2Centre,
+      level: record.q2Level,
+      session: record.q2Session,
+      result: record.q2Result
+    });
+  }
+
+  return undefined;
 }
 
 export function toQuarterAssessmentRows(
   records: StudentAssessmentRecord[]
 ): QuarterAssessmentRow[] {
   return records.flatMap((record) =>
-    assessmentQuarters.map((quarter) => ({
+    getRecordQuarters(record).map((quarter) => ({
       id: `${record.id}-${quarter}`,
       studentName: record.studentName,
       quarter,
@@ -594,11 +820,11 @@ export function calculateQuarterSummaries(rows: QuarterAssessmentRow[]): Quarter
     })
     .sort((a, b) => {
       if (a.quarter !== b.quarter) {
-        return a.quarter.localeCompare(b.quarter);
+        return compareAssessmentQuarters(a.quarter, b.quarter);
       }
 
       if (a.session !== b.session) {
-        return a.session.localeCompare(b.session);
+        return compareSessionLabels(a.session, b.session);
       }
 
       return a.coachName.localeCompare(b.coachName);
@@ -758,46 +984,58 @@ export function getFilterOptions(
   records: StudentAssessmentRecord[],
   selectedQuarter: QuarterFilter = "All"
 ): FilterOptions {
-  if (selectedQuarter === "Q1" || selectedQuarter === "Q2") {
-    const sessions = records.map((record) => getQuarterSession(record, selectedQuarter));
+  const quarters = getAvailableQuarters(records);
+
+  if (selectedQuarter !== "All") {
+    const quarterRecords = records.filter((record) => recordHasQuarter(record, selectedQuarter));
+    const sessions = quarterRecords.map((record) => getQuarterSession(record, selectedQuarter));
 
     return {
-      coaches: uniqueSorted(records.map((record) => getQuarterCoachName(record, selectedQuarter))),
-      centres: uniqueSorted(records.map((record) => getQuarterCentre(record, selectedQuarter))),
-      levels: uniqueSorted(records.map((record) => getQuarterLevel(record, selectedQuarter))),
+      coaches: uniqueSorted(quarterRecords.map((record) => getQuarterCoachName(record, selectedQuarter))),
+      centres: uniqueSorted(quarterRecords.map((record) => getQuarterCentre(record, selectedQuarter))),
+      levels: uniqueSorted(quarterRecords.map((record) => getQuarterLevel(record, selectedQuarter))),
       sessions: uniqueSorted(sessions),
       sessionDays: uniqueSessionDays(sessions),
       sessionPeriods: uniqueSessionPeriods(),
-      quarters: assessmentQuarters,
-      results: uniqueResults(records.map((record) => getQuarterResult(record, selectedQuarter)))
+      quarters,
+      results: uniqueResults(quarterRecords.map((record) => getQuarterResult(record, selectedQuarter)))
     };
   }
 
+  const recordQuarters = records.flatMap((record) => getRecordQuarters(record));
   const sessions = records.flatMap((record) => [
     record.session,
-    getQuarterSession(record, "Q1"),
-    getQuarterSession(record, "Q2")
+    ...getRecordQuarters(record).map((quarter) => getQuarterSession(record, quarter))
   ]);
 
   return {
     coaches: uniqueSorted(
       records.flatMap((record) => [
         record.coachName,
-        getQuarterCoachName(record, "Q1"),
-        getQuarterCoachName(record, "Q2")
+        ...getRecordQuarters(record).map((quarter) => getQuarterCoachName(record, quarter))
       ])
     ),
     centres: uniqueSorted(
-      records.flatMap((record) => [record.centre, getQuarterCentre(record, "Q1"), getQuarterCentre(record, "Q2")])
+      records.flatMap((record) => [
+        record.centre,
+        ...getRecordQuarters(record).map((quarter) => getQuarterCentre(record, quarter))
+      ])
     ),
     levels: uniqueSorted(
-      records.flatMap((record) => [record.level, getQuarterLevel(record, "Q1"), getQuarterLevel(record, "Q2")])
+      records.flatMap((record) => [
+        record.level,
+        ...getRecordQuarters(record).map((quarter) => getQuarterLevel(record, quarter))
+      ])
     ),
     sessions: uniqueSorted(sessions),
     sessionDays: uniqueSessionDays(sessions),
     sessionPeriods: uniqueSessionPeriods(),
-    quarters: assessmentQuarters,
-    results: uniqueResults(records.flatMap((record) => [record.q1Result, record.q2Result]))
+    quarters: recordQuarters.length > 0 ? quarters : assessmentQuarters,
+    results: uniqueResults(
+      records.flatMap((record) =>
+        getRecordQuarters(record).map((quarter) => getQuarterResult(record, quarter))
+      )
+    )
   };
 }
 

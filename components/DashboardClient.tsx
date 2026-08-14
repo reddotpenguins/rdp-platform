@@ -398,6 +398,10 @@ function sanitizeFiltersForOptions(
     nextFilters.result = "All";
   }
 
+  if (nextFilters.quarter !== "All" && !options.quarters.includes(nextFilters.quarter)) {
+    nextFilters.quarter = "All";
+  }
+
   return filtersAreEqual(filters, nextFilters) ? filters : nextFilters;
 }
 

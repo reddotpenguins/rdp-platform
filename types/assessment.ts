@@ -1,6 +1,6 @@
 export type AssessmentResult = "Pass" | "Fail" | "Absent" | "Not Assessed" | "";
 
-export type AssessmentQuarter = "Q1" | "Q2";
+export type AssessmentQuarter = `Q${number}`;
 
 export type AssessmentYear = string;
 
@@ -12,6 +12,14 @@ export type ActionRequired =
   | "No immediate concern"
   | "Monitor"
   | "Intervention Required";
+
+export type QuarterAssessmentDetails = {
+  coachName?: string;
+  centre?: string;
+  level?: string;
+  session?: string;
+  result: AssessmentResult;
+};
 
 export type StudentAssessmentRecord = {
   id: string;
@@ -32,6 +40,7 @@ export type StudentAssessmentRecord = {
   q2Level?: string;
   q2Session?: string;
   q2Result: AssessmentResult;
+  quarterDetails?: Partial<Record<AssessmentQuarter, QuarterAssessmentDetails>>;
   flagStatus: FlagStatus;
   actionRequired: ActionRequired;
   interventionRequired: boolean;
@@ -50,6 +59,7 @@ export type QuarterMetrics = {
 
 export type DashboardMetrics = {
   totalUniqueStudents: number;
+  quarters: Partial<Record<AssessmentQuarter, QuarterMetrics>>;
   q1: QuarterMetrics;
   q2: QuarterMetrics;
   yellowFlagCount: number;
@@ -60,18 +70,14 @@ export type DashboardMetrics = {
 export type CoachSummary = {
   coachName: string;
   totalStudents: number;
-  q1TotalCount: number;
-  q1AssessedCount: number;
-  q1PassCount: number;
-  q1FailCount: number;
-  q1FailRate: number;
-  q1PassRate: number;
-  q2TotalCount: number;
-  q2AssessedCount: number;
-  q2PassCount: number;
-  q2FailCount: number;
-  q2FailRate: number;
-  q2PassRate: number;
+  quarters: Partial<
+    Record<
+      AssessmentQuarter,
+      QuarterMetrics & {
+        failRate: number;
+      }
+    >
+  >;
   yellowFlagCount: number;
   redFlagCount: number;
   suggestedAction: "Intervention Review" | "Monitor" | "No immediate concern";

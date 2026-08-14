@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "RDP LTS Assessment Dashboard",
-  description: "Prototype dashboard for Red Dot Penguins LTS 2026 Q1 and Q2 assessment results."
+  description: "Prototype dashboard for Red Dot Penguins LTS assessment results."
 };
 
 export default function RootLayout({

@@ -1,6 +1,10 @@
 import clsx from "clsx";
 import type { AssessmentQuarter, CoachSummary } from "@/types/assessment";
-import { formatPercent } from "@/lib/assessmentLogic";
+import {
+  assessmentQuarters,
+  compareAssessmentQuarters,
+  formatPercent
+} from "@/lib/assessmentLogic";
 
 type CoachSummaryTableProps = {
   summaries: CoachSummary[];
@@ -8,8 +12,7 @@ type CoachSummaryTableProps = {
 };
 
 export function CoachSummaryTable({ summaries, selectedQuarter }: CoachSummaryTableProps) {
-  const showQ1 = selectedQuarter === "All" || selectedQuarter === "Q1";
-  const showQ2 = selectedQuarter === "All" || selectedQuarter === "Q2";
+  const displayedQuarters = getDisplayedSummaryQuarters(summaries, selectedQuarter);
 
   return (
     <section className="min-w-0 overflow-hidden rounded-lg border border-line bg-paper shadow-panel">
@@ -25,12 +28,14 @@ export function CoachSummaryTable({ summaries, selectedQuarter }: CoachSummaryTa
               {[
                 "Coach name",
                 "Total students",
-                ...(showQ1
-                  ? ["Q1 total", "Q1 assessed", "Q1 pass", "Q1 fail / total", "Q1 fail %", "Q1 pass rate"]
-                  : []),
-                ...(showQ2
-                  ? ["Q2 total", "Q2 assessed", "Q2 pass", "Q2 fail / total", "Q2 fail %", "Q2 pass rate"]
-                  : []),
+                ...displayedQuarters.flatMap((quarter) => [
+                  `${quarter} total`,
+                  `${quarter} assessed`,
+                  `${quarter} pass`,
+                  `${quarter} fail / total`,
+                  `${quarter} fail %`,
+                  `${quarter} pass rate`
+                ]),
                 "Monitor",
                 "Immediate concern",
                 "Suggested action"
@@ -48,42 +53,17 @@ export function CoachSummaryTable({ summaries, selectedQuarter }: CoachSummaryTa
                   {summary.coachName}
                 </td>
                 <td className="border-b border-line px-4 py-3">{summary.totalStudents}</td>
-                {showQ1 ? (
-                  <>
-                    <td className="border-b border-line px-4 py-3">{summary.q1TotalCount}</td>
-                    <td className="border-b border-line px-4 py-3">{summary.q1AssessedCount}</td>
-                    <td className="border-b border-line px-4 py-3 font-semibold text-green-800">
-                      {summary.q1PassCount}
-                    </td>
-                    <td className="border-b border-line px-4 py-3 font-semibold text-red-800">
-                      {summary.q1FailCount} / {summary.q1TotalCount}
-                    </td>
-                    <td className="border-b border-line px-4 py-3 font-semibold text-red-800">
-                      {formatPercent(summary.q1FailRate)}
-                    </td>
-                    <td className="border-b border-line px-4 py-3">
-                      {formatPercent(summary.q1PassRate)}
-                    </td>
-                  </>
-                ) : null}
-                {showQ2 ? (
-                  <>
-                    <td className="border-b border-line px-4 py-3">{summary.q2TotalCount}</td>
-                    <td className="border-b border-line px-4 py-3">{summary.q2AssessedCount}</td>
-                    <td className="border-b border-line px-4 py-3 font-semibold text-green-600">
-                      {summary.q2PassCount}
-                    </td>
-                    <td className="border-b border-line px-4 py-3 font-semibold text-red-600">
-                      {summary.q2FailCount} / {summary.q2TotalCount}
-                    </td>
-                    <td className="border-b border-line px-4 py-3 font-semibold text-red-600">
-                      {formatPercent(summary.q2FailRate)}
-                    </td>
-                    <td className="border-b border-line px-4 py-3">
-                      {formatPercent(summary.q2PassRate)}
-                    </td>
-                  </>
-                ) : null}
+                {displayedQuarters.map((quarter) => {
+                  const metrics = getQuarterMetrics(summary, quarter);
+
+                  return (
+                    <QuarterMetricsCells
+                      key={`${summary.coachName}-${quarter}`}
+                      metrics={metrics}
+                      quarter={quarter}
+                    />
+                  );
+                })}
                 <td className="border-b border-line px-4 py-3 font-semibold text-yellow-800">
                   {summary.yellowFlagCount}
                 </td>
@@ -112,4 +92,75 @@ export function CoachSummaryTable({ summaries, selectedQuarter }: CoachSummaryTa
       </div>
     </section>
   );
+}
+
+function QuarterMetricsCells({
+  metrics,
+  quarter
+}: {
+  metrics: NonNullable<CoachSummary["quarters"][AssessmentQuarter]>;
+  quarter: AssessmentQuarter;
+}) {
+  return (
+    <>
+      <td className="border-b border-line px-4 py-3">{metrics.totalCount}</td>
+      <td className="border-b border-line px-4 py-3">{metrics.assessedCount}</td>
+      <td className={clsx("border-b border-line px-4 py-3 font-semibold", getPassTextClass(quarter))}>
+        {metrics.passCount}
+      </td>
+      <td className={clsx("border-b border-line px-4 py-3 font-semibold", getFailTextClass(quarter))}>
+        {metrics.failCount} / {metrics.totalCount}
+      </td>
+      <td className={clsx("border-b border-line px-4 py-3 font-semibold", getFailTextClass(quarter))}>
+        {formatPercent(metrics.failRate)}
+      </td>
+      <td className="border-b border-line px-4 py-3">{formatPercent(metrics.passRate)}</td>
+    </>
+  );
+}
+
+function getDisplayedSummaryQuarters(
+  summaries: CoachSummary[],
+  selectedQuarter: "All" | AssessmentQuarter
+) {
+  if (selectedQuarter !== "All") {
+    return [selectedQuarter];
+  }
+
+  const quarters = new Set<AssessmentQuarter>();
+
+  summaries.forEach((summary) => {
+    Object.keys(summary.quarters).forEach((quarter) => {
+      quarters.add(quarter as AssessmentQuarter);
+    });
+  });
+
+  const displayedQuarters = Array.from(quarters).sort(compareAssessmentQuarters);
+  return displayedQuarters.length > 0 ? displayedQuarters : assessmentQuarters;
+}
+
+function getQuarterMetrics(summary: CoachSummary, quarter: AssessmentQuarter) {
+  return (
+    summary.quarters[quarter] ?? {
+      assessedCount: 0,
+      failCount: 0,
+      failRate: 0,
+      passCount: 0,
+      passRate: 0,
+      totalCount: 0
+    }
+  );
+}
+
+function getPassTextClass(quarter: AssessmentQuarter) {
+  return getQuarterShadeIndex(quarter) >= 2 ? "text-green-600" : "text-green-800";
+}
+
+function getFailTextClass(quarter: AssessmentQuarter) {
+  return getQuarterShadeIndex(quarter) >= 2 ? "text-red-600" : "text-red-800";
+}
+
+function getQuarterShadeIndex(quarter: AssessmentQuarter) {
+  const match = quarter.match(/^Q(\d+)$/);
+  return match ? Number(match[1]) - 1 : 0;
 }

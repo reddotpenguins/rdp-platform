@@ -4,7 +4,11 @@ import Link from "next/link";
 import { ChangeEvent, useMemo, useState } from "react";
 import { CheckCircle2, Download, FileSpreadsheet, Upload } from "lucide-react";
 import { parseUploadFile } from "@/lib/parseFile";
-import { calculateDashboardMetrics, formatPercent } from "@/lib/assessmentLogic";
+import {
+  calculateDashboardMetrics,
+  compareAssessmentQuarters,
+  formatPercent
+} from "@/lib/assessmentLogic";
 import { recordsToAssessmentImportRows } from "@/lib/supabase/assessmentImport";
 import { createClient } from "@/lib/supabase/client";
 import type { StudentAssessmentRecord } from "@/types/assessment";
@@ -42,6 +46,19 @@ export function FileUpload() {
       };
       const importRows = recordsToAssessmentImportRows(parsed.records);
       const supabase = createClient();
+
+      for (const [year, quarters] of getReplacementScope(importRows)) {
+        const { error: deleteError } = await supabase
+          .from("assessment_import_rows")
+          .delete()
+          .eq("year", Number(year))
+          .in("quarter", Array.from(quarters));
+
+        if (deleteError) {
+          throw new Error(deleteError.message);
+        }
+      }
+
       const { error: insertError } = await supabase
         .from("assessment_import_rows")
         .insert(importRows);
@@ -134,8 +151,17 @@ export function FileUpload() {
               label="Unique students"
               value={metrics.totalUniqueStudents.toLocaleString()}
             />
-            <StatusCard label="Q1 pass rate" value={formatPercent(metrics.q1.passRate)} />
-            <StatusCard label="Q2 pass rate" value={formatPercent(metrics.q2.passRate)} />
+            {Object.entries(metrics.quarters)
+              .sort(([first], [second]) =>
+                compareAssessmentQuarters(first as `Q${number}`, second as `Q${number}`)
+              )
+              .map(([quarter, quarterMetrics]) => (
+                <StatusCard
+                  key={quarter}
+                  label={`${quarter} pass rate`}
+                  value={formatPercent(quarterMetrics?.passRate ?? 0)}
+                />
+              ))}
             <StatusCard label="Monitor" value={metrics.yellowFlagCount.toLocaleString()} />
             <StatusCard label="Immediate concern" value={metrics.redFlagCount.toLocaleString()} />
           </div>
@@ -147,6 +173,21 @@ export function FileUpload() {
       </div>
     </section>
   );
+}
+
+function getReplacementScope(
+  rows: ReturnType<typeof recordsToAssessmentImportRows>
+): Array<[string, Set<string>]> {
+  const scope = new Map<string, Set<string>>();
+
+  for (const row of rows) {
+    const year = String(row.year);
+    const quarters = scope.get(year) ?? new Set<string>();
+    quarters.add(row.quarter);
+    scope.set(year, quarters);
+  }
+
+  return Array.from(scope.entries());
 }
 
 function StatusCard({ label, value }: { label: string; value: string }) {

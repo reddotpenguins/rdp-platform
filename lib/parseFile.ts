@@ -1,11 +1,17 @@
 import Papa from "papaparse";
 import {
   applyAssessmentLogic,
+  compareAssessmentQuarters,
   getSessionDay,
   getSessionPeriod,
+  normalizeAssessmentQuarter,
   normalizeAssessmentResult
 } from "@/lib/assessmentLogic";
-import type { StudentAssessmentRecord } from "@/types/assessment";
+import type {
+  AssessmentQuarter,
+  QuarterAssessmentDetails,
+  StudentAssessmentRecord
+} from "@/types/assessment";
 
 type RawAssessmentRow = Record<string, unknown>;
 
@@ -24,14 +30,8 @@ const aliases = {
   studentCode: ["Student Code", "student_code", "Student ID", "Student No", "ID"],
   studentName: ["Student Name", "Name", "Student"],
   coachName: ["Current Coach", "Coach", "Coach Name"],
-  q1CoachName: ["Q1 Coach", "2026 Q1 Coach", "Q1 Coach Name"],
-  q2CoachName: ["Q2 Coach", "2026 Q2 Coach", "Q2 Coach Name"],
   centre: ["Centre", "Center", "Location", "Current Centre"],
-  q1Centre: ["Q1 Centre", "Q1 Center", "2026 Q1 Centre", "2026 Q1 Center"],
-  q2Centre: ["Q2 Centre", "Q2 Center", "2026 Q2 Centre", "2026 Q2 Center"],
   level: ["Level", "Current Level"],
-  q1Level: ["Q1 Current Level", "Q1 Level", "2026 Q1 Current Level", "2026 Q1 Level"],
-  q2Level: ["Q2 Current Level", "Q2 Level", "2026 Q2 Current Level", "2026 Q2 Level"],
   session: [
     "Session",
     "Session Time",
@@ -42,62 +42,28 @@ const aliases = {
     "Timing",
     "Time Slot"
   ],
-  q1Session: [
-    "Q1 Session",
-    "Q1 Session Time",
-    "Q1 Class Time",
-    "Q1 Lesson Time",
-    "Q1 Time",
-    "2026 Q1 Session",
-    "2026 Q1 Session Time"
-  ],
-  q1SessionDay: [
-    "Q1 Day",
-    "Q1 Session Day",
-    "Q1 Class Day",
-    "2026 Q1 Day",
-    "2026 Q1 Session Day"
-  ],
-  q1SessionPeriod: [
-    "Q1 AM/PM",
-    "Q1 AM PM",
-    "Q1 Period",
-    "Q1 Session Period",
-    "Q1 Time of Day",
-    "2026 Q1 AM/PM",
-    "2026 Q1 Period"
-  ],
-  q2Session: [
-    "Q2 Session",
-    "Q2 Session Time",
-    "Q2 Class Time",
-    "Q2 Lesson Time",
-    "Q2 Time",
-    "2026 Q2 Session",
-    "2026 Q2 Session Time"
-  ],
-  q2SessionDay: [
-    "Q2 Day",
-    "Q2 Session Day",
-    "Q2 Class Day",
-    "2026 Q2 Day",
-    "2026 Q2 Session Day"
-  ],
-  q2SessionPeriod: [
-    "Q2 AM/PM",
-    "Q2 AM PM",
-    "Q2 Period",
-    "Q2 Session Period",
-    "Q2 Time of Day",
-    "2026 Q2 AM/PM",
-    "2026 Q2 Period"
+  sessionDay: ["Day", "Session Day", "Class Day", "Lesson Day", "Weekday"],
+  sessionPeriod: ["AM/PM", "AM PM", "Period", "Session Period", "Time of Day"],
+  flagStatus: ["Flag Status", "Flag"],
+  actionRequired: ["Action Required", "Action"]
+};
+
+const quarterFieldNames = {
+  coachName: ["Coach", "Coach Name"],
+  centre: ["Centre", "Center", "Location"],
+  level: ["Current Level", "Level"],
+  session: [
+    "Session",
+    "Session Time",
+    "Class Time",
+    "Lesson Time",
+    "Time",
+    "Timing",
+    "Time Slot"
   ],
   sessionDay: ["Day", "Session Day", "Class Day", "Lesson Day", "Weekday"],
   sessionPeriod: ["AM/PM", "AM PM", "Period", "Session Period", "Time of Day"],
-  q1Result: ["Q1 Result", "2026 Q1", "Q1"],
-  q2Result: ["Q2 Result", "2026 Q2", "Q2"],
-  flagStatus: ["Flag Status", "Flag"],
-  actionRequired: ["Action Required", "Action"]
+  result: ["Result", "Assessment Result"]
 };
 
 function normalizeHeader(header: string) {
@@ -133,14 +99,19 @@ function pickValue(row: RawAssessmentRow, candidateHeaders: string[]) {
   return "";
 }
 
-function pickQuarterResult(row: RawAssessmentRow, quarter: "Q1" | "Q2") {
-  const fallback = pickValue(row, aliases[quarter === "Q1" ? "q1Result" : "q2Result"]);
+function pickQuarterResult(row: RawAssessmentRow, quarter: AssessmentQuarter) {
+  const quarterNumber = quarter.replace(/^Q/i, "");
+  const fallback = pickValue(row, [
+    quarter,
+    `${quarter} Result`,
+    `Quarter ${quarterNumber}`,
+    `Quarter ${quarterNumber} Result`,
+    ...buildQuarterHeaders(quarter, quarterFieldNames.result)
+  ]);
 
   if (String(fallback ?? "").trim() !== "") {
     return fallback;
   }
-
-  const quarterNumber = quarter === "Q1" ? "1" : "2";
 
   for (const [header, value] of Object.entries(row)) {
     const normalized = normalizeHeader(header);
@@ -159,7 +130,7 @@ function pickQuarterResult(row: RawAssessmentRow, quarter: "Q1" | "Q2") {
 
 function pickQuarterField(
   row: RawAssessmentRow,
-  quarter: "Q1" | "Q2",
+  quarter: AssessmentQuarter,
   fallbackHeaders: string[],
   fieldNames: string[]
 ) {
@@ -169,7 +140,7 @@ function pickQuarterField(
     return fallback;
   }
 
-  const quarterNumber = quarter === "Q1" ? "1" : "2";
+  const quarterNumber = quarter.replace(/^Q/i, "");
   const quarterPrefix = new RegExp(`^(20\\d{2} )?(q${quarterNumber}|quarter ${quarterNumber}) `);
   const normalizedFieldNames = fieldNames.map(normalizeHeader);
 
@@ -183,6 +154,13 @@ function pickQuarterField(
   }
 
   return "";
+}
+
+function buildQuarterHeaders(quarter: AssessmentQuarter, fieldNames: string[]) {
+  const quarterNumber = quarter.replace(/^Q/i, "");
+  const prefixes = [quarter, `Quarter ${quarterNumber}`];
+
+  return prefixes.flatMap((prefix) => fieldNames.map((fieldName) => `${prefix} ${fieldName}`));
 }
 
 function textValue(value: unknown) {
@@ -244,11 +222,136 @@ function inferAssessmentYear(rows: RawAssessmentRow[], options: ParseAssessmentO
   return options.defaultYear ?? "2026";
 }
 
+function discoverAssessmentQuarters(rows: RawAssessmentRow[]) {
+  const quarters = new Set<AssessmentQuarter>();
+
+  for (const row of rows) {
+    for (const header of Object.keys(row)) {
+      const normalized = normalizeHeader(header);
+      const match = normalized.match(/^(?:20\d{2} )?(?:q([1-9]\d*)|quarter ([1-9]\d*))(?: |$)/);
+      const quarter = normalizeAssessmentQuarter(match?.[1] ?? match?.[2] ?? "");
+
+      if (quarter) {
+        quarters.add(quarter);
+      }
+    }
+  }
+
+  return Array.from(quarters).sort(compareAssessmentQuarters);
+}
+
+function buildQuarterDetail(
+  row: RawAssessmentRow,
+  quarter: AssessmentQuarter,
+  fallback: {
+    session: string;
+    sessionDay: string;
+    sessionPeriod: string;
+  }
+): QuarterAssessmentDetails | null {
+  const coachName = textValue(
+    pickQuarterField(
+      row,
+      quarter,
+      buildQuarterHeaders(quarter, quarterFieldNames.coachName),
+      quarterFieldNames.coachName
+    )
+  );
+  const centre = textValue(
+    pickQuarterField(
+      row,
+      quarter,
+      buildQuarterHeaders(quarter, quarterFieldNames.centre),
+      quarterFieldNames.centre
+    )
+  );
+  const level = textValue(
+    pickQuarterField(
+      row,
+      quarter,
+      buildQuarterHeaders(quarter, quarterFieldNames.level),
+      quarterFieldNames.level
+    )
+  );
+  const quarterSessionDay = textValue(
+    pickQuarterField(
+      row,
+      quarter,
+      buildQuarterHeaders(quarter, quarterFieldNames.sessionDay),
+      quarterFieldNames.sessionDay
+    )
+  );
+  const quarterSessionPeriod = textValue(
+    pickQuarterField(
+      row,
+      quarter,
+      buildQuarterHeaders(quarter, quarterFieldNames.sessionPeriod),
+      quarterFieldNames.sessionPeriod
+    )
+  );
+  const quarterSession = textValue(
+    pickQuarterField(
+      row,
+      quarter,
+      buildQuarterHeaders(quarter, quarterFieldNames.session),
+      quarterFieldNames.session
+    )
+  );
+  const rawResult = textValue(pickQuarterResult(row, quarter));
+  const result = normalizeAssessmentResult(rawResult);
+  const hasQuarterData = [
+    coachName,
+    centre,
+    level,
+    quarterSessionDay,
+    quarterSessionPeriod,
+    quarterSession,
+    rawResult
+  ].some(Boolean);
+
+  if (!hasQuarterData) {
+    return null;
+  }
+
+  return {
+    coachName: coachName || undefined,
+    centre: centre || undefined,
+    level: level || undefined,
+    session:
+      combineSessionParts(
+        quarterSession || fallback.session,
+        quarterSessionDay || fallback.sessionDay,
+        quarterSessionPeriod || fallback.sessionPeriod
+      ) || undefined,
+    result
+  };
+}
+
+function getLatestQuarterDetail(
+  quarterDetails: Partial<Record<AssessmentQuarter, QuarterAssessmentDetails>>
+) {
+  const quarters = Object.keys(quarterDetails).sort(
+    (first, second) =>
+      compareAssessmentQuarters(first as AssessmentQuarter, second as AssessmentQuarter)
+  ) as AssessmentQuarter[];
+
+  for (let index = quarters.length - 1; index >= 0; index -= 1) {
+    const detail = quarterDetails[quarters[index]];
+
+    if (detail) {
+      return detail;
+    }
+  }
+
+  return undefined;
+}
+
 export function parseAssessmentRows(
   rows: RawAssessmentRow[],
   options: ParseAssessmentOptions = {}
 ): StudentAssessmentRecord[] {
   const assessmentYear = inferAssessmentYear(rows, options);
+  const discoveredQuarters = discoverAssessmentQuarters(rows);
 
   return rows
     .map((row, rowIndex) => {
@@ -261,89 +364,39 @@ export function parseAssessmentRows(
       const studentCode = textValue(pickValue(row, aliases.studentCode));
       const originalFlagStatus = textValue(pickValue(row, aliases.flagStatus));
       const originalActionRequired = textValue(pickValue(row, aliases.actionRequired));
-      const q1CoachName = textValue(
-        pickQuarterField(row, "Q1", aliases.q1CoachName, ["Coach", "Coach Name"])
-      );
-      const q2CoachName = textValue(
-        pickQuarterField(row, "Q2", aliases.q2CoachName, ["Coach", "Coach Name"])
-      );
-      const q1Centre = textValue(
-        pickQuarterField(row, "Q1", aliases.q1Centre, ["Centre", "Center", "Location"])
-      );
-      const q2Centre = textValue(
-        pickQuarterField(row, "Q2", aliases.q2Centre, ["Centre", "Center", "Location"])
-      );
-      const q1Level = textValue(
-        pickQuarterField(row, "Q1", aliases.q1Level, ["Level", "Current Level"])
-      );
-      const q2Level = textValue(
-        pickQuarterField(row, "Q2", aliases.q2Level, ["Level", "Current Level"])
-      );
       const session = textValue(pickValue(row, aliases.session));
       const sessionDay = textValue(pickValue(row, aliases.sessionDay));
       const sessionPeriod = textValue(pickValue(row, aliases.sessionPeriod));
-      const q1SessionDay = textValue(
-        pickQuarterField(row, "Q1", aliases.q1SessionDay, [
-          "Day",
-          "Session Day",
-          "Class Day",
-          "Lesson Day",
-          "Weekday"
-        ])
-      );
-      const q2SessionDay = textValue(
-        pickQuarterField(row, "Q2", aliases.q2SessionDay, [
-          "Day",
-          "Session Day",
-          "Class Day",
-          "Lesson Day",
-          "Weekday"
-        ])
-      );
-      const q1SessionPeriod = textValue(
-        pickQuarterField(row, "Q1", aliases.q1SessionPeriod, [
-          "AM/PM",
-          "AM PM",
-          "Period",
-          "Session Period",
-          "Time of Day"
-        ])
-      );
-      const q2SessionPeriod = textValue(
-        pickQuarterField(row, "Q2", aliases.q2SessionPeriod, [
-          "AM/PM",
-          "AM PM",
-          "Period",
-          "Session Period",
-          "Time of Day"
-        ])
-      );
-      const q1Session = textValue(
-        pickQuarterField(row, "Q1", aliases.q1Session, [
-          "Session",
-          "Session Time",
-          "Class Time",
-          "Lesson Time",
-          "Time",
-          "Timing",
-          "Time Slot"
-        ])
-      );
-      const q2Session = textValue(
-        pickQuarterField(row, "Q2", aliases.q2Session, [
-          "Session",
-          "Session Time",
-          "Class Time",
-          "Lesson Time",
-          "Time",
-          "Timing",
-          "Time Slot"
-        ])
-      );
+      const quarterDetails = discoveredQuarters.reduce<
+        Partial<Record<AssessmentQuarter, QuarterAssessmentDetails>>
+      >((details, quarter) => {
+        const detail = buildQuarterDetail(row, quarter, {
+          session,
+          sessionDay,
+          sessionPeriod
+        });
+
+        if (detail) {
+          details[quarter] = detail;
+        }
+
+        return details;
+      }, {});
+      const latestQuarterDetail = getLatestQuarterDetail(quarterDetails);
+      const q1Detail = quarterDetails.Q1;
+      const q2Detail = quarterDetails.Q2;
       const coachName =
-        textValue(pickValue(row, aliases.coachName)) || q2CoachName || q1CoachName || "Unassigned";
-      const centre = textValue(pickValue(row, aliases.centre)) || q2Centre || q1Centre || undefined;
-      const level = textValue(pickValue(row, aliases.level)) || q2Level || q1Level || undefined;
+        textValue(pickValue(row, aliases.coachName)) ||
+        latestQuarterDetail?.coachName ||
+        "Unassigned";
+      const centre =
+        textValue(pickValue(row, aliases.centre)) || latestQuarterDetail?.centre || undefined;
+      const level =
+        textValue(pickValue(row, aliases.level)) || latestQuarterDetail?.level || undefined;
+      const combinedSession =
+        combineSessionParts(session, sessionDay, sessionPeriod) ||
+        latestQuarterDetail?.session ||
+        undefined;
 
       return applyAssessmentLogic({
         id: recordId(studentName, rowIndex, assessmentYear),
@@ -352,28 +405,19 @@ export function parseAssessmentRows(
         coachName,
         centre,
         level,
-        session: combineSessionParts(session, sessionDay, sessionPeriod) || undefined,
+        session: combinedSession,
         assessmentYear,
-        q1CoachName: q1CoachName || coachName,
-        q1Centre: q1Centre || centre,
-        q1Level: q1Level || level,
-        q1Session:
-          combineSessionParts(
-            q1Session || session,
-            q1SessionDay || sessionDay,
-            q1SessionPeriod || sessionPeriod
-          ) || undefined,
-        q1Result: normalizeAssessmentResult(pickQuarterResult(row, "Q1")),
-        q2CoachName: q2CoachName || coachName,
-        q2Centre: q2Centre || centre,
-        q2Level: q2Level || level,
-        q2Session:
-          combineSessionParts(
-            q2Session || session,
-            q2SessionDay || sessionDay,
-            q2SessionPeriod || sessionPeriod
-          ) || undefined,
-        q2Result: normalizeAssessmentResult(pickQuarterResult(row, "Q2")),
+        q1CoachName: q1Detail?.coachName,
+        q1Centre: q1Detail?.centre,
+        q1Level: q1Detail?.level,
+        q1Session: q1Detail?.session,
+        q1Result: q1Detail?.result ?? "",
+        q2CoachName: q2Detail?.coachName,
+        q2Centre: q2Detail?.centre,
+        q2Level: q2Detail?.level,
+        q2Session: q2Detail?.session,
+        q2Result: q2Detail?.result ?? "",
+        quarterDetails,
         sourceRow: rowIndex + 2,
         originalFlagStatus: originalFlagStatus || undefined,
         originalActionRequired: originalActionRequired || undefined

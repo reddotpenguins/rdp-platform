@@ -69,18 +69,10 @@ function flagLabel(row: QuarterAssessmentRow) {
 }
 
 function resultBadge(result: string, quarter: AssessmentQuarter) {
-  const isQ2 = quarter === "Q2";
-
   return clsx(
     "inline-flex min-w-20 justify-center rounded-md border px-2 py-1 text-xs font-semibold",
-    result === "Pass" &&
-      (isQ2
-        ? "border-green-300 bg-green-50 text-green-700"
-        : "border-green-500/40 bg-green-100 text-green-800"),
-    result === "Fail" &&
-      (isQ2
-        ? "border-red-300 bg-red-50 text-red-700"
-        : "border-red-500/40 bg-red-100 text-red-800"),
+    result === "Pass" && getPassBadgeClass(quarter),
+    result === "Fail" && getFailBadgeClass(quarter),
     result === "Absent" && "border-slate-300 bg-slate-100 text-slate-600",
     result === "Not Assessed" && "border-slate-300 bg-slate-100 text-slate-600",
     !result && "border-slate-200 bg-paper text-slate-400"
@@ -331,4 +323,37 @@ function compareQuarterRows(
 
 function normalizeFilterValue(value: string | undefined) {
   return String(value ?? "").trim().toLowerCase();
+}
+
+function getPassBadgeClass(quarter: AssessmentQuarter) {
+  const shadeIndex = getQuarterShadeIndex(quarter);
+
+  if (shadeIndex >= 2) {
+    return "border-green-300 bg-green-50 text-green-700";
+  }
+
+  if (shadeIndex === 1) {
+    return "border-green-400/50 bg-green-100 text-green-700";
+  }
+
+  return "border-green-500/40 bg-green-100 text-green-800";
+}
+
+function getFailBadgeClass(quarter: AssessmentQuarter) {
+  const shadeIndex = getQuarterShadeIndex(quarter);
+
+  if (shadeIndex >= 2) {
+    return "border-red-300 bg-red-50 text-red-700";
+  }
+
+  if (shadeIndex === 1) {
+    return "border-red-400/50 bg-red-100 text-red-700";
+  }
+
+  return "border-red-500/40 bg-red-100 text-red-800";
+}
+
+function getQuarterShadeIndex(quarter: AssessmentQuarter) {
+  const match = quarter.match(/^Q(\d+)$/);
+  return match ? Math.max(Number(match[1]) - 1, 0) : 0;
 }

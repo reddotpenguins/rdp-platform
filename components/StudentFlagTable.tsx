@@ -5,6 +5,7 @@ import { Download, Printer, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 import {
   compareSessionLabels,
+  getDisplayedQuarters,
   getQuarterCentre,
   getQuarterCoachName,
   getQuarterLevel,
@@ -55,18 +56,10 @@ function flagBadge(record: StudentAssessmentRecord) {
 }
 
 function resultBadge(result: string, quarter?: AssessmentQuarter) {
-  const isQ2 = quarter === "Q2";
-
   return clsx(
     "inline-flex min-w-20 justify-center rounded-md border px-2 py-1 text-xs font-semibold",
-    result === "Pass" &&
-      (isQ2
-        ? "border-green-300 bg-green-50 text-green-700"
-        : "border-green-500/40 bg-green-100 text-green-800"),
-    result === "Fail" &&
-      (isQ2
-        ? "border-red-300 bg-red-50 text-red-700"
-        : "border-red-500/40 bg-red-100 text-red-800"),
+    result === "Pass" && getPassBadgeClass(quarter),
+    result === "Fail" && getFailBadgeClass(quarter),
     result === "Absent" && "border-slate-300 bg-slate-100 text-slate-600",
     result === "Not Assessed" && "border-slate-300 bg-slate-100 text-slate-600",
     !result && "border-slate-200 bg-paper text-slate-400"
@@ -78,10 +71,11 @@ export function StudentFlagTable({ records, selectedQuarter }: StudentFlagTableP
   const [resultFilter, setResultFilter] = useState<ResultFilter>("All");
   const [concernFilter, setConcernFilter] = useState<ConcernFilter>("All");
   const [sortMode, setSortMode] = useState<SortMode>("alphabetical");
-  const showAllQuarters = selectedQuarter === "All";
-  const resultHeadings = showAllQuarters
-    ? ["Q1 Result", "Q2 Result"]
-    : [`${selectedQuarter} Result`];
+  const displayedQuarters = useMemo(
+    () => getDisplayedQuarters(records, selectedQuarter),
+    [records, selectedQuarter]
+  );
+  const resultHeadings = displayedQuarters.map((quarter) => `${quarter} Result`);
   const tableHeadings = [
     "Student Name",
     "Coach",
@@ -96,15 +90,15 @@ export function StudentFlagTable({ records, selectedQuarter }: StudentFlagTableP
     () =>
       records.filter(
         (record) =>
-          matchesTableSearch(record, selectedQuarter, tableSearch) &&
-          matchesResultFilter(record, selectedQuarter, resultFilter) &&
+          matchesTableSearch(record, selectedQuarter, displayedQuarters, tableSearch) &&
+          matchesResultFilter(record, displayedQuarters, resultFilter) &&
           matchesConcernFilter(record, concernFilter)
       ).sort((first, second) => compareStudentRecords(first, second, selectedQuarter, sortMode)),
-    [concernFilter, records, resultFilter, selectedQuarter, sortMode, tableSearch]
+    [concernFilter, displayedQuarters, records, resultFilter, selectedQuarter, sortMode, tableSearch]
   );
   const exportColumns = useMemo(
-    () => getExportColumns(selectedQuarter),
-    [selectedQuarter]
+    () => getExportColumns(selectedQuarter, displayedQuarters),
+    [displayedQuarters, selectedQuarter]
   );
 
   function handleDownload() {
@@ -247,31 +241,16 @@ export function StudentFlagTable({ records, selectedQuarter }: StudentFlagTableP
                 <td className="border-b border-line px-4 py-3 text-slate-700">
                   {getDisplaySession(record, selectedQuarter)}
                 </td>
-                {showAllQuarters ? (
-                  <>
-                    <td className="border-b border-line px-4 py-3">
-                      <span className={resultBadge(record.q1Result, "Q1")}>
-                        {record.q1Result || "Blank"}
-                      </span>
-                    </td>
-                    <td className="border-b border-line px-4 py-3">
-                      <span className={resultBadge(record.q2Result, "Q2")}>
-                        {record.q2Result || "Blank"}
-                      </span>
-                    </td>
-                  </>
-                ) : (
-                  <td className="border-b border-line px-4 py-3">
-                    <span
-                      className={resultBadge(
-                        getQuarterResult(record, selectedQuarter),
-                        selectedQuarter
-                      )}
-                    >
-                      {getQuarterResult(record, selectedQuarter) || "Blank"}
+                {displayedQuarters.map((quarter) => (
+                  <td
+                    className="border-b border-line px-4 py-3"
+                    key={`${record.id}-${quarter}-result`}
+                  >
+                    <span className={resultBadge(getQuarterResult(record, quarter), quarter)}>
+                      {getQuarterResult(record, quarter) || "Blank"}
                     </span>
                   </td>
-                )}
+                ))}
                 <td className="border-b border-line px-4 py-3">
                   <span
                     className={clsx(
@@ -345,6 +324,7 @@ function getDisplaySession(
 function matchesTableSearch(
   record: StudentAssessmentRecord,
   selectedQuarter: "All" | AssessmentQuarter,
+  displayedQuarters: AssessmentQuarter[],
   search: string
 ) {
   const normalizedSearch = normalizeFilterValue(search);
@@ -360,9 +340,7 @@ function matchesTableSearch(
     getDisplayCentre(record, selectedQuarter),
     getDisplayLevel(record, selectedQuarter),
     getDisplaySession(record, selectedQuarter),
-    record.q1Result,
-    record.q2Result,
-    selectedQuarter === "All" ? "" : getQuarterResult(record, selectedQuarter),
+    ...displayedQuarters.map((quarter) => getQuarterResult(record, quarter)),
     flagBadge(record),
     record.actionRequired
   ]
@@ -372,17 +350,14 @@ function matchesTableSearch(
 
 function matchesResultFilter(
   record: StudentAssessmentRecord,
-  selectedQuarter: "All" | AssessmentQuarter,
+  displayedQuarters: AssessmentQuarter[],
   resultFilter: ResultFilter
 ) {
   if (resultFilter === "All") {
     return true;
   }
 
-  const results =
-    selectedQuarter === "All"
-      ? [record.q1Result, record.q2Result]
-      : [getQuarterResult(record, selectedQuarter)];
+  const results = displayedQuarters.map((quarter) => getQuarterResult(record, quarter));
 
   if (resultFilter === "Blank") {
     return results.some((result) => !result);
@@ -419,7 +394,8 @@ function normalizeFilterValue(value: string | undefined) {
 }
 
 function getExportColumns(
-  selectedQuarter: "All" | AssessmentQuarter
+  selectedQuarter: "All" | AssessmentQuarter,
+  displayedQuarters: AssessmentQuarter[]
 ): ExportColumn<StudentAssessmentRecord>[] {
   const sharedColumns: ExportColumn<StudentAssessmentRecord>[] = [
     { header: "Student Name", value: (record) => record.studentName },
@@ -431,10 +407,10 @@ function getExportColumns(
 
   const resultColumns: ExportColumn<StudentAssessmentRecord>[] =
     selectedQuarter === "All"
-      ? [
-          { header: "Q1 Result", value: (record) => record.q1Result || "Blank" },
-          { header: "Q2 Result", value: (record) => record.q2Result || "Blank" }
-        ]
+      ? displayedQuarters.map((quarter) => ({
+          header: `${quarter} Result`,
+          value: (record) => getQuarterResult(record, quarter) || "Blank"
+        }))
       : [
           {
             header: `${selectedQuarter} Result`,
@@ -448,4 +424,37 @@ function getExportColumns(
     { header: "Concern", value: flagBadge },
     { header: "Action Required", value: (record) => record.actionRequired }
   ];
+}
+
+function getPassBadgeClass(quarter?: AssessmentQuarter) {
+  const shadeIndex = getQuarterShadeIndex(quarter);
+
+  if (shadeIndex >= 2) {
+    return "border-green-300 bg-green-50 text-green-700";
+  }
+
+  if (shadeIndex === 1) {
+    return "border-green-400/50 bg-green-100 text-green-700";
+  }
+
+  return "border-green-500/40 bg-green-100 text-green-800";
+}
+
+function getFailBadgeClass(quarter?: AssessmentQuarter) {
+  const shadeIndex = getQuarterShadeIndex(quarter);
+
+  if (shadeIndex >= 2) {
+    return "border-red-300 bg-red-50 text-red-700";
+  }
+
+  if (shadeIndex === 1) {
+    return "border-red-400/50 bg-red-100 text-red-700";
+  }
+
+  return "border-red-500/40 bg-red-100 text-red-800";
+}
+
+function getQuarterShadeIndex(quarter?: AssessmentQuarter) {
+  const match = quarter?.match(/^Q(\d+)$/);
+  return match ? Math.max(Number(match[1]) - 1, 0) : 0;
 }

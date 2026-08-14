@@ -14,6 +14,7 @@ import {
   YAxis
 } from "recharts";
 import type { AssessmentQuarter, CoachSummary, DashboardMetrics } from "@/types/assessment";
+import { assessmentQuarters, compareAssessmentQuarters } from "@/lib/assessmentLogic";
 
 type AssessmentChartsProps = {
   metrics: DashboardMetrics;
@@ -42,14 +43,8 @@ type FailCoachDatum = {
 };
 
 const colors = {
-  pass: {
-    q1: "#15803d",
-    q2: "#4ade80"
-  },
-  fail: {
-    q1: "#b91c1c",
-    q2: "#f87171"
-  },
+  pass: ["#15803d", "#16a34a", "#86efac", "#bbf7d0"],
+  fail: ["#b91c1c", "#dc2626", "#fca5a5", "#fecaca"],
   none: "#cbd5e1",
   monitor: "#facc15",
   immediate: "#f97316"
@@ -68,21 +63,23 @@ export function AssessmentCharts({
   coachSummaries,
   selectedQuarter
 }: AssessmentChartsProps) {
-  const showQ1 = selectedQuarter === "All" || selectedQuarter === "Q1";
-  const showQ2 = selectedQuarter === "All" || selectedQuarter === "Q2";
-  const selectedQuarterLabel = selectedQuarter === "All" ? "Q1 vs Q2" : selectedQuarter;
-  const passRateData: PassRateDatum[] = [];
-  const passFailData: PassFailDatum[] = [];
+  const displayedQuarters = getDisplayedMetricQuarters(metrics, selectedQuarter);
+  const selectedQuarterLabel =
+    selectedQuarter === "All" ? displayedQuarters.join(" vs ") : selectedQuarter;
+  const passRateData: PassRateDatum[] = displayedQuarters.map((quarter) => {
+    const quarterMetrics = getMetricForQuarter(metrics, quarter);
 
-  if (showQ1) {
-    passRateData.push({ quarter: "Q1", passRate: Math.round(metrics.q1.passRate * 100) });
-    passFailData.push({ quarter: "Q1", Pass: metrics.q1.passCount, Fail: metrics.q1.failCount });
-  }
+    return { quarter, passRate: Math.round(quarterMetrics.passRate * 100) };
+  });
+  const passFailData: PassFailDatum[] = displayedQuarters.map((quarter) => {
+    const quarterMetrics = getMetricForQuarter(metrics, quarter);
 
-  if (showQ2) {
-    passRateData.push({ quarter: "Q2", passRate: Math.round(metrics.q2.passRate * 100) });
-    passFailData.push({ quarter: "Q2", Pass: metrics.q2.passCount, Fail: metrics.q2.failCount });
-  }
+    return {
+      quarter,
+      Pass: quarterMetrics.passCount,
+      Fail: quarterMetrics.failCount
+    };
+  });
 
   const flagData = [
     {
@@ -107,13 +104,11 @@ export function AssessmentCharts({
         "Fail Count": getSummaryFailCount(summary, selectedQuarter)
       };
 
-      if (showQ1) {
-        item["Q1 Pass Rate"] = Math.round(summary.q1PassRate * 100);
-      }
-
-      if (showQ2) {
-        item["Q2 Pass Rate"] = Math.round(summary.q2PassRate * 100);
-      }
+      displayedQuarters.forEach((quarter) => {
+        item[`${quarter} Pass Rate`] = Math.round(
+          (summary.quarters[quarter]?.passRate ?? 0) * 100
+        );
+      });
 
       return item;
     });
@@ -214,12 +209,14 @@ export function AssessmentCharts({
             <YAxis tickFormatter={percentTick} domain={[0, 100]} />
             <Tooltip formatter={(value) => `${value}%`} />
             <Legend />
-            {showQ1 ? (
-              <Bar dataKey="Q1 Pass Rate" fill={colors.pass.q1} radius={[4, 4, 0, 0]} />
-            ) : null}
-            {showQ2 ? (
-              <Bar dataKey="Q2 Pass Rate" fill={colors.pass.q2} radius={[4, 4, 0, 0]} />
-            ) : null}
+            {displayedQuarters.map((quarter) => (
+              <Bar
+                dataKey={`${quarter} Pass Rate`}
+                fill={getQuarterPassColor(quarter)}
+                key={`${quarter}-pass-rate`}
+                radius={[4, 4, 0, 0]}
+              />
+            ))}
           </BarChart>
         </ResponsiveContainer>
       </ChartPanel>
@@ -244,44 +241,43 @@ export function AssessmentCharts({
 }
 
 function getQuarterPassColor(quarter: AssessmentQuarter) {
-  return quarter === "Q2" ? colors.pass.q2 : colors.pass.q1;
+  return colors.pass[Math.min(getQuarterShadeIndex(quarter), colors.pass.length - 1)];
 }
 
 function getQuarterFailColor(quarter: AssessmentQuarter) {
-  return quarter === "Q2" ? colors.fail.q2 : colors.fail.q1;
+  return colors.fail[Math.min(getQuarterShadeIndex(quarter), colors.fail.length - 1)];
 }
 
 function getSummaryFailCount(summary: CoachSummary, selectedQuarter: "All" | AssessmentQuarter) {
-  if (selectedQuarter === "Q1") {
-    return summary.q1FailCount;
+  if (selectedQuarter !== "All") {
+    return summary.quarters[selectedQuarter]?.failCount ?? 0;
   }
 
-  if (selectedQuarter === "Q2") {
-    return summary.q2FailCount;
-  }
-
-  return summary.q1FailCount + summary.q2FailCount;
+  return Object.values(summary.quarters).reduce(
+    (total, metrics) => total + (metrics?.failCount ?? 0),
+    0
+  );
 }
 
 function getSummaryFailStats(summary: CoachSummary, selectedQuarter: "All" | AssessmentQuarter) {
-  if (selectedQuarter === "Q1") {
+  if (selectedQuarter !== "All") {
+    const metrics = summary.quarters[selectedQuarter];
+
     return {
-      failCount: summary.q1FailCount,
-      failRate: summary.q1FailRate,
-      totalCount: summary.q1TotalCount
+      failCount: metrics?.failCount ?? 0,
+      failRate: metrics?.failRate ?? 0,
+      totalCount: metrics?.totalCount ?? 0
     };
   }
 
-  if (selectedQuarter === "Q2") {
-    return {
-      failCount: summary.q2FailCount,
-      failRate: summary.q2FailRate,
-      totalCount: summary.q2TotalCount
-    };
-  }
-
-  const failCount = summary.q1FailCount + summary.q2FailCount;
-  const totalCount = summary.q1TotalCount + summary.q2TotalCount;
+  const failCount = Object.values(summary.quarters).reduce(
+    (total, metrics) => total + (metrics?.failCount ?? 0),
+    0
+  );
+  const totalCount = Object.values(summary.quarters).reduce(
+    (total, metrics) => total + (metrics?.totalCount ?? 0),
+    0
+  );
 
   return {
     failCount,
@@ -297,15 +293,44 @@ function formatFailRateLabel(failCount: number, totalCount: number) {
 }
 
 function getSummaryFailColor(selectedQuarter: "All" | AssessmentQuarter) {
-  if (selectedQuarter === "Q2") {
-    return colors.fail.q2;
-  }
-
-  if (selectedQuarter === "Q1") {
-    return colors.fail.q1;
+  if (selectedQuarter !== "All") {
+    return getQuarterFailColor(selectedQuarter);
   }
 
   return "#ef4444";
+}
+
+function getMetricForQuarter(metrics: DashboardMetrics, quarter: AssessmentQuarter) {
+  return (
+    metrics.quarters[quarter] ?? {
+      assessedCount: 0,
+      failCount: 0,
+      passCount: 0,
+      passRate: 0,
+      totalCount: 0
+    }
+  );
+}
+
+function getDisplayedMetricQuarters(
+  metrics: DashboardMetrics,
+  selectedQuarter: "All" | AssessmentQuarter
+) {
+  if (selectedQuarter !== "All") {
+    return [selectedQuarter];
+  }
+
+  const quarters = Object.keys(metrics.quarters).sort(
+    (first, second) =>
+      compareAssessmentQuarters(first as AssessmentQuarter, second as AssessmentQuarter)
+  ) as AssessmentQuarter[];
+
+  return quarters.length > 0 ? quarters : assessmentQuarters;
+}
+
+function getQuarterShadeIndex(quarter: AssessmentQuarter) {
+  const match = quarter.match(/^Q(\d+)$/);
+  return match ? Math.max(Number(match[1]) - 1, 0) : 0;
 }
 
 function FailRateCoachList({
