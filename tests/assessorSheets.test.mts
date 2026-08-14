@@ -115,6 +115,39 @@ describe("assessor sheet helpers", () => {
     );
   });
 
+  it("sorts assessor rows by session day, AM or PM, and timing before location", () => {
+    const rows = buildAssessorSheetRows({
+      assessmentRows: [],
+      regularRows: [
+        {
+          "Student Name": "Pm Student",
+          "Event Name": "ACS(BR) @ Bt Timah Foundation (F1, F2, F3) - Sat: 3:00 - 3:45",
+          Instructors: "Coach, Pm"
+        },
+        {
+          "Student Name": "Early Student",
+          "Event Name": "YMCA @ Orchard Foundation (F1, F2, F3) - Sat: 8:30 - 9:15",
+          Instructors: "Coach, Early"
+        },
+        {
+          "Student Name": "Late Student",
+          "Event Name": "SAAC @ Siglap Foundation (F1, F2, F3) - Sat: 10:15 - 11:00",
+          Instructors: "Coach, Late"
+        }
+      ],
+      makeUpRows: []
+    });
+
+    assert.deepEqual(
+      rows.map((row) => `${row.sessionTime} | ${row.location}`),
+      [
+        "Sat 8:30AM - 9:15AM | YMCA @ Orchard",
+        "Sat 10:15AM - 11:00AM | SAAC @ Siglap",
+        "Sat 3:00PM - 3:45PM | ACS(BR) @ Bt Timah"
+      ]
+    );
+  });
+
   it("adds make-up students with instructor names and class schedule", () => {
     const rows = buildAssessorSheetRows({
       assessmentRows: [],

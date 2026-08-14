@@ -464,8 +464,8 @@ function buildAssessmentLookup(rows: RawSheetRow[]) {
 
 function compareAssessorRows(first: AssessorSheetRow, second: AssessorSheetRow) {
   return (
-    first.location.localeCompare(second.location, undefined, { sensitivity: "base" }) ||
     compareSessionLabels(first.sessionTime, second.sessionTime) ||
+    first.location.localeCompare(second.location, undefined, { sensitivity: "base" }) ||
     first.instructorName.localeCompare(second.instructorName, undefined, { sensitivity: "base" }) ||
     first.classType.localeCompare(second.classType, undefined, { sensitivity: "base" }) ||
     first.studentName.localeCompare(second.studentName, undefined, { sensitivity: "base" })
@@ -485,6 +485,7 @@ function compareSessionLabels(first: string, second: string) {
 
   return (
     firstParts.day - secondParts.day ||
+    firstParts.period - secondParts.period ||
     firstParts.startMinutes - secondParts.startMinutes ||
     first.localeCompare(second, undefined, { numeric: true, sensitivity: "base" })
   );
@@ -495,18 +496,20 @@ function getSessionSortParts(value: string) {
   const dayMatch = cleaned.match(/^([A-Za-z]+)/);
   const timeMatch = cleaned.match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
   const day = dayOrder.get((dayMatch?.[1] ?? "").toLowerCase()) ?? 99;
+  let periodOrder = 99;
   let startMinutes = 24 * 60;
 
   if (timeMatch) {
     const hour = Number(timeMatch[1]);
     const minute = Number(timeMatch[2]);
     const period = timeMatch[3]?.toUpperCase() ?? inferStartPeriod(hour);
+    periodOrder = period === "AM" ? 0 : period === "PM" ? 1 : 99;
     const normalizedHour =
       period === "PM" && hour < 12 ? hour + 12 : period === "AM" && hour === 12 ? 0 : hour;
     startMinutes = normalizedHour * 60 + minute;
   }
 
-  return { day, startMinutes };
+  return { day, period: periodOrder, startMinutes };
 }
 
 function getValue(row: RawSheetRow, candidateHeaders: string[]) {
