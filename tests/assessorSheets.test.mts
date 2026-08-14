@@ -169,6 +169,44 @@ describe("assessor sheet helpers", () => {
     );
   });
 
+  it("does not duplicate make-up classes as regular rows when the custom list includes the make-up event", () => {
+    const rows = buildAssessorSheetRows({
+      assessmentRows: [],
+      regularRows: [
+        {
+          "Student Name": "Lai, Qi En",
+          "Event Name":
+            "SJII @ Caldecott Foundation (F1, F2, F3) - Sun: 4:30 - 5:15, YMCA @ Orchard Foundation (F1, F2, F3) - Fri: 4:00 - 4:45",
+          Instructors: "Lai, Joyce,Lum, Remus"
+        }
+      ],
+      makeUpRows: [
+        {
+          Type: "MAKEUP",
+          "Class Name": "YMCA @ Orchard Foundation (F1, F2, F3) - Fri: 4:00 - 4:45",
+          "Class Schedule": "Fri-4:00PM-4:45PM",
+          Student: "Qi En Lai",
+          Instructors: "Lai, Joyce"
+        }
+      ]
+    });
+
+    const regularRow = rows.find((row) => row.classType === "Regular");
+    const makeUpRow = rows.find((row) => row.classType === "Make Up");
+
+    assert.equal(rows.length, 2);
+    assert.equal(regularRow?.sessionTime, "Sun 4:30PM - 5:15PM");
+    assert.equal(regularRow?.location, "SJII");
+    assert.equal(regularRow?.instructorName, "Remus Lum");
+    assert.equal(makeUpRow?.sessionTime, "Fri 4:00PM - 4:45PM");
+    assert.equal(makeUpRow?.location, "YMCA");
+    assert.equal(makeUpRow?.instructorName, "Joyce Lai");
+    assert.equal(
+      rows.some((row) => row.classType === "Regular" && row.sessionTime === "Fri 4:00PM - 4:45PM"),
+      false
+    );
+  });
+
   it("sorts assessor rows by session day, AM or PM, and timing before location", () => {
     const rows = buildAssessorSheetRows({
       assessmentRows: [],

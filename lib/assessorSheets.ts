@@ -33,6 +33,20 @@ type AssessmentLookupValue = {
   currentLevel: string;
 };
 
+type MakeUpClassIndexValue = {
+  instructorNames: string[];
+  location: string;
+  sessionTime: string;
+};
+
+type RegularClassEntry = {
+  classIndex: number;
+  classText: string;
+  location: string;
+  makeUpMatch?: MakeUpClassIndexValue;
+  sessionTime: string;
+};
+
 const dayOrder = new Map([
   ["mon", 1],
   ["monday", 1],
@@ -66,6 +80,7 @@ export function buildAssessorSheetRows({
   makeUpRows: RawSheetRow[];
 }) {
   const assessmentLookup = buildAssessmentLookup(assessmentRows);
+  const makeUpClassIndex = buildMakeUpClassIndex(makeUpRows);
   const rows: AssessorSheetRow[] = [];
 
   regularRows.forEach((row, index) => {
@@ -80,23 +95,50 @@ export function buildAssessorSheetRows({
     const eventName = textValue(getValue(row, ["Event Name", "Class Name", "Programme"]));
     const classTexts = getRegularClassTexts(eventName);
     const lookup = assessmentLookup.get(normalizeStudentKey(studentName));
-
-    classTexts.forEach((classText, classIndex) => {
+    const studentKey = normalizeStudentKey(studentName);
+    const classEntries = classTexts.map<RegularClassEntry>((classText, classIndex) => {
       const sessionTime = getSessionFromRegularRow(row, classText);
+      const location = normalizeAssessorLocation(
+        parseLocationFromClassText(classText) ||
+          textValue(getValue(row, ["Class Centre", "Centre", "Center", "Location"]))
+      );
 
+      return {
+        classIndex,
+        classText,
+        location,
+        makeUpMatch: findMakeUpClassMatch(makeUpClassIndex, {
+          location,
+          sessionTime,
+          studentKey
+        }),
+        sessionTime
+      };
+    });
+    const regularClassEntries = classEntries.filter((classEntry) => !classEntry.makeUpMatch);
+    const regularInstructorNames = getRegularInstructorNamesForEntries(
+      row,
+      classEntries,
+      regularClassEntries
+    );
+
+    regularClassEntries.forEach((classEntry, regularClassIndex) => {
       rows.push({
-        id: `regular-${index}-${classIndex}-${normalizeStudentKey(studentName) || "student"}`,
-        sessionTime,
-        sessionDay: parseDayFromSessionLabel(sessionTime),
-        location: normalizeAssessorLocation(
-          parseLocationFromClassText(classText) ||
-            textValue(getValue(row, ["Class Centre", "Centre", "Center", "Location"]))
-        ),
+        id: `regular-${index}-${classEntry.classIndex}-${studentKey || "student"}`,
+        sessionTime: classEntry.sessionTime,
+        sessionDay: parseDayFromSessionLabel(classEntry.sessionTime),
+        location: classEntry.location,
         studentName,
-        instructorName: getInstructorFromRegularRow(row, lookup, classIndex, classTexts.length),
+        instructorName: getInstructorFromRegularRow(
+          row,
+          lookup,
+          regularClassIndex,
+          regularClassEntries.length,
+          regularInstructorNames
+        ),
         classType: "Regular",
-        classBand: getClassBandFromRegularRow(row, classText),
-        currentLevel: getCurrentLevelFromRegularRow(row, lookup, classText),
+        classBand: getClassBandFromRegularRow(row, classEntry.classText),
+        currentLevel: getCurrentLevelFromRegularRow(row, lookup, classEntry.classText),
         passFail: ""
       });
     });
@@ -183,6 +225,87 @@ function getRegularClassTexts(eventName: string) {
   return classTexts.length > 0 ? classTexts : [""];
 }
 
+function buildMakeUpClassIndex(makeUpRows: RawSheetRow[]) {
+  const index = new Map<string, MakeUpClassIndexValue>();
+
+  for (const row of makeUpRows) {
+    const studentName = normalizeStudentNameForDisplay(getValue(row, ["Student", "Student Name"]));
+    const studentKey = normalizeStudentKey(studentName);
+
+    if (!studentKey) {
+      continue;
+    }
+
+    const className = textValue(getValue(row, ["Class Name", "Event Name"]));
+    const classSchedule = textValue(getValue(row, ["Class Schedule", "Session", "Session Time"]));
+    const sessionTime = normalizeSessionLabel(classSchedule) || parseSessionFromClassText(className);
+    const location = normalizeAssessorLocation(
+      parseLocationFromClassText(className) ||
+        textValue(getValue(row, ["Centre", "Center", "Location"]))
+    );
+
+    if (!sessionTime || !location) {
+      continue;
+    }
+
+    index.set(makeClassMatchKey({ location, sessionTime, studentKey }), {
+      instructorNames: parseInstructorNames(textValue(getValue(row, ["Instructors", "Instructor"]))),
+      location,
+      sessionTime
+    });
+  }
+
+  return index;
+}
+
+function findMakeUpClassMatch(
+  makeUpClassIndex: Map<string, MakeUpClassIndexValue>,
+  classEntry: {
+    location: string;
+    sessionTime: string;
+    studentKey: string;
+  }
+) {
+  return makeUpClassIndex.get(makeClassMatchKey(classEntry));
+}
+
+function makeClassMatchKey({
+  location,
+  sessionTime,
+  studentKey
+}: {
+  location: string;
+  sessionTime: string;
+  studentKey: string;
+}) {
+  return [studentKey, normalizeComparable(location), normalizeComparable(sessionTime)].join("|");
+}
+
+function getRegularInstructorNamesForEntries(
+  row: RawSheetRow,
+  classEntries: RegularClassEntry[],
+  regularClassEntries: RegularClassEntry[]
+) {
+  const instructorNames = getInstructorNamesFromRegularRow(row);
+
+  if (regularClassEntries.length === classEntries.length) {
+    return instructorNames;
+  }
+
+  const makeUpInstructorKeys = new Set(
+    classEntries
+      .flatMap((classEntry) => classEntry.makeUpMatch?.instructorNames ?? [])
+      .map(normalizeComparable)
+  );
+  const nonMakeUpInstructorNames = instructorNames.filter(
+    (instructorName) => !makeUpInstructorKeys.has(normalizeComparable(instructorName))
+  );
+
+  return nonMakeUpInstructorNames.length === regularClassEntries.length
+    ? nonMakeUpInstructorNames
+    : instructorNames;
+}
+
 export function splitClassTextsFromEventName(value: unknown) {
   const text = textValue(value);
 
@@ -231,10 +354,9 @@ function getInstructorFromRegularRow(
   row: RawSheetRow,
   lookup: AssessmentLookupValue | undefined,
   classIndex: number,
-  classCount: number
+  classCount: number,
+  instructorNames = getInstructorNamesFromRegularRow(row)
 ) {
-  const instructorNames = getInstructorNamesFromRegularRow(row);
-
   if (instructorNames.length === classCount) {
     return instructorNames[classIndex] ?? "";
   }
@@ -660,6 +782,14 @@ function normalizeHeader(header: string) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
+}
+
+function normalizeComparable(value: unknown) {
+  return textValue(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
 }
 
 function normalizeDayLabel(value: string) {
