@@ -9,6 +9,7 @@ import {
   getAssessorSessionTiming,
   getAssessorSheetColumns,
   getAssessorSheetSummary,
+  type AssessorAssessmentStatus,
   type AssessorSheetRow
 } from "@/lib/assessorSheets";
 import { downloadCsv } from "@/lib/tableExport";
@@ -324,10 +325,14 @@ export function AssessorSheetBuilder() {
                       >
                         {columns.map((column) => (
                           <td key={column.header} className="px-3 py-3 text-slate-700">
-                            {column.value(row) || (
-                              <span className="text-slate-400">
-                                {column.header === "Pass/Fail" ? "Mark on paper" : "-"}
-                              </span>
+                            {column.header === "Assessment Status" && row.assessmentStatus ? (
+                              <AssessmentStatusBadge status={row.assessmentStatus} />
+                            ) : (
+                              column.value(row) || (
+                                <span className="text-slate-400">
+                                  {column.header === "Pass/Fail" ? "Mark on paper" : "-"}
+                                </span>
+                              )
                             )}
                           </td>
                         ))}
@@ -448,7 +453,11 @@ function AssessorPrintPreview({
                     <tr key={row.id}>
                       {columns.map((column) => (
                         <td key={column.header} className="border border-slate-300 px-2 py-2">
-                          {column.value(row) || "\u00a0"}
+                          {column.header === "Assessment Status" && row.assessmentStatus ? (
+                            <AssessmentStatusBadge status={row.assessmentStatus} print />
+                          ) : (
+                            column.value(row) || "\u00a0"
+                          )}
                         </td>
                       ))}
                     </tr>
@@ -461,6 +470,47 @@ function AssessorPrintPreview({
       </div>
     </div>
   );
+}
+
+function AssessmentStatusBadge({
+  print = false,
+  status
+}: {
+  print?: boolean;
+  status: AssessorAssessmentStatus;
+}) {
+  return (
+    <span
+      className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] font-bold ${getAssessmentStatusBadgeClass(
+        status,
+        print
+      )}`}
+    >
+      {status}
+    </span>
+  );
+}
+
+function getAssessmentStatusBadgeClass(status: AssessorAssessmentStatus, print: boolean) {
+  if (status === "On track") {
+    return print
+      ? "border-green-700 text-green-800"
+      : "border-green-200 bg-green-50 text-green-700";
+  }
+
+  if (status === "Failed 1 time") {
+    return print
+      ? "border-yellow-700 text-yellow-800"
+      : "border-yellow-200 bg-yellow-50 text-yellow-800";
+  }
+
+  if (status === "Failed 2 times") {
+    return print
+      ? "border-orange-700 text-orange-800"
+      : "border-orange-200 bg-orange-50 text-orange-800";
+  }
+
+  return "border-slate-200 bg-slate-50 text-slate-500";
 }
 
 function FilePicker({

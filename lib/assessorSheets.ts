@@ -1,4 +1,12 @@
+import {
+  compareAssessmentQuarters,
+  normalizeAssessmentQuarter,
+  normalizeAssessmentResult
+} from "./assessmentLogic.ts";
+import type { AssessmentQuarter, AssessmentResult } from "../types/assessment.ts";
+
 export type AssessorSheetClassType = "Regular" | "Make Up";
+export type AssessorAssessmentStatus = "On track" | "Failed 1 time" | "Failed 2 times" | "";
 
 export type AssessorSheetRow = {
   id: string;
@@ -10,6 +18,7 @@ export type AssessorSheetRow = {
   classType: AssessorSheetClassType;
   classBand: string;
   currentLevel: string;
+  assessmentStatus: AssessorAssessmentStatus;
   passFail: string;
 };
 
@@ -31,6 +40,7 @@ type RawSheetRow = Record<string, unknown>;
 type AssessmentLookupValue = {
   instructorName: string;
   currentLevel: string;
+  assessmentStatus: AssessorAssessmentStatus;
 };
 
 type MakeUpClassIndexValue = {
@@ -139,6 +149,7 @@ export function buildAssessorSheetRows({
         classType: "Regular",
         classBand: getClassBandFromRegularRow(row, classEntry.classText),
         currentLevel: getCurrentLevelFromRegularRow(row, lookup, classEntry.classText),
+        assessmentStatus: lookup?.assessmentStatus ?? "",
         passFail: ""
       });
     });
@@ -169,6 +180,7 @@ export function buildAssessorSheetRows({
       classType: "Make Up",
       classBand: parseClassBandFromClassText(className),
       currentLevel: lookup?.currentLevel || getExactLevelFromRow(row),
+      assessmentStatus: lookup?.assessmentStatus ?? "",
       passFail: ""
     });
   });
@@ -215,6 +227,7 @@ export function getAssessorSheetColumns() {
     { header: "Class Type", value: (row: AssessorSheetRow) => row.classType },
     { header: "Class Band", value: (row: AssessorSheetRow) => row.classBand },
     { header: "Current Level", value: (row: AssessorSheetRow) => row.currentLevel },
+    { header: "Assessment Status", value: (row: AssessorSheetRow) => row.assessmentStatus },
     { header: "Pass/Fail", value: (row: AssessorSheetRow) => row.passFail }
   ];
 }
@@ -659,6 +672,7 @@ function parseInstructorNames(value: unknown): string[] {
 
 function buildAssessmentLookup(rows: RawSheetRow[]) {
   const lookup = new Map<string, AssessmentLookupValue>();
+  const historyLookup = buildAssessmentHistoryLookup(rows);
 
   for (const row of rows) {
     const studentName = normalizeStudentNameForDisplay(
@@ -677,11 +691,102 @@ function buildAssessmentLookup(rows: RawSheetRow[]) {
 
     lookup.set(studentKey, {
       instructorName,
-      currentLevel
+      currentLevel,
+      assessmentStatus: getAssessmentStatusFromHistory(historyLookup.get(studentKey))
     });
   }
 
   return lookup;
+}
+
+function buildAssessmentHistoryLookup(rows: RawSheetRow[]) {
+  const lookup = new Map<string, Map<AssessmentQuarter, AssessmentResult>>();
+
+  for (const row of rows) {
+    const studentName = normalizeStudentNameForDisplay(
+      getValue(row, ["Student Name", "Student", "Name"])
+    );
+    const studentKey = normalizeStudentKey(studentName);
+
+    if (!studentKey) {
+      continue;
+    }
+
+    const studentHistory = lookup.get(studentKey) ?? new Map<AssessmentQuarter, AssessmentResult>();
+
+    for (const { quarter, result } of getAssessmentResultsFromRow(row)) {
+      studentHistory.set(quarter, result);
+    }
+
+    lookup.set(studentKey, studentHistory);
+  }
+
+  return lookup;
+}
+
+function getAssessmentResultsFromRow(row: RawSheetRow) {
+  const results: Array<{ quarter: AssessmentQuarter; result: AssessmentResult }> = [];
+  const longFormatQuarter = normalizeAssessmentQuarter(
+    getValue(row, ["Quarter", "Assessment Quarter", "Term"])
+  );
+  const longFormatResult = normalizeAssessmentResult(
+    getValue(row, ["Result", "Assessment Result", "Pass/Fail", "Pass Fail"])
+  );
+
+  if (longFormatQuarter && isPassFailResult(longFormatResult)) {
+    results.push({ quarter: longFormatQuarter, result: longFormatResult });
+  }
+
+  for (const [header, value] of Object.entries(row)) {
+    const normalizedHeader = normalizeHeader(header);
+    const match = normalizedHeader.match(
+      /^(?:20\d{2} )?(?:q([1-9]\d*)|quarter ([1-9]\d*))(?: result| assessment result| pass fail)?$/
+    );
+    const quarter = normalizeAssessmentQuarter(match?.[1] ?? match?.[2] ?? "");
+    const result = normalizeAssessmentResult(value);
+
+    if (quarter && isPassFailResult(result)) {
+      results.push({ quarter, result });
+    }
+  }
+
+  return results;
+}
+
+function getAssessmentStatusFromHistory(
+  history: Map<AssessmentQuarter, AssessmentResult> | undefined
+): AssessorAssessmentStatus {
+  const results = Array.from(history?.entries() ?? [])
+    .sort(([firstQuarter], [secondQuarter]) =>
+      compareAssessmentQuarters(firstQuarter, secondQuarter)
+    )
+    .map(([, result]) => result)
+    .filter(isPassFailResult);
+  const latestResult = results.at(-1);
+
+  if (!latestResult) {
+    return "";
+  }
+
+  if (latestResult === "Pass") {
+    return "On track";
+  }
+
+  let recentFailCount = 0;
+
+  for (let index = results.length - 1; index >= 0; index -= 1) {
+    if (results[index] !== "Fail") {
+      break;
+    }
+
+    recentFailCount += 1;
+  }
+
+  return recentFailCount >= 2 ? "Failed 2 times" : "Failed 1 time";
+}
+
+function isPassFailResult(result: AssessmentResult): result is "Pass" | "Fail" {
+  return result === "Pass" || result === "Fail";
 }
 
 function getSpecificAssessmentLevel(row: RawSheetRow) {

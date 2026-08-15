@@ -47,6 +47,7 @@ describe("assessor sheet helpers", () => {
         classType: "Regular",
         classBand: "Intermediate",
         currentLevel: "",
+        assessmentStatus: "",
         passFail: ""
       }
     ]);
@@ -73,6 +74,56 @@ describe("assessor sheet helpers", () => {
 
     assert.equal(rows[0].currentLevel, "Water Movement 3");
     assert.equal(rows[0].classBand, "Toddler");
+  });
+
+  it("adds assessment status from recent pass/fail history", () => {
+    const rows = buildAssessorSheetRows({
+      assessmentRows: [
+        {
+          "Student Name": "On Track Student",
+          "Q1 Result": "Fail",
+          "Q2 Result": "Pass"
+        },
+        {
+          "Student Name": "Failed Once Student",
+          "Q1 Result": "",
+          "Q2 Result": "Fail"
+        },
+        {
+          "Student Name": "Failed Twice Student",
+          "Q1 Result": "Fail",
+          "Q2 Result": "Fail"
+        }
+      ],
+      regularRows: [
+        {
+          "Student Name": "On Track Student",
+          "Event Name": "SAAC @ Siglap Foundation (F1, F2, F3) - Sat: 8:30 - 9:15"
+        },
+        {
+          "Student Name": "Failed Once Student",
+          "Event Name": "SAAC @ Siglap Foundation (F1, F2, F3) - Sat: 8:30 - 9:15"
+        },
+        {
+          "Student Name": "Failed Twice Student",
+          "Event Name": "SAAC @ Siglap Foundation (F1, F2, F3) - Sat: 8:30 - 9:15"
+        }
+      ],
+      makeUpRows: []
+    });
+
+    assert.equal(
+      rows.find((row) => row.studentName === "On Track Student")?.assessmentStatus,
+      "On track"
+    );
+    assert.equal(
+      rows.find((row) => row.studentName === "Failed Once Student")?.assessmentStatus,
+      "Failed 1 time"
+    );
+    assert.equal(
+      rows.find((row) => row.studentName === "Failed Twice Student")?.assessmentStatus,
+      "Failed 2 times"
+    );
   });
 
   it("uses assessment levels for make-up students when an assessment file is supplied", () => {
@@ -126,6 +177,7 @@ describe("assessor sheet helpers", () => {
         classType: "Regular",
         classBand: "Intermediate",
         currentLevel: "Breaststroke 5",
+        assessmentStatus: "",
         passFail: ""
       }
     ]);
