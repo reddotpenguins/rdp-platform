@@ -374,6 +374,10 @@ function AssessorPrintPreview({
   title: string;
 }) {
   const groupedRows = useMemo(() => groupRowsBySession(rows), [rows]);
+  const printColumns = useMemo(
+    () => columns.filter((column) => !["Session Time", "Class Type"].includes(column.header)),
+    [columns]
+  );
 
   useEffect(() => {
     document.body.classList.add("assessor-print-preview-open");
@@ -438,7 +442,7 @@ function AssessorPrintPreview({
               <table className="w-full border-collapse text-left text-xs text-slate-700">
                 <thead>
                   <tr>
-                    {columns.map((column) => (
+                    {printColumns.map((column) => (
                       <th
                         key={column.header}
                         className="border border-slate-300 bg-orange-50 px-2 py-2 text-[10px] font-bold uppercase text-orange-900"
@@ -451,7 +455,7 @@ function AssessorPrintPreview({
                 <tbody>
                   {sessionRows.map((row) => (
                     <tr key={row.id}>
-                      {columns.map((column) => (
+                      {printColumns.map((column) => (
                         <td key={column.header} className="border border-slate-300 px-2 py-2">
                           {column.header === "Assessment Status" && row.assessmentStatus ? (
                             <AssessmentStatusBadge status={row.assessmentStatus} print />
