@@ -8,6 +8,7 @@ import {
   canManageTrainingResources,
   canUploadAssessmentData,
   canViewAllAssessments,
+  canViewAuditLog,
   canViewQuarterAssessmentDashboard,
   canViewTeamAssessments,
   canViewTrainingDepartment,
@@ -34,6 +35,7 @@ describe("staff permission model", () => {
     assert.equal(canViewTrainingDepartment(admin), true);
     assert.equal(canViewTrainingResources(admin), true);
     assert.equal(canManageTrainingResources(admin), true);
+    assert.equal(canViewAuditLog(admin), true);
   });
 
   it("does not restrict admin centre filters to assigned-centre rows", () => {
@@ -62,6 +64,7 @@ describe("staff permission model", () => {
     assert.equal(canViewTrainingDepartment(leadCoach), false);
     assert.equal(canViewTrainingResources(leadCoach), true);
     assert.equal(canManageTrainingResources(leadCoach), false);
+    assert.equal(canViewAuditLog(leadCoach), false);
     assert.equal(canViewQuarterAssessmentDashboard(leadCoach), false);
     assert.equal(roleUsesAssignedCentres("lead_coach"), true);
     assert.deepEqual(getCentreFilterAccess(leadCoach), {
@@ -84,6 +87,7 @@ describe("staff permission model", () => {
     assert.equal(canViewTrainingDepartment(coach), false);
     assert.equal(canViewTrainingResources(coach), true);
     assert.equal(canManageTrainingResources(coach), false);
+    assert.equal(canViewAuditLog(coach), false);
   });
 
   it("rejects permissions for inactive staff", () => {

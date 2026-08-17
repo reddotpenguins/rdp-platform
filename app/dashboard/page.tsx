@@ -4,6 +4,7 @@ import {
   canManageStudentLifecycle,
   canManageStaffAccess,
   canAccessScheduling,
+  canViewAuditLog,
   canViewStudentLifecycle,
   canViewTrainingResources,
   canUploadAssessmentData,
@@ -26,6 +27,7 @@ export default async function DashboardPage() {
       canManageEnquiries={canManageCustomerEnquiries(profile)}
       canManageStaff={canManageStaffAccess(profile)}
       canManageStudentLifecycle={canManageStudentLifecycle(profile)}
+      canViewAuditLog={canViewAuditLog(profile)}
       canViewStudentLifecycle={canViewStudentLifecycle(profile)}
       canViewTrainingResources={canViewTrainingResources(profile)}
       centreFilterAccess={getCentreFilterAccess(profile)}

@@ -9,6 +9,7 @@ import {
   CalendarCheck,
   ChevronDown,
   ClipboardList,
+  FileText,
   FileUp,
   Inbox,
   Receipt,
@@ -50,6 +51,7 @@ type DashboardClientProps = {
   canManageEnquiries?: boolean;
   canManageStaff?: boolean;
   canManageStudentLifecycle?: boolean;
+  canViewAuditLog?: boolean;
   canViewStudentLifecycle?: boolean;
   canViewTrainingResources?: boolean;
   centreFilterAccess: CentreFilterAccess;
@@ -63,6 +65,7 @@ export function DashboardClient({
   canManageEnquiries = false,
   canManageStaff = false,
   canManageStudentLifecycle = false,
+  canViewAuditLog = false,
   canViewStudentLifecycle = false,
   canViewTrainingResources = false,
   centreFilterAccess,
@@ -131,6 +134,7 @@ export function DashboardClient({
               canManageStaff={canManageStaff}
               canManageStudentLifecycle={canManageStudentLifecycle}
               canUpload={canUpload}
+              canViewAuditLog={canViewAuditLog}
               canViewStudentLifecycle={canViewStudentLifecycle}
               canViewTrainingResources={canViewTrainingResources}
             />
@@ -196,6 +200,7 @@ function AdminToolsMenu({
   canManageStaff,
   canManageStudentLifecycle,
   canUpload,
+  canViewAuditLog,
   canViewStudentLifecycle,
   canViewTrainingResources
 }: {
@@ -204,6 +209,7 @@ function AdminToolsMenu({
   canManageStaff: boolean;
   canManageStudentLifecycle: boolean;
   canUpload: boolean;
+  canViewAuditLog: boolean;
   canViewStudentLifecycle: boolean;
   canViewTrainingResources: boolean;
 }) {
@@ -240,6 +246,7 @@ function AdminToolsMenu({
           {canViewTrainingResources ? <AdminToolLink href="/training?tab=resources" icon={BookOpen} label="Training resources" /> : null}
           {canAccessScheduling ? <AdminToolLink href="/schedule" icon={CalendarCheck} label="Schedule" /> : null}
           {canManageStaff ? <AdminToolLink href="/rba" icon={ShieldCheck} label="RBA" /> : null}
+          {canViewAuditLog ? <AdminToolLink href="/compliance" icon={FileText} label="Compliance log" /> : null}
         </AdminToolGroup>
       </div>
     </details>

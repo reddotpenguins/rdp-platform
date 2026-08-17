@@ -146,6 +146,10 @@ export function canManageScheduling(profile: StaffProfile) {
   return hasStaffPermission(profile, "schedule.manage");
 }
 
+export function canViewAuditLog(profile: StaffProfile) {
+  return hasStaffPermission(profile, "audit.view");
+}
+
 export function canViewQuarterAssessmentDashboard(profile: StaffProfile) {
   return canViewAllAssessments(profile);
 }
@@ -168,6 +172,7 @@ export function canViewAdminHome(profile: StaffProfile) {
     "schedule.viewAll",
     "enquiries.assign",
     "students.view",
+    "audit.view",
     "settings.manage"
   ]);
 }

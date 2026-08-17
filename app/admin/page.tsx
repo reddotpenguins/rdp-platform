@@ -6,6 +6,7 @@ import {
   BookOpen,
   CalendarCheck,
   ClipboardList,
+  FileText,
   FileUp,
   GraduationCap,
   Inbox,
@@ -128,6 +129,12 @@ export default async function AdminPage() {
           icon={ShieldCheck}
           title="RBA"
           description="Invite staff and update roles."
+        />
+        <AdminCard
+          href="/compliance"
+          icon={FileText}
+          title="Compliance log"
+          description="Record incidents, policy checks, follow-ups, and audit notes."
         />
       </AdminSection>
     </main>
