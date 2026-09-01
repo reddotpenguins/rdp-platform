@@ -1,44 +1,41 @@
 import clsx from "clsx";
-import type { AssessmentQuarter, CoachSummary } from "@/types/assessment";
-import {
-  assessmentQuarters,
-  compareAssessmentQuarters,
-  formatPercent
-} from "@/lib/assessmentLogic";
+import { formatPercent } from "@/lib/assessmentLogic";
+import type { AssessmentQuarter, CoachSummary, QuarterMetrics } from "@/types/assessment";
 
 type CoachSummaryTableProps = {
   summaries: CoachSummary[];
   selectedQuarter: "All" | AssessmentQuarter;
 };
 
-export function CoachSummaryTable({ summaries, selectedQuarter }: CoachSummaryTableProps) {
-  const displayedQuarters = getDisplayedSummaryQuarters(summaries, selectedQuarter);
+type CoachDisplayMetrics = QuarterMetrics & {
+  failRate: number;
+};
 
+export function CoachSummaryTable({ summaries, selectedQuarter }: CoachSummaryTableProps) {
   return (
     <section className="min-w-0 overflow-hidden rounded-lg border border-line bg-paper shadow-panel">
       <div className="border-b border-line px-4 py-3">
         <h2 className="text-lg font-semibold text-ink">Coach summary</h2>
-        <p className="text-sm text-slate-500">{summaries.length.toLocaleString()} coaches</p>
+        <p className="text-sm text-slate-500">
+          {summaries.length.toLocaleString()} coaches in current filter
+        </p>
       </div>
 
-      <div className="max-h-[620px] w-full overflow-auto">
+      <div className="max-h-[520px] w-full overflow-auto">
         <table className="min-w-full border-separate border-spacing-0 text-left text-sm">
           <thead className="sticky top-0 z-10 bg-paper text-xs uppercase text-slate-500">
             <tr>
               {[
                 "Coach name",
-                "Total students",
-                ...displayedQuarters.flatMap((quarter) => [
-                  `${quarter} total`,
-                  `${quarter} assessed`,
-                  `${quarter} pass`,
-                  `${quarter} fail / total`,
-                  `${quarter} fail %`,
-                  `${quarter} pass rate`
-                ]),
+                "Students",
+                "Assessed",
+                "Pass",
+                "Fail / total",
+                "Fail %",
+                "Pass rate",
                 "Monitor",
-                "Immediate concern",
-                "Suggested action"
+                "Require intervention",
+                "Status"
               ].map((heading) => (
                 <th key={heading} className="border-b border-line px-4 py-3 font-semibold">
                   {heading}
@@ -47,46 +44,62 @@ export function CoachSummaryTable({ summaries, selectedQuarter }: CoachSummaryTa
             </tr>
           </thead>
           <tbody>
-            {summaries.map((summary) => (
-              <tr key={summary.coachName} className="align-top transition hover:bg-teal/5">
-                <td className="border-b border-line px-4 py-3 font-medium text-ink">
-                  {summary.coachName}
-                </td>
-                <td className="border-b border-line px-4 py-3">{summary.totalStudents}</td>
-                {displayedQuarters.map((quarter) => {
-                  const metrics = getQuarterMetrics(summary, quarter);
+            {summaries.map((summary) => {
+              const metrics = getDisplayMetrics(summary, selectedQuarter);
+              const status = coachStatusLabel(summary);
 
-                  return (
-                    <QuarterMetricsCells
-                      key={`${summary.coachName}-${quarter}`}
-                      metrics={metrics}
-                      quarter={quarter}
-                    />
-                  );
-                })}
-                <td className="border-b border-line px-4 py-3 font-semibold text-yellow-800">
-                  {summary.yellowFlagCount}
-                </td>
-                <td className="border-b border-line px-4 py-3 font-semibold text-orange-700">
-                  {summary.redFlagCount}
-                </td>
-                <td className="border-b border-line px-4 py-3">
-                  <span
-                    className={clsx(
-                      "inline-flex rounded-md border px-2 py-1 text-xs font-semibold",
-                      summary.suggestedAction === "Intervention Review" &&
-                        "border-orange-300 bg-orange-100 text-orange-700",
-                      summary.suggestedAction === "Monitor" &&
-                        "border-yellow-300 bg-yellow-100 text-yellow-800",
-                      summary.suggestedAction === "No immediate concern" &&
-                        "border-slate-200 bg-paper text-slate-600"
-                    )}
-                  >
-                    {summary.suggestedAction}
-                  </span>
+              return (
+                <tr key={summary.coachName} className="align-top transition hover:bg-teal/5">
+                  <td className="border-b border-line px-4 py-3 font-medium text-ink">
+                    {summary.coachName}
+                  </td>
+                  <td className="border-b border-line px-4 py-3">{summary.totalStudents}</td>
+                  <td className="border-b border-line px-4 py-3">{metrics.assessedCount}</td>
+                  <td className="border-b border-line px-4 py-3 font-semibold text-green-700">
+                    {metrics.passCount}
+                  </td>
+                  <td className="border-b border-line px-4 py-3 font-semibold text-red-700">
+                    {metrics.failCount} / {metrics.totalCount}
+                  </td>
+                  <td className="border-b border-line px-4 py-3 font-semibold text-red-700">
+                    {formatPercent(metrics.failRate)}
+                  </td>
+                  <td className="border-b border-line px-4 py-3">
+                    {formatPercent(metrics.passRate)}
+                  </td>
+                  <td className="border-b border-line px-4 py-3 font-semibold text-yellow-800">
+                    {summary.yellowFlagCount}
+                  </td>
+                  <td className="border-b border-line px-4 py-3 font-semibold text-orange-700">
+                    {summary.redFlagCount}
+                  </td>
+                  <td className="border-b border-line px-4 py-3">
+                    <span
+                      className={clsx(
+                        "inline-flex whitespace-nowrap rounded-md border px-2 py-1 text-xs font-semibold",
+                        status === "Require intervention" &&
+                          "border-orange-300 bg-orange-100 text-orange-800",
+                        status === "Monitor" &&
+                          "border-yellow-300 bg-yellow-100 text-yellow-800",
+                        status === "On track" && "border-sky-200 bg-sky-50 text-sky-800"
+                      )}
+                    >
+                      {status}
+                    </span>
+                  </td>
+                </tr>
+              );
+            })}
+            {summaries.length === 0 ? (
+              <tr>
+                <td
+                  colSpan={10}
+                  className="border-b border-line px-4 py-8 text-center text-sm text-slate-500"
+                >
+                  No coaches match the current filters.
                 </td>
               </tr>
-            ))}
+            ) : null}
           </tbody>
         </table>
       </div>
@@ -94,73 +107,53 @@ export function CoachSummaryTable({ summaries, selectedQuarter }: CoachSummaryTa
   );
 }
 
-function QuarterMetricsCells({
-  metrics,
-  quarter
-}: {
-  metrics: NonNullable<CoachSummary["quarters"][AssessmentQuarter]>;
-  quarter: AssessmentQuarter;
-}) {
-  return (
-    <>
-      <td className="border-b border-line px-4 py-3">{metrics.totalCount}</td>
-      <td className="border-b border-line px-4 py-3">{metrics.assessedCount}</td>
-      <td className={clsx("border-b border-line px-4 py-3 font-semibold", getPassTextClass(quarter))}>
-        {metrics.passCount}
-      </td>
-      <td className={clsx("border-b border-line px-4 py-3 font-semibold", getFailTextClass(quarter))}>
-        {metrics.failCount} / {metrics.totalCount}
-      </td>
-      <td className={clsx("border-b border-line px-4 py-3 font-semibold", getFailTextClass(quarter))}>
-        {formatPercent(metrics.failRate)}
-      </td>
-      <td className="border-b border-line px-4 py-3">{formatPercent(metrics.passRate)}</td>
-    </>
-  );
-}
-
-function getDisplayedSummaryQuarters(
-  summaries: CoachSummary[],
+function getDisplayMetrics(
+  summary: CoachSummary,
   selectedQuarter: "All" | AssessmentQuarter
-) {
+): CoachDisplayMetrics {
   if (selectedQuarter !== "All") {
-    return [selectedQuarter];
+    return (
+      summary.quarters[selectedQuarter] ?? {
+        assessedCount: 0,
+        failCount: 0,
+        failRate: 0,
+        passCount: 0,
+        passRate: 0,
+        totalCount: 0
+      }
+    );
   }
 
-  const quarters = new Set<AssessmentQuarter>();
-
-  summaries.forEach((summary) => {
-    Object.keys(summary.quarters).forEach((quarter) => {
-      quarters.add(quarter as AssessmentQuarter);
-    });
-  });
-
-  const displayedQuarters = Array.from(quarters).sort(compareAssessmentQuarters);
-  return displayedQuarters.length > 0 ? displayedQuarters : assessmentQuarters;
-}
-
-function getQuarterMetrics(summary: CoachSummary, quarter: AssessmentQuarter) {
-  return (
-    summary.quarters[quarter] ?? {
+  const metrics = Object.values(summary.quarters).reduce(
+    (total, quarterMetrics) => ({
+      assessedCount: total.assessedCount + (quarterMetrics?.assessedCount ?? 0),
+      failCount: total.failCount + (quarterMetrics?.failCount ?? 0),
+      passCount: total.passCount + (quarterMetrics?.passCount ?? 0),
+      totalCount: total.totalCount + (quarterMetrics?.totalCount ?? 0)
+    }),
+    {
       assessedCount: 0,
       failCount: 0,
-      failRate: 0,
       passCount: 0,
-      passRate: 0,
       totalCount: 0
     }
   );
+
+  return {
+    ...metrics,
+    failRate: metrics.totalCount > 0 ? metrics.failCount / metrics.totalCount : 0,
+    passRate: metrics.assessedCount > 0 ? metrics.passCount / metrics.assessedCount : 0
+  };
 }
 
-function getPassTextClass(quarter: AssessmentQuarter) {
-  return getQuarterShadeIndex(quarter) >= 2 ? "text-green-600" : "text-green-800";
-}
+function coachStatusLabel(summary: CoachSummary) {
+  if (summary.redFlagCount > 0) {
+    return "Require intervention";
+  }
 
-function getFailTextClass(quarter: AssessmentQuarter) {
-  return getQuarterShadeIndex(quarter) >= 2 ? "text-red-600" : "text-red-800";
-}
+  if (summary.yellowFlagCount > 0) {
+    return "Monitor";
+  }
 
-function getQuarterShadeIndex(quarter: AssessmentQuarter) {
-  const match = quarter.match(/^Q(\d+)$/);
-  return match ? Number(match[1]) - 1 : 0;
+  return "On track";
 }

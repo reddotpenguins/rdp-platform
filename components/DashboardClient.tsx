@@ -20,6 +20,7 @@ import {
   type LucideIcon
 } from "lucide-react";
 import { AssessmentCharts } from "@/components/AssessmentCharts";
+import { AssessmentOverviewCards } from "@/components/AssessmentOverviewCards";
 import { CoachSummaryTable } from "@/components/CoachSummaryTable";
 import { Filters } from "@/components/Filters";
 import { QuarterStudentTable } from "@/components/QuarterStudentTable";
@@ -36,6 +37,7 @@ import {
   getFilterOptions,
   toQuarterAssessmentRows
 } from "@/lib/assessmentLogic";
+import { calculateAssessmentOverview } from "@/lib/assessmentStatus";
 import type { CentreFilterAccess } from "@/lib/staffRoles";
 import type {
   AssessmentFilters,
@@ -52,6 +54,7 @@ type DashboardClientProps = {
   canManageStaff?: boolean;
   canManageStudentLifecycle?: boolean;
   canViewAuditLog?: boolean;
+  canViewQuarterAssessment?: boolean;
   canViewStudentLifecycle?: boolean;
   canViewTrainingResources?: boolean;
   centreFilterAccess: CentreFilterAccess;
@@ -66,6 +69,7 @@ export function DashboardClient({
   canManageStaff = false,
   canManageStudentLifecycle = false,
   canViewAuditLog = false,
+  canViewQuarterAssessment = false,
   canViewStudentLifecycle = false,
   canViewTrainingResources = false,
   centreFilterAccess,
@@ -100,9 +104,16 @@ export function DashboardClient({
 
   const filteredRecords = useMemo(() => filterRecords(records, filters), [filters, records]);
   const metrics = useMemo(() => calculateDashboardMetrics(filteredRecords), [filteredRecords]);
-  const coachSummaries = useMemo(
-    () => calculateCoachSummaries(filteredRecords, filters.quarter),
+  const overview = useMemo(
+    () => calculateAssessmentOverview(filteredRecords, filters.quarter),
     [filteredRecords, filters.quarter]
+  );
+  const coachSummaries = useMemo(
+    () =>
+      calculateCoachSummaries(filteredRecords, filters.quarter).filter(
+        (summary) => filters.coach === "All" || summary.coachName === filters.coach
+      ),
+    [filteredRecords, filters.coach, filters.quarter]
   );
   const quarterRows = useMemo(
     () => filterQuarterRows(toQuarterAssessmentRows(records), filters),
@@ -124,6 +135,11 @@ export function DashboardClient({
           <h1 className="mt-1 break-words text-2xl font-semibold text-ink sm:text-3xl">
             {view === "coach" ? "Coach Assessment Dashboard" : "Quarter Assessment Dashboard"}
           </h1>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
+            {view === "coach"
+              ? "Coach-level view for pass/fail patterns, student status, and who needs support."
+              : "Quarter-level view for student assessment follow-up by quarter, session, and centre."}
+          </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2 sm:w-auto">
@@ -157,13 +173,15 @@ export function DashboardClient({
         </div>
       </header>
 
-      <nav className="flex flex-wrap gap-2 rounded-lg border border-line bg-paper p-2 shadow-panel">
+      <nav className="grid gap-2 rounded-lg border border-line bg-paper p-2 shadow-panel sm:grid-cols-2">
         <ViewLink active={view === "coach"} href="/dashboard" label="Coach assessment" />
-        <ViewLink
-          active={view === "quarter"}
-          href="/dashboard/quarter"
-          label="Quarter assessment"
-        />
+        {canViewQuarterAssessment ? (
+          <ViewLink
+            active={view === "quarter"}
+            href="/dashboard/quarter"
+            label="Quarter assessment"
+          />
+        ) : null}
       </nav>
 
       <Filters
@@ -176,13 +194,20 @@ export function DashboardClient({
 
       {view === "coach" ? (
         <>
+          <AssessmentOverviewCards overview={overview} />
           <AssessmentCharts
-            metrics={metrics}
             coachSummaries={coachSummaries}
+            metrics={metrics}
+            selectedCoach={filters.coach}
             selectedQuarter={filters.quarter}
+            statusCounts={overview.statusCounts}
           />
           <CoachSummaryTable summaries={coachSummaries} selectedQuarter={filters.quarter} />
-          <StudentFlagTable records={filteredRecords} selectedQuarter={filters.quarter} />
+          <StudentFlagTable
+            records={filteredRecords}
+            selectedCoach={filters.coach}
+            selectedQuarter={filters.quarter}
+          />
         </>
       ) : (
         <>
@@ -449,9 +474,12 @@ function filtersAreEqual(first: AssessmentFilters, second: AssessmentFilters) {
 function ViewLink({ active, href, label }: { active: boolean; href: string; label: string }) {
   return (
     <Link
+      aria-current={active ? "page" : undefined}
       href={href}
-      className={`inline-flex h-9 items-center rounded-md px-3 text-sm font-semibold transition ${
-        active ? "bg-teal text-white" : "text-slate-700 hover:bg-teal/10 hover:text-teal"
+      className={`inline-flex min-h-11 items-center justify-center rounded-md border px-3 text-sm font-semibold transition ${
+        active
+          ? "border-teal bg-teal text-white"
+          : "border-transparent text-slate-700 hover:border-teal/30 hover:bg-teal/10 hover:text-teal"
       }`}
     >
       {label}

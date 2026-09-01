@@ -35,6 +35,7 @@ export default async function QuarterDashboardPage() {
       canManageStaff={canManageStaffAccess(profile)}
       canManageStudentLifecycle={canManageStudentLifecycle(profile)}
       canViewAuditLog={canViewAuditLog(profile)}
+      canViewQuarterAssessment={canViewQuarterAssessmentDashboard(profile)}
       canViewStudentLifecycle={canViewStudentLifecycle(profile)}
       canViewTrainingResources={canViewTrainingResources(profile)}
       centreFilterAccess={getCentreFilterAccess(profile)}

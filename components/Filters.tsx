@@ -19,7 +19,15 @@ type FiltersProps = {
 };
 
 function resultLabel(result: AssessmentResult | "All") {
-  return result === "" ? "Blank" : result;
+  if (result === "") {
+    return "Not assessed";
+  }
+
+  if (result === "Not Assessed") {
+    return "Not assessed";
+  }
+
+  return result;
 }
 
 function concernLabel(flag: FlagStatus | "All") {

@@ -614,12 +614,14 @@ function matchesSelectedQuarterResult(
     return true;
   }
 
+  const selectedResult = filters.result;
+
   if (filters.quarter !== "All") {
-    return getQuarterResult(record, filters.quarter) === filters.result;
+    return resultMatchesFilter(getQuarterResult(record, filters.quarter), selectedResult);
   }
 
   return getRecordQuarters(record).some(
-    (quarter) => getQuarterResult(record, quarter) === filters.result
+    (quarter) => resultMatchesFilter(getQuarterResult(record, quarter), selectedResult)
   );
 }
 
@@ -834,7 +836,8 @@ export function filterQuarterRows(
       filters.sessionPeriod === "All" || getSessionPeriod(row.session) === filters.sessionPeriod;
     const matchesFlag = filters.flag === "All" || row.flagStatus === filters.flag;
     const matchesQuarter = filters.quarter === "All" || row.quarter === filters.quarter;
-    const matchesResult = filters.result === "All" || row.result === filters.result;
+    const matchesResult =
+      filters.result === "All" || resultMatchesFilter(row.result, filters.result);
 
     return (
       matchesSearch &&
@@ -1049,9 +1052,24 @@ function getSessionStartMinutes(session: string, period: SessionPeriod | "") {
 }
 
 function uniqueResults(values: AssessmentResult[]): AssessmentResult[] {
-  const order: AssessmentResult[] = ["Pass", "Fail", "Absent", "Not Assessed", ""];
+  const order: AssessmentResult[] = ["Pass", "Fail", "Absent", "Not Assessed"];
   const present = new Set(values);
-  return order.filter((value) => present.has(value));
+
+  return order.filter((value) => {
+    if (value === "Not Assessed") {
+      return present.has("Not Assessed") || present.has("");
+    }
+
+    return present.has(value);
+  });
+}
+
+function resultMatchesFilter(result: AssessmentResult, filter: AssessmentResult) {
+  if (filter === "Not Assessed") {
+    return result === "Not Assessed" || result === "";
+  }
+
+  return result === filter;
 }
 
 export function getFilterOptions(

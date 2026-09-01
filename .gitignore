@@ -13,3 +13,5 @@ coverage
 data/RDP_LTS_*.csv
 data/*.xlsx
 data/*.xls
+output/
+outputs/

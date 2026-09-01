@@ -13,55 +13,62 @@ import {
   XAxis,
   YAxis
 } from "recharts";
-import type { AssessmentQuarter, CoachSummary, DashboardMetrics } from "@/types/assessment";
 import { assessmentQuarters, compareAssessmentQuarters } from "@/lib/assessmentLogic";
+import {
+  studentAssessmentStatuses,
+  type StudentAssessmentStatus
+} from "@/lib/assessmentStatus";
+import type { AssessmentQuarter, CoachSummary, DashboardMetrics } from "@/types/assessment";
 
 type AssessmentChartsProps = {
-  metrics: DashboardMetrics;
   coachSummaries: CoachSummary[];
+  metrics: DashboardMetrics;
+  selectedCoach: string;
   selectedQuarter: "All" | AssessmentQuarter;
+  statusCounts: Record<StudentAssessmentStatus, number>;
 };
 
 type PassRateDatum = {
-  quarter: AssessmentQuarter;
   passRate: number;
-};
-
-type PassFailDatum = {
   quarter: AssessmentQuarter;
-  Pass: number;
-  Fail: number;
 };
 
 type FailCoachDatum = {
-  coach: string;
+  failedStudents: number;
   fullCoachName: string;
   "Fail Rate": number;
-  failedStudents: number;
-  totalStudents: number;
   rateLabel: string;
+  totalStudents: number;
+};
+
+type StatusDatum = {
+  color: string;
+  name: StudentAssessmentStatus;
+  value: number;
 };
 
 const colors = {
   pass: ["#15803d", "#16a34a", "#86efac", "#bbf7d0"],
   fail: ["#b91c1c", "#dc2626", "#fca5a5", "#fecaca"],
-  none: "#cbd5e1",
-  monitor: "#facc15",
-  immediate: "#f97316"
+  status: {
+    "Due for assessment": "#94a3b8",
+    Monitor: "#facc15",
+    "On track": "#0ea5e9",
+    "Ready to advance": "#22c55e",
+    "Require intervention": "#f97316"
+  } satisfies Record<StudentAssessmentStatus, string>
 };
 
 function percentTick(value: number) {
   return `${value}%`;
 }
 
-function chartCoachName(name: string) {
-  return name.length > 16 ? `${name.slice(0, 15)}.` : name;
-}
-
 export function AssessmentCharts({
-  metrics,
   coachSummaries,
-  selectedQuarter
+  metrics,
+  selectedCoach,
+  selectedQuarter,
+  statusCounts
 }: AssessmentChartsProps) {
   const displayedQuarters = getDisplayedMetricQuarters(metrics, selectedQuarter);
   const selectedQuarterLabel =
@@ -71,54 +78,18 @@ export function AssessmentCharts({
 
     return { quarter, passRate: Math.round(quarterMetrics.passRate * 100) };
   });
-  const passFailData: PassFailDatum[] = displayedQuarters.map((quarter) => {
-    const quarterMetrics = getMetricForQuarter(metrics, quarter);
-
-    return {
-      quarter,
-      Pass: quarterMetrics.passCount,
-      Fail: quarterMetrics.failCount
-    };
-  });
-
-  const flagData = [
-    {
-      name: "No immediate concern",
-      value:
-        metrics.totalUniqueStudents - metrics.yellowFlagCount - metrics.redFlagCount > 0
-          ? metrics.totalUniqueStudents - metrics.yellowFlagCount - metrics.redFlagCount
-          : 0,
-      color: colors.none
-    },
-    { name: "Monitor", value: metrics.yellowFlagCount, color: colors.monitor },
-    { name: "Immediate concern", value: metrics.redFlagCount, color: colors.immediate }
-  ];
-
-  const coachChartData = coachSummaries
-    .slice()
-    .sort((a, b) => b.totalStudents - a.totalStudents)
-    .slice(0, 12)
-    .map((summary) => {
-      const item: Record<string, string | number> = {
-        coach: chartCoachName(summary.coachName),
-        "Fail Count": getSummaryFailCount(summary, selectedQuarter)
-      };
-
-      displayedQuarters.forEach((quarter) => {
-        item[`${quarter} Pass Rate`] = Math.round(
-          (summary.quarters[quarter]?.passRate ?? 0) * 100
-        );
-      });
-
-      return item;
-    });
-
+  const statusData: StatusDatum[] = studentAssessmentStatuses
+    .map((status) => ({
+      color: colors.status[status],
+      name: status,
+      value: statusCounts[status] ?? 0
+    }))
+    .filter((status) => status.value > 0);
   const failCoachData = coachSummaries
     .map((summary) => {
       const stats = getSummaryFailStats(summary, selectedQuarter);
 
       return {
-        coach: chartCoachName(summary.coachName),
         fullCoachName: summary.coachName,
         "Fail Rate": Math.round(stats.failRate * 100),
         failedStudents: stats.failCount,
@@ -132,21 +103,11 @@ export function AssessmentCharts({
       (a, b) =>
         b["Fail Rate"] - a["Fail Rate"] || b.failedStudents - a.failedStudents
     )
-    .slice(0, 12);
-
-  const redFlagCoachData = coachSummaries
-    .filter((summary) => summary.redFlagCount > 0)
-    .slice()
-    .sort((a, b) => b.redFlagCount - a.redFlagCount)
-    .slice(0, 12)
-    .map((summary) => ({
-      coach: chartCoachName(summary.coachName),
-      Immediate: summary.redFlagCount
-    }));
+    .slice(0, selectedCoach === "All" ? 12 : 1);
 
   return (
-    <section className="grid gap-4 xl:grid-cols-2">
-      <ChartPanel title={`${selectedQuarterLabel} pass rate`}>
+    <section className="grid gap-4 xl:grid-cols-3">
+      <ChartPanel title={`${selectedQuarterLabel} pass-rate trend`}>
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={passRateData} margin={{ left: 0, right: 8, top: 10, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" vertical={false} />
@@ -165,76 +126,32 @@ export function AssessmentCharts({
         </ResponsiveContainer>
       </ChartPanel>
 
-      <ChartPanel title={`${selectedQuarterLabel} pass and fail counts`}>
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={passFailData} margin={{ left: 0, right: 8, top: 10, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" vertical={false} />
-            <XAxis dataKey="quarter" />
-            <YAxis allowDecimals={false} />
-            <Tooltip />
-            <Legend />
-            <Bar dataKey="Pass" radius={[4, 4, 0, 0]}>
-              {passFailData.map((entry) => (
-                <Cell key={`pass-${entry.quarter}`} fill={getQuarterPassColor(entry.quarter)} />
-              ))}
-            </Bar>
-            <Bar dataKey="Fail" radius={[4, 4, 0, 0]}>
-              {passFailData.map((entry) => (
-                <Cell key={`fail-${entry.quarter}`} fill={getQuarterFailColor(entry.quarter)} />
-              ))}
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
+      <ChartPanel title="Student status mix">
+        {statusData.length > 0 ? (
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie data={statusData} dataKey="value" innerRadius={52} nameKey="name" outerRadius={88}>
+                {statusData.map((entry) => (
+                  <Cell key={entry.name} fill={entry.color} />
+                ))}
+              </Pie>
+              <Tooltip />
+              <Legend />
+            </PieChart>
+          </ResponsiveContainer>
+        ) : (
+          <EmptyPanel>No student status data for this filter.</EmptyPanel>
+        )}
       </ChartPanel>
 
-      <ChartPanel title="Concern breakdown">
-        <ResponsiveContainer width="100%" height="100%">
-          <PieChart>
-            <Pie data={flagData} dataKey="value" nameKey="name" innerRadius={58} outerRadius={92}>
-              {flagData.map((entry) => (
-                <Cell key={entry.name} fill={entry.color} />
-              ))}
-            </Pie>
-            <Tooltip />
-            <Legend />
-          </PieChart>
-        </ResponsiveContainer>
-      </ChartPanel>
-
-      <ChartPanel title={`${selectedQuarterLabel} coach pass rate`}>
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={coachChartData} margin={{ left: 0, right: 8, top: 10, bottom: 20 }}>
-            <CartesianGrid strokeDasharray="3 3" vertical={false} />
-            <XAxis dataKey="coach" angle={-25} textAnchor="end" interval={0} height={62} />
-            <YAxis tickFormatter={percentTick} domain={[0, 100]} />
-            <Tooltip formatter={(value) => `${value}%`} />
-            <Legend />
-            {displayedQuarters.map((quarter) => (
-              <Bar
-                dataKey={`${quarter} Pass Rate`}
-                fill={getQuarterPassColor(quarter)}
-                key={`${quarter}-pass-rate`}
-                radius={[4, 4, 0, 0]}
-              />
-            ))}
-          </BarChart>
-        </ResponsiveContainer>
-      </ChartPanel>
-
-      <ChartPanel title={`${selectedQuarterLabel} fail rate by coach (failed / total)`}>
+      <ChartPanel
+        title={
+          selectedCoach === "All"
+            ? "Coach fail rate (failed / total)"
+            : `${selectedCoach} fail rate`
+        }
+      >
         <FailRateCoachList data={failCoachData} selectedQuarter={selectedQuarter} />
-      </ChartPanel>
-
-      <ChartPanel title="Immediate concerns by coach">
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={redFlagCoachData} margin={{ left: 0, right: 8, top: 10, bottom: 20 }}>
-            <CartesianGrid strokeDasharray="3 3" vertical={false} />
-            <XAxis dataKey="coach" angle={-25} textAnchor="end" interval={0} height={62} />
-            <YAxis allowDecimals={false} />
-            <Tooltip />
-            <Bar dataKey="Immediate" fill={colors.immediate} radius={[4, 4, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
       </ChartPanel>
     </section>
   );
@@ -246,17 +163,6 @@ function getQuarterPassColor(quarter: AssessmentQuarter) {
 
 function getQuarterFailColor(quarter: AssessmentQuarter) {
   return colors.fail[Math.min(getQuarterShadeIndex(quarter), colors.fail.length - 1)];
-}
-
-function getSummaryFailCount(summary: CoachSummary, selectedQuarter: "All" | AssessmentQuarter) {
-  if (selectedQuarter !== "All") {
-    return summary.quarters[selectedQuarter]?.failCount ?? 0;
-  }
-
-  return Object.values(summary.quarters).reduce(
-    (total, metrics) => total + (metrics?.failCount ?? 0),
-    0
-  );
 }
 
 function getSummaryFailStats(summary: CoachSummary, selectedQuarter: "All" | AssessmentQuarter) {
@@ -341,16 +247,12 @@ function FailRateCoachList({
   selectedQuarter: "All" | AssessmentQuarter;
 }) {
   if (data.length === 0) {
-    return (
-      <div className="flex h-full items-center justify-center rounded-lg border border-dashed border-line bg-field px-4 text-center text-sm text-slate-500">
-        No failed students for this filter.
-      </div>
-    );
+    return <EmptyPanel>No failed students for this filter.</EmptyPanel>;
   }
 
   return (
     <div className="h-full overflow-y-auto pr-1">
-      <div className="grid grid-cols-[9rem_minmax(0,1fr)_6.75rem] gap-3 border-b border-line pb-2 text-xs font-semibold uppercase text-slate-500">
+      <div className="grid grid-cols-[minmax(7rem,1fr)_minmax(0,1.5fr)_6.75rem] gap-3 border-b border-line pb-2 text-xs font-semibold uppercase text-slate-500">
         <span>Coach</span>
         <span>Fail rate</span>
         <span className="text-right">Rate / count</span>
@@ -358,7 +260,7 @@ function FailRateCoachList({
       <div className="mt-2 space-y-2.5">
         {data.map((item) => (
           <div
-            className="grid grid-cols-[9rem_minmax(0,1fr)_6.75rem] items-center gap-3 text-sm"
+            className="grid grid-cols-[minmax(7rem,1fr)_minmax(0,1.5fr)_6.75rem] items-center gap-3 text-sm"
             key={item.fullCoachName}
           >
             <span className="truncate font-medium text-ink" title={item.fullCoachName}>
@@ -385,11 +287,19 @@ function FailRateCoachList({
   );
 }
 
-function ChartPanel({ title, children }: { title: string; children: React.ReactNode }) {
+function ChartPanel({ title, children }: { children: React.ReactNode; title: string }) {
   return (
     <article className="rounded-lg border border-line bg-paper p-4 shadow-panel">
-      <h2 className="mb-3 text-lg font-semibold text-ink">{title}</h2>
+      <h2 className="mb-3 text-base font-semibold text-ink">{title}</h2>
       <div className="h-72 min-w-0">{children}</div>
     </article>
+  );
+}
+
+function EmptyPanel({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex h-full items-center justify-center rounded-lg border border-dashed border-line bg-field px-4 text-center text-sm text-slate-500">
+      {children}
+    </div>
   );
 }

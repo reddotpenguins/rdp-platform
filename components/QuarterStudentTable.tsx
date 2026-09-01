@@ -4,6 +4,14 @@ import clsx from "clsx";
 import { Download, Printer, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 import { compareSessionLabels } from "@/lib/assessmentLogic";
+import {
+  displayAssessmentResult,
+  getQuarterRowAssessmentStatus,
+  getStatusBadgeClass,
+  resultMatchesFilter,
+  studentAssessmentStatuses,
+  type StudentAssessmentStatus
+} from "@/lib/assessmentStatus";
 import { downloadCsv, type ExportColumn, printTable } from "@/lib/tableExport";
 import type { AssessmentQuarter, QuarterAssessmentRow } from "@/types/assessment";
 
@@ -11,24 +19,12 @@ type QuarterStudentTableProps = {
   rows: QuarterAssessmentRow[];
 };
 
-type ResultFilter = "All" | "Pass" | "Fail" | "Absent" | "Not Assessed" | "Blank";
-type ConcernFilter = "All" | "Intervention Required" | "Monitor" | "No immediate concern";
+type ResultFilter = "All" | "Pass" | "Fail" | "Absent" | "Not Assessed";
+type StatusFilter = "All" | StudentAssessmentStatus;
 type SortMode = "alphabetical" | "session";
 
-const resultFilters: ResultFilter[] = [
-  "All",
-  "Pass",
-  "Fail",
-  "Absent",
-  "Not Assessed",
-  "Blank"
-];
-const concernFilters: ConcernFilter[] = [
-  "All",
-  "Intervention Required",
-  "Monitor",
-  "No immediate concern"
-];
+const resultFilters: ResultFilter[] = ["All", "Pass", "Fail", "Absent", "Not Assessed"];
+const statusFilters: StatusFilter[] = ["All", ...studentAssessmentStatuses];
 const sortOptions: Array<{ value: SortMode; label: string }> = [
   { value: "alphabetical", label: "Alphabetical A-Z" },
   { value: "session", label: "Sort by session" }
@@ -41,8 +37,7 @@ const tableHeadings = [
   "Session",
   "Level",
   "Result",
-  "Concern",
-  "Action Required"
+  "Status"
 ];
 const exportColumns: ExportColumn<QuarterAssessmentRow>[] = [
   { header: "Student Name", value: (row) => row.studentName },
@@ -51,22 +46,9 @@ const exportColumns: ExportColumn<QuarterAssessmentRow>[] = [
   { header: "Centre", value: (row) => row.centre },
   { header: "Session", value: (row) => row.session },
   { header: "Level", value: (row) => row.level },
-  { header: "Result", value: (row) => row.result || "Blank" },
-  { header: "Concern", value: flagLabel },
-  { header: "Action Required", value: (row) => row.actionRequired }
+  { header: "Result", value: (row) => displayAssessmentResult(row.result) },
+  { header: "Status", value: (row) => getQuarterRowAssessmentStatus(row) }
 ];
-
-function flagLabel(row: QuarterAssessmentRow) {
-  if (row.flagStatus === "Red") {
-    return "Intervention Required";
-  }
-
-  if (row.flagStatus === "Yellow") {
-    return "Monitor";
-  }
-
-  return "No immediate concern";
-}
 
 function resultBadge(result: string, quarter: AssessmentQuarter) {
   return clsx(
@@ -74,15 +56,14 @@ function resultBadge(result: string, quarter: AssessmentQuarter) {
     result === "Pass" && getPassBadgeClass(quarter),
     result === "Fail" && getFailBadgeClass(quarter),
     result === "Absent" && "border-slate-300 bg-slate-100 text-slate-600",
-    result === "Not Assessed" && "border-slate-300 bg-slate-100 text-slate-600",
-    !result && "border-slate-200 bg-paper text-slate-400"
+    (result === "Not Assessed" || !result) && "border-slate-300 bg-slate-100 text-slate-600"
   );
 }
 
 export function QuarterStudentTable({ rows }: QuarterStudentTableProps) {
   const [tableSearch, setTableSearch] = useState("");
   const [resultFilter, setResultFilter] = useState<ResultFilter>("All");
-  const [concernFilter, setConcernFilter] = useState<ConcernFilter>("All");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("All");
   const [sortMode, setSortMode] = useState<SortMode>("alphabetical");
   const visibleRows = useMemo(
     () =>
@@ -90,9 +71,9 @@ export function QuarterStudentTable({ rows }: QuarterStudentTableProps) {
         (row) =>
           matchesTableSearch(row, tableSearch) &&
           matchesResultFilter(row, resultFilter) &&
-          matchesConcernFilter(row, concernFilter)
+          matchesStatusFilter(row, statusFilter)
       ).sort((first, second) => compareQuarterRows(first, second, sortMode)),
-    [concernFilter, resultFilter, rows, sortMode, tableSearch]
+    [resultFilter, rows, sortMode, statusFilter, tableSearch]
   );
 
   function handleDownload() {
@@ -137,20 +118,20 @@ export function QuarterStudentTable({ rows }: QuarterStudentTableProps) {
           >
             {resultFilters.map((filter) => (
               <option key={filter} value={filter}>
-                {filter === "All" ? "All results" : filter}
+                {filter === "All" ? "All results" : displayAssessmentResult(filter)}
               </option>
             ))}
           </select>
 
           <select
-            value={concernFilter}
-            onChange={(event) => setConcernFilter(event.target.value as ConcernFilter)}
+            value={statusFilter}
+            onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}
             className="h-10 rounded-md border border-line bg-field px-3 text-sm font-medium text-slate-700 outline-none transition focus:border-teal focus:bg-paper focus:ring-2 focus:ring-teal/15"
-            aria-label="Filter by concern"
+            aria-label="Filter by status"
           >
-            {concernFilters.map((filter) => (
+            {statusFilters.map((filter) => (
               <option key={filter} value={filter}>
-                {filter === "All" ? "All concerns" : filter}
+                {filter === "All" ? "All statuses" : filter}
               </option>
             ))}
           </select>
@@ -208,8 +189,8 @@ export function QuarterStudentTable({ rows }: QuarterStudentTableProps) {
                 key={row.id}
                 className={clsx(
                   "align-top transition hover:bg-teal/5",
-                  row.flagStatus === "Yellow" && "bg-yellow-50",
-                  row.flagStatus === "Red" && "bg-orange-50"
+                  getQuarterRowAssessmentStatus(row) === "Monitor" && "bg-yellow-50",
+                  getQuarterRowAssessmentStatus(row) === "Require intervention" && "bg-orange-50"
                 )}
               >
                 <td className="border-b border-line px-4 py-3 font-medium text-ink">
@@ -222,25 +203,18 @@ export function QuarterStudentTable({ rows }: QuarterStudentTableProps) {
                 <td className="max-w-72 border-b border-line px-4 py-3">{row.level}</td>
                 <td className="border-b border-line px-4 py-3">
                   <span className={resultBadge(row.result, row.quarter)}>
-                    {row.result || "Blank"}
+                    {displayAssessmentResult(row.result)}
                   </span>
                 </td>
                 <td className="border-b border-line px-4 py-3">
                   <span
                     className={clsx(
-                      "inline-flex rounded-md border px-2 py-1 text-xs font-semibold",
-                      row.flagStatus === "Red" &&
-                        "border-orange-300 bg-orange-100 text-orange-700",
-                      row.flagStatus === "Yellow" &&
-                        "border-yellow-300 bg-yellow-100 text-yellow-800",
-                      row.flagStatus === "None" && "border-slate-200 bg-paper text-slate-600"
+                      "inline-flex whitespace-nowrap rounded-md border px-2 py-1 text-xs font-semibold",
+                      getStatusBadgeClass(getQuarterRowAssessmentStatus(row))
                     )}
                   >
-                    {flagLabel(row)}
+                    {getQuarterRowAssessmentStatus(row)}
                   </span>
-                </td>
-                <td className="border-b border-line px-4 py-3 font-medium text-slate-700">
-                  {row.actionRequired}
                 </td>
               </tr>
             ))}
@@ -275,9 +249,8 @@ function matchesTableSearch(row: QuarterAssessmentRow, search: string) {
     row.centre,
     row.session,
     row.level,
-    row.result,
-    flagLabel(row),
-    row.actionRequired
+    displayAssessmentResult(row.result),
+    getQuarterRowAssessmentStatus(row)
   ]
     .map((value) => normalizeFilterValue(value))
     .some((value) => value.includes(normalizedSearch));
@@ -288,15 +261,11 @@ function matchesResultFilter(row: QuarterAssessmentRow, resultFilter: ResultFilt
     return true;
   }
 
-  if (resultFilter === "Blank") {
-    return !row.result;
-  }
-
-  return row.result === resultFilter;
+  return resultMatchesFilter(row.result, resultFilter);
 }
 
-function matchesConcernFilter(row: QuarterAssessmentRow, concernFilter: ConcernFilter) {
-  return concernFilter === "All" || flagLabel(row) === concernFilter;
+function matchesStatusFilter(row: QuarterAssessmentRow, statusFilter: StatusFilter) {
+  return statusFilter === "All" || getQuarterRowAssessmentStatus(row) === statusFilter;
 }
 
 function compareQuarterRows(
