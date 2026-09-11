@@ -42,7 +42,7 @@ export function AssessorSheetBuilder() {
 
   const summary = useMemo(() => getAssessorSheetSummary(rows), [rows]);
   const columns = useMemo(() => getAssessorSheetColumns(), []);
-  const missingCurrentLevelCount = useMemo(
+  const missingTestedLevelCount = useMemo(
     () => rows.filter((row) => row.currentLevel.trim() === "").length,
     [rows]
   );
@@ -279,15 +279,15 @@ export function AssessorSheetBuilder() {
 
         {rows.length > 0 && !files.assessment ? (
           <p className="mt-4 rounded-md border border-yellow-200 bg-yellow-50 px-3 py-2 text-sm font-medium text-yellow-800">
-            Current Level is blank where no exact assessment level is available. Class Band still
+            Tested Level is blank where no exact assessment level is available. Class Band still
             shows the programme group from the class name.
           </p>
         ) : null}
 
-        {rows.length > 0 && files.assessment && missingCurrentLevelCount > 0 ? (
+        {rows.length > 0 && files.assessment && missingTestedLevelCount > 0 ? (
           <p className="mt-4 rounded-md border border-yellow-200 bg-yellow-50 px-3 py-2 text-sm font-medium text-yellow-800">
-            {missingCurrentLevelCount.toLocaleString()} row
-            {missingCurrentLevelCount === 1 ? "" : "s"} have blank Current Level because those
+            {missingTestedLevelCount.toLocaleString()} row
+            {missingTestedLevelCount === 1 ? "" : "s"} have blank Tested Level because those
             students do not have an exact level match in the assessment file.
           </p>
         ) : null}

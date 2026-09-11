@@ -5,6 +5,7 @@ import {
   formatInstructorNames,
   getAssessorSessionPeriod,
   getAssessorSessionTiming,
+  getAssessorSheetColumns,
   getAssessorSheetSummary,
   normalizeAssessorLocation,
   normalizeSessionLabel,
@@ -148,6 +149,33 @@ describe("assessor sheet helpers", () => {
 
     assert.equal(rows[0].currentLevel, "Breaststroke 6");
     assert.equal(rows[0].classBand, "Intermediate");
+  });
+
+  it("uses the plain Tested Level column when the assessment Current Level is blank", () => {
+    const rows = buildAssessorSheetRows({
+      assessmentRows: [
+        {
+          Name: "Ayla Khan Ismeer",
+          "Tested Level": "Freestyle 2",
+          "Current Level": "",
+          Instructor: "David Hiah"
+        }
+      ],
+      regularRows: [
+        {
+          "Student Name": "Khan Ismeer, Ayla",
+          "Event Name": "YMCA @ Orchard Foundation (F1, F2, F3) - Fri: 4:45 - 5:30"
+        }
+      ],
+      makeUpRows: []
+    });
+
+    assert.equal(rows[0].currentLevel, "Freestyle 2");
+    assert.equal(rows[0].instructorName, "David Hiah");
+    assert.equal(
+      getAssessorSheetColumns().some((column) => column.header === "Tested Level"),
+      true
+    );
   });
 
   it("uses direct session columns when regular rows come from a mapped upload file", () => {

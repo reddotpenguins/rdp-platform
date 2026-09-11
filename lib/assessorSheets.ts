@@ -226,7 +226,7 @@ export function getAssessorSheetColumns() {
     { header: "Name of Instructor", value: (row: AssessorSheetRow) => row.instructorName },
     { header: "Class Type", value: (row: AssessorSheetRow) => row.classType },
     { header: "Class Band", value: (row: AssessorSheetRow) => row.classBand },
-    { header: "Current Level", value: (row: AssessorSheetRow) => row.currentLevel },
+    { header: "Tested Level", value: (row: AssessorSheetRow) => row.currentLevel },
     { header: "Assessment Status", value: (row: AssessorSheetRow) => row.assessmentStatus },
     { header: "Pass/Fail", value: (row: AssessorSheetRow) => row.passFail }
   ];
@@ -790,7 +790,35 @@ function isPassFailResult(result: AssessmentResult): result is "Pass" | "Fail" {
 }
 
 function getSpecificAssessmentLevel(row: RawSheetRow) {
-  return getExactLevelFromRow(row);
+  const lookup = rowLookup(row);
+  const candidateHeaders = [
+    "Tested Level",
+    "Q3 Tested Level",
+    "Q3 Assessed Level",
+    "Q2 Tested Level",
+    "Q2 Assessed Level",
+    "Q1 Tested Level",
+    "Q1 Assessed Level",
+    "Current Level",
+    "Q3 Current Level",
+    "Q2 Current Level",
+    "Q1 Current Level",
+    "Current Class Level",
+    "Q3 Level",
+    "Q2 Level",
+    "Q1 Level",
+    "Level"
+  ];
+
+  for (const header of candidateHeaders) {
+    const value = textValue(lookup.get(normalizeHeader(header)));
+
+    if (value && !isAssessorClassBandLevel(value)) {
+      return value;
+    }
+  }
+
+  return "";
 }
 
 function compareAssessorRows(first: AssessorSheetRow, second: AssessorSheetRow) {
