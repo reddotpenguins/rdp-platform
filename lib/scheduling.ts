@@ -519,12 +519,11 @@ export function buildWeekDays(weekStartDate: string) {
 }
 
 export function parseSingaporeShiftRange(date: string, startTime: string, endTime: string) {
-  const startsAt = Date.parse(`${date}T${startTime}:00+08:00`);
-  let endsAt = Date.parse(`${date}T${endTime}:00+08:00`);
-
-  if (!Number.isFinite(startsAt) || !Number.isFinite(endsAt)) {
-    throw new Error("Use a valid date, start time, and end time.");
-  }
+  const validDate=/^\d{4}-\d{2}-\d{2}$/.test(date)&&Number.isFinite(Date.parse(date+'T00:00:00Z'))&&new Date(date+'T00:00:00Z').toISOString().slice(0,10)===date;
+  const validTime=(time:string)=>/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/.test(time);
+  if(!validDate||!validTime(startTime)||!validTime(endTime))throw new Error('Use a valid date, start time, and end time.');
+  const startsAt = Date.parse(`${date}T${startTime.length===5?startTime+':00':startTime}+08:00`);
+  let endsAt = Date.parse(`${date}T${endTime.length===5?endTime+':00':endTime}+08:00`);
 
   if (endsAt <= startsAt) {
     endsAt += 24 * 60 * 60 * 1000;

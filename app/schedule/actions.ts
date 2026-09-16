@@ -1,5 +1,6 @@
 "use server";
 
+import {availabilityIntersects,periodRange,statusPrefix,blockMarker,type AvailabilityRow} from "@/lib/schedule-workforce";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import {
@@ -54,18 +55,18 @@ export async function saveShiftAction(formData: FormData) {
     redirectWithScheduleError(weekStartDate, "Completed or cancelled schedule weeks cannot be edited.");
   }
 
-  const assignmentError = await validateAssignment({
-    endsAt: values.endsAt,
-    excludeShiftId: values.shiftId,
-    organisationId,
-    requiredQualificationId: values.requiredQualificationId,
-    staffProfileId: values.staffProfileId,
-    startsAt: values.startsAt,
-    supabase
-  });
-
-  if (assignmentError) {
-    redirectWithScheduleError(weekStartDate, assignmentError);
+  await validateShiftResources(supabase,organisationId,values);
+  let retainedAssignments: string[] | null = null;
+  if(values.shiftId){
+    const existing=await requireEditableShift(supabase,organisationId,values.shiftId);
+    if(existing.status==='completed'||existing.status==='cancelled')redirectWithScheduleError(weekStartDate,'Completed or cancelled shifts cannot be edited.');
+    const assigned=await getAssignmentsForShiftIds(supabase,[values.shiftId]);
+    const ids=(assigned.get(values.shiftId)||[]).map(a=>a.staff_profile_id);
+    if(ids.length>1)retainedAssignments=ids;
+  }
+  for(const staffId of retainedAssignments||[values.staffProfileId]){
+    const assignmentError=await validateAssignment({endsAt:values.endsAt,excludeShiftId:values.shiftId,organisationId,requiredQualificationId:values.requiredQualificationId,requiredRole:values.requiredRole,staffProfileId:staffId,startsAt:values.startsAt,supabase});
+    if(assignmentError)redirectWithScheduleError(weekStartDate,assignmentError);
   }
 
   const payload = {
@@ -96,7 +97,7 @@ export async function saveShiftAction(formData: FormData) {
         ...payload,
         version: await getNextShiftVersion(supabase, shiftId)
       })
-      .eq("id", shiftId);
+      .eq("id", shiftId).eq("organisation_id",organisationId);
 
     if (error) {
       redirectWithScheduleError(weekStartDate, error.message);
@@ -118,7 +119,7 @@ export async function saveShiftAction(formData: FormData) {
     shiftId = data.id;
   }
 
-  await replaceShiftAssignment({
+  if(!retainedAssignments)await replaceShiftAssignment({
     organisationId,
     shiftId,
     staffProfileId: values.staffProfileId,
@@ -147,6 +148,7 @@ export async function cancelShiftAction(formData: FormData) {
   const organisationId = await getOrganisationId(supabase);
   const weekStartDate = getWeekStartDate(getRequiredText(formData, "weekStartDate"));
   const shiftId = getRequiredText(formData, "shiftId");
+  await requireEditableShift(supabase,organisationId,shiftId);
   const { error } = await supabase
     .from("schedule_shifts")
     .update({
@@ -188,6 +190,7 @@ export async function duplicateShiftAction(formData: FormData) {
   const organisationId = await getOrganisationId(supabase);
   const weekStartDate = getWeekStartDate(getRequiredText(formData, "weekStartDate"));
   const shiftId = getRequiredText(formData, "shiftId");
+  await requireEditableShift(supabase,organisationId,shiftId);
   const { data: source, error } = await supabase
     .from("schedule_shifts")
     .select(
@@ -241,6 +244,13 @@ export async function publishScheduleWeekAction(formData: FormData) {
     redirectWithScheduleError(weekStartDate, "Completed or cancelled schedule weeks cannot be published.");
   }
 
+  const {data:publishShifts,error:publishReadError}=await supabase.from('schedule_shifts').select('id,starts_at,ends_at,required_role,required_qualification_id').eq('organisation_id',organisationId).eq('schedule_week_id',week.id).neq('status','cancelled');
+  if(publishReadError)redirectWithScheduleError(weekStartDate,publishReadError.message);
+  const publishAssignments=await getAssignmentsForShiftIds(supabase,(publishShifts||[]).map(s=>s.id));
+  for(const shift of publishShifts||[])for(const assigned of publishAssignments.get(shift.id)||[]){
+    const issue=await validateAssignment({endsAt:shift.ends_at,excludeShiftId:shift.id,organisationId,requiredQualificationId:shift.required_qualification_id,requiredRole:shift.required_role,staffProfileId:assigned.staff_profile_id,startsAt:shift.starts_at,supabase});
+    if(issue)redirectWithScheduleError(weekStartDate,issue);
+  }
   const { error } = await supabase
     .from("schedule_weeks")
     .update({
@@ -340,6 +350,7 @@ export async function copyWeekToNextWeekAction(formData: FormData) {
   }
 
   const targetWeek = await getOrCreateScheduleWeek(supabase, organisationId, targetWeekStartDate, profile.id);
+  if(['completed','cancelled'].includes(targetWeek.status))redirectWithScheduleError(weekStartDate,'The destination week is closed.');
   const { count: existingTargetCount } = await supabase
     .from("schedule_shifts")
     .select("id", { count: "exact", head: true })
@@ -475,7 +486,10 @@ export async function applyTemplateAction(formData: FormData) {
   const organisationId = await getOrganisationId(supabase);
   const weekStartDate = getWeekStartDate(getRequiredText(formData, "weekStartDate"));
   const templateId = getRequiredText(formData, "templateId");
+  const {data:ownedTemplate,error:templateOwnerError}=await supabase.from("schedule_templates").select("id").eq("id",templateId).eq("organisation_id",organisationId).eq("active",true).maybeSingle();
+  if(templateOwnerError||!ownedTemplate)redirectWithScheduleError(weekStartDate,"Choose an active template in this organisation.");
   const week = await getOrCreateScheduleWeek(supabase, organisationId, weekStartDate, profile.id);
+  if(['completed','cancelled'].includes(week.status))redirectWithScheduleError(weekStartDate,'The destination week is closed.');
   const { data: templateShifts, error } = await supabase
     .from("schedule_template_shifts")
     .select(
@@ -491,6 +505,8 @@ export async function applyTemplateAction(formData: FormData) {
   for (const templateShift of templateShifts) {
     const targetDate = addDaysToIsoDate(weekStartDate, Number(templateShift.day_offset ?? 0));
     const range = parseSingaporeShiftRange(targetDate, templateShift.start_time, templateShift.end_time);
+    const issue=await validateAssignment({endsAt:range.endsAt,organisationId,requiredQualificationId:templateShift.required_qualification_id,requiredRole:templateShift.required_role,staffProfileId:templateShift.assigned_staff_profile_id||'',startsAt:range.startsAt,supabase});
+    if(issue)redirectWithScheduleError(weekStartDate,`Template stopped before ${targetDate}: ${issue} Previously saved rows remain visible; review before retrying.`);
     const { data: insertedShift, error: insertError } = await supabase
       .from("schedule_shifts")
       .insert({
@@ -598,7 +614,7 @@ export async function moveShiftAction({
   try {
     const { data: shift, error } = await supabase
       .from("schedule_shifts")
-      .select("id, starts_at, ends_at, required_qualification_id")
+      .select("id, starts_at, ends_at, required_qualification_id, required_role, schedule_week_id, status")
       .eq("id", shiftId)
       .eq("organisation_id", organisationId)
       .single();
@@ -607,6 +623,10 @@ export async function moveShiftAction({
       return { error: error?.message ?? "Shift was not found.", ok: false };
     }
 
+    await requireEditableShift(supabase,organisationId,shiftId);
+    if(getWeekStartDate(targetDate)!==normalizedWeekStartDate||getWeekStartDate(getShiftSingaporeDate(shift.starts_at))!==normalizedWeekStartDate)return {ok:false,error:'Move shifts within the displayed week.'};
+    const currentAssignments=await getAssignmentsForShiftIds(supabase,[shiftId]);
+    if((currentAssignments.get(shiftId)||[]).length>1)return {ok:false,error:'Edit this group shift to preserve all assigned staff.'};
     const range = parseSingaporeShiftRange(
       targetDate,
       getShiftSingaporeTime(shift.starts_at),
@@ -617,6 +637,7 @@ export async function moveShiftAction({
       excludeShiftId: shiftId,
       organisationId,
       requiredQualificationId: shift.required_qualification_id,
+      requiredRole: shift.required_role,
       staffProfileId: targetStaffProfileId,
       startsAt: range.startsAt,
       supabase
@@ -680,7 +701,7 @@ export async function resizeShiftAction({
   try {
     const { data: shift, error } = await supabase
       .from("schedule_shifts")
-      .select("id, starts_at, ends_at, required_qualification_id")
+      .select("id, starts_at, ends_at, required_qualification_id, required_role, schedule_week_id, status")
       .eq("id", shiftId)
       .eq("organisation_id", organisationId)
       .single();
@@ -689,6 +710,7 @@ export async function resizeShiftAction({
       return { error: error?.message ?? "Shift was not found.", ok: false };
     }
 
+    await requireEditableShift(supabase,organisationId,shiftId);
     const startsAtMs = Date.parse(shift.starts_at);
     const nextEndsAtMs = Date.parse(shift.ends_at) + minutes * 60 * 1000;
 
@@ -698,19 +720,9 @@ export async function resizeShiftAction({
 
     const nextEndsAt = new Date(nextEndsAtMs).toISOString();
     const assignments = await getAssignmentsForShiftIds(supabase, [shiftId]);
-    const assignedStaffId = assignments.get(shiftId)?.[0]?.staff_profile_id ?? "";
-    const assignmentError = await validateAssignment({
-      endsAt: nextEndsAt,
-      excludeShiftId: shiftId,
-      organisationId,
-      requiredQualificationId: shift.required_qualification_id,
-      staffProfileId: assignedStaffId,
-      startsAt: shift.starts_at,
-      supabase
-    });
-
-    if (assignmentError) {
-      return { error: assignmentError, ok: false };
+    for(const assigned of assignments.get(shiftId)||[]){
+      const assignmentError=await validateAssignment({endsAt:nextEndsAt,excludeShiftId:shiftId,organisationId,requiredQualificationId:shift.required_qualification_id,requiredRole:shift.required_role,staffProfileId:assigned.staff_profile_id,startsAt:shift.starts_at,supabase});
+      if(assignmentError)return {error:assignmentError,ok:false};
     }
 
     const { error: updateError } = await supabase
@@ -817,9 +829,11 @@ function getShiftFormValues(formData: FormData) {
   const endTime = getRequiredText(formData, "endTime");
   const range = parseSingaporeShiftRange(shiftDate, startTime, endTime);
   const requiredRole = getOptionalText(formData, "requiredRole");
+  if(requiredRole&&!isStaffRole(requiredRole))throw new Error("Choose a valid required role.");
+  const colour=getOptionalText(formData,"colour")||"#2563eb";if(!/^#[0-9a-f]{6}$/i.test(colour))throw new Error("Choose a valid colour.");
 
   return {
-    colour: getOptionalText(formData, "colour") || "#f26a2e",
+    colour,
     departmentId: getOptionalText(formData, "departmentId") || null,
     endsAt: range.endsAt,
     notes: getOptionalText(formData, "notes") || null,
@@ -850,22 +864,14 @@ async function replaceShiftAssignment({
   supabase: SupabaseClient;
   userId: string;
 }) {
-  await supabase.from("schedule_shift_assignments").delete().eq("shift_id", shiftId);
-
-  if (!staffProfileId) {
-    return;
+  if(staffProfileId){
+    const {error}=await supabase.from('schedule_shift_assignments').upsert({created_by:userId,organisation_id:organisationId,shift_id:shiftId,staff_profile_id:staffProfileId,status:'assigned'},{onConflict:'shift_id,staff_profile_id'});
+    if(error)throw new Error(error.message);
   }
+  let removal=supabase.from('schedule_shift_assignments').update({status:'removed',updated_at:new Date().toISOString()}).eq('shift_id',shiftId).eq('organisation_id',organisationId);
+  if(staffProfileId)removal=removal.neq('staff_profile_id',staffProfileId);
+  const {error}=await removal;if(error)throw new Error(error.message);
 
-  const { error } = await supabase.from("schedule_shift_assignments").insert({
-    created_by: userId,
-    organisation_id: organisationId,
-    shift_id: shiftId,
-    staff_profile_id: staffProfileId
-  });
-
-  if (error) {
-    throw new Error(error.message);
-  }
 }
 
 async function validateAssignment({
@@ -873,6 +879,7 @@ async function validateAssignment({
   excludeShiftId,
   organisationId,
   requiredQualificationId,
+  requiredRole,
   staffProfileId,
   startsAt,
   supabase
@@ -881,6 +888,7 @@ async function validateAssignment({
   excludeShiftId?: string | null;
   organisationId: string;
   requiredQualificationId: string | null;
+  requiredRole?: string | null;
   staffProfileId: string;
   startsAt: string;
   supabase: SupabaseClient;
@@ -889,6 +897,9 @@ async function validateAssignment({
     return null;
   }
 
+  const {data:staff,error:staffError}=await supabase.from('staff_profiles').select('id,role,active').eq('organisation_id',organisationId).eq('id',staffProfileId).maybeSingle();
+  if(staffError||!staff?.active)return 'Choose an active staff member in this organisation.';
+  if(requiredRole&&staff.role!==requiredRole)return 'This staff member does not match the required role.';
   const [overlapError, unavailableError, qualificationError] = await Promise.all([
     getStaffOverlapError(supabase, organisationId, staffProfileId, startsAt, endsAt, excludeShiftId),
     getStaffUnavailableError(supabase, organisationId, staffProfileId, startsAt, endsAt),
@@ -911,7 +922,7 @@ async function getStaffOverlapError(
     .select("shift_id")
     .eq("organisation_id", organisationId)
     .eq("staff_profile_id", staffProfileId)
-    .neq("status", "removed");
+    .in("status", ["assigned","acknowledged"]);
 
   if (error || !assignments?.length) {
     return error?.message ?? null;
@@ -968,7 +979,10 @@ async function getStaffUnavailableError(
     return error.message;
   }
 
-  return data?.length ? "This staff member is unavailable during that shift." : null;
+  if(data?.length)return 'This staff member is unavailable during that shift.';
+  const {data:availability,error:availabilityError}=await supabase.from('staff_availability').select('*').eq('organisation_id',organisationId).eq('staff_profile_id',staffProfileId).eq('availability_status','unavailable');
+  if(availabilityError)return availabilityError.message;
+  return (availability||[]).some(row=>availabilityIntersects(row as AvailabilityRow,startsAt,endsAt))?'This staff member is marked on leave or unavailable during this shift.':null;
 }
 
 async function getStaffQualificationError(
@@ -1021,6 +1035,8 @@ async function duplicateShiftsToDate({
       getShiftSingaporeTime(sourceShift.starts_at),
       getShiftSingaporeTime(sourceShift.ends_at)
     );
+    if(['completed','cancelled'].includes(weekStatus))throw new Error('The destination week is closed.');
+    for(const assigned of assignments.get(sourceShift.id)||[]){const issue=await validateAssignment({endsAt:range.endsAt,organisationId,requiredQualificationId:sourceShift.required_qualification_id,requiredRole:sourceShift.required_role,staffProfileId:assigned.staff_profile_id,startsAt:range.startsAt,supabase});if(issue)throw new Error(`Copy stopped before ${targetDate}: ${issue}`);}
     const { data: insertedShift, error } = await supabase
       .from("schedule_shifts")
       .insert({
@@ -1074,12 +1090,13 @@ async function getAssignmentsForShiftIds(supabase: SupabaseClient, shiftIds: str
     return assignments;
   }
 
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("schedule_shift_assignments")
     .select("shift_id, staff_profile_id")
     .in("shift_id", shiftIds)
-    .neq("status", "removed");
+    .in("status", ["assigned","acknowledged"]);
 
+  if(error)throw new Error(error.message);
   (data ?? []).forEach((assignment) => {
     const shiftAssignments = assignments.get(assignment.shift_id) ?? [];
     shiftAssignments.push({ staff_profile_id: assignment.staff_profile_id });
@@ -1103,14 +1120,14 @@ async function writeScheduleAudit(
   supabase: SupabaseClient,
   values: {
     actorStaffId: string;
-    entityId: string;
+    entityId: string | null;
     entityType: string;
     eventType: string;
     metadata: Record<string, unknown>;
     organisationId: string;
   }
 ) {
-  await supabase.from("audit_events").insert({
+  const {error}=await supabase.from("audit_events").insert({
     actor_staff_id: values.actorStaffId,
     entity_id: values.entityId,
     entity_type: values.entityType,
@@ -1118,6 +1135,7 @@ async function writeScheduleAudit(
     metadata: values.metadata,
     organisation_id: values.organisationId
   });
+  if(error)throw new Error("Change saved, but the audit entry failed. Refresh before retrying.");
 }
 
 function getDayOffset(weekStartDate: string, targetDate: string) {
@@ -1144,7 +1162,7 @@ function getOptionalText(formData: FormData, key: string) {
 function getRequiredDate(formData: FormData, key: string) {
   const value = getRequiredText(formData, key);
 
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)||!Number.isFinite(Date.parse(value+"T00:00:00Z"))||new Date(value+"T00:00:00Z").toISOString().slice(0,10)!==value) {
     throw new Error("Use the date picker or YYYY-MM-DD date format.");
   }
 
@@ -1185,4 +1203,61 @@ function redirectWithScheduleError(weekStartDate: string, message: string): neve
 function redirectWithScheduleSuccess(weekStartDate: string, message: string): never {
   const params = new URLSearchParams({ saved: message, week: weekStartDate });
   redirect(`/schedule?${params.toString()}`);
+}
+
+async function requireEditableShift(supabase:SupabaseClient,organisationId:string,shiftId:string){
+ const {data:shift,error}=await supabase.from('schedule_shifts').select('id,status,schedule_week_id').eq('organisation_id',organisationId).eq('id',shiftId).maybeSingle();
+ if(error||!shift)throw new Error('Shift was not found in this organisation.');
+ const {data:week,error:weekError}=await supabase.from('schedule_weeks').select('status').eq('organisation_id',organisationId).eq('id',shift.schedule_week_id).single();
+ if(weekError||!week||['completed','cancelled'].includes(week.status)||['completed','cancelled'].includes(shift.status))throw new Error('Completed or cancelled schedules cannot be changed.');
+ return shift;
+}
+async function validateShiftResources(supabase:SupabaseClient,organisationId:string,values:ReturnType<typeof getShiftFormValues>){
+ for(const [table,id] of [['work_locations',values.workLocationId],['schedule_departments',values.departmentId],['schedule_programmes',values.programmeId],['qualifications',values.requiredQualificationId]] as const){
+  if(!id)continue;const {data,error}=await supabase.from(table).select('id').eq('id',id).eq('organisation_id',organisationId).maybeSingle();if(error||!data)throw new Error('Choose scheduling resources from this organisation.');
+ }
+}
+export async function saveCentreAction(formData:FormData){
+ const {profile}=await requireSchedulingAdmin();const supabase=createClient();const organisationId=await getOrganisationId(supabase);const week=getWeekStartDate(getRequiredDate(formData,'weekStartDate'));
+ const id=getOptionalText(formData,'locationId'),name=getRequiredText(formData,'name'),latitude=getOptionalNumber(formData,'latitude'),longitude=getOptionalNumber(formData,'longitude'),radius=getPositiveInteger(formData,'geofenceRadiusMeters');
+ if(name.length>100||radius<20||radius>1000||(latitude===null)!==(longitude===null)||(latitude!==null&&Math.abs(latitude)>90)||(longitude!==null&&Math.abs(longitude)>180))redirectWithScheduleError(week,'Use a name, both valid coordinates (or neither), and a radius of 20–1,000 metres.');
+ const payload={name,short_name:getOptionalText(formData,'shortName')||null,latitude,longitude,geofence_radius_meters:radius};
+ const result=id?await supabase.from('work_locations').update(payload).eq('id',id).eq('organisation_id',organisationId).select('id').single():await supabase.from('work_locations').insert({...payload,organisation_id:organisationId,active:true}).select('id').single();
+ if(result.error||!result.data)redirectWithScheduleError(week,result.error?.message||'Centre could not be saved.');
+ await writeScheduleAudit(supabase,{actorStaffId:profile.id,entityId:result.data.id,entityType:'work_location',eventType:id?'schedule.location.updated':'schedule.location.created',metadata:{name},organisationId});revalidatePath('/schedule');redirectWithScheduleSuccess(week,'Centre saved. Existing assignments remain connected.');
+}
+export async function saveBlockPresetAction(formData:FormData){
+ const {profile}=await requireSchedulingAdmin();const supabase=createClient();const organisationId=await getOrganisationId(supabase);const values=getShiftFormValues(formData);const week=getWeekStartDate(values.shiftDate);const day=Number(getRequiredText(formData,'dayOffset'));
+ if(!Number.isInteger(day)||day<0||day>6)redirectWithScheduleError(week,'Choose a valid weekday.');
+ await validateShiftResources(supabase,organisationId,values);
+ if(values.staffProfileId){const {data,error}=await supabase.from('staff_profiles').select('id').eq('organisation_id',organisationId).eq('id',values.staffProfileId).eq('active',true).maybeSingle();if(error||!data)redirectWithScheduleError(week,'Choose an active default coach.');}
+ const {data:template,error}=await supabase.from('schedule_templates').insert({organisation_id:organisationId,name:values.title,description:blockMarker,active:false,created_by:profile.id}).select('id').single();
+ if(error||!template)redirectWithScheduleError(week,error?.message||'Could not save preset.');
+ const {error:rowError}=await supabase.from('schedule_template_shifts').insert({template_id:template.id,day_offset:day,title:values.title,start_time:getShiftSingaporeTime(values.startsAt),end_time:getShiftSingaporeTime(values.endsAt),work_location_id:values.workLocationId,assigned_staff_profile_id:values.staffProfileId||null,department_id:values.departmentId,programme_id:values.programmeId,required_role:values.requiredRole,required_qualification_id:values.requiredQualificationId,required_manpower:values.requiredManpower,colour:values.colour,session_label:values.sessionLabel,notes:values.notes});
+ if(rowError)redirectWithScheduleError(week,rowError.message);
+ const {error:activateError}=await supabase.from('schedule_templates').update({active:true}).eq('id',template.id).eq('organisation_id',organisationId);if(activateError)redirectWithScheduleError(week,activateError.message);
+ await writeScheduleAudit(supabase,{actorStaffId:profile.id,entityId:template.id,entityType:'schedule_template',eventType:'schedule.block.created',metadata:{day},organisationId});revalidatePath('/schedule');redirectWithScheduleSuccess(week,'Schedule preset saved for the team.');
+}
+export async function saveRosterStatusAction(formData:FormData){
+ const {profile}=await requireSchedulingAdmin();const supabase=createClient();const organisationId=await getOrganisationId(supabase);const date=getRequiredDate(formData,'date'),week=getWeekStartDate(date),staffId=getRequiredText(formData,'staffProfileId'),period=getRequiredText(formData,'period'),status=getRequiredText(formData,'status');
+ if(!['AM','PM'].includes(period)||!['Not On Shift','Sick leave','On Leave','Available for work'].includes(status))redirectWithScheduleError(week,'Choose a valid roster status. On Shift follows the roster.');
+ const existingWeek=await getScheduleWeek(supabase,organisationId,week);if(existingWeek&&['completed','cancelled'].includes(existingWeek.status))redirectWithScheduleError(week,'This schedule week is closed.');
+ const {data:staff,error:staffError}=await supabase.from('staff_profiles').select('id').eq('id',staffId).eq('organisation_id',organisationId).eq('active',true).maybeSingle();if(staffError||!staff)redirectWithScheduleError(week,'Choose an active staff member.');
+ const range=periodRange(date,period as 'AM'|'PM');const overlap=await getStaffOverlapError(supabase,organisationId,staffId,range.startsAt,range.endsAt);if(overlap)redirectWithScheduleError(week,'Reassign the affected shifts before changing this period’s status.');
+ const {data:approved,error:approvedError}=await supabase.from('staff_unavailable_periods').select('id').eq('organisation_id',organisationId).eq('staff_profile_id',staffId).eq('status','approved').lt('starts_at',range.endsAt).gt('ends_at',range.startsAt).limit(1);
+ if(approvedError||approved?.length)redirectWithScheduleError(week,approvedError?.message||'An approved unavailable period controls this status. Review that record before changing it.');
+ const start=period==='AM'?'00:00:00':'12:00:00',end=period==='AM'?'12:00:00':'24:00:00';
+ const {data:rows,error:readError}=await supabase.from('staff_availability').select('id,notes').eq('organisation_id',organisationId).eq('staff_profile_id',staffId).eq('effective_from',date).eq('effective_to',date).eq('start_time',start).eq('end_time',end).like('notes',`${statusPrefix}%`);
+ if(readError)redirectWithScheduleError(week,readError.message);
+ // Reuse only this editor's exact-date markers; recurring and external availability stay intact.
+ const ids=(rows||[]).map(r=>r.id);let savedId=ids[0]||null;
+ if(status==='Not On Shift'){
+  if(ids.length){const {error}=await supabase.from('staff_availability').delete().in('id',ids).eq('organisation_id',organisationId);if(error)redirectWithScheduleError(week,error.message);}
+ }else{
+  const payload={organisation_id:organisationId,staff_profile_id:staffId,weekday:new Date(`${date}T12:00:00Z`).getUTCDay(),start_time:start,end_time:end,availability_status:status==='Available for work'?'available':'unavailable',effective_from:date,effective_to:date,notes:`${statusPrefix}${status}`};
+  const result=savedId?await supabase.from('staff_availability').update(payload).eq('id',savedId).eq('organisation_id',organisationId).select('id').single():await supabase.from('staff_availability').insert(payload).select('id').single();
+  if(result.error||!result.data)redirectWithScheduleError(week,result.error?.message||'Status could not be saved.');savedId=result.data.id;
+  if(ids.length>1){const {error}=await supabase.from('staff_availability').delete().in('id',ids.slice(1)).eq('organisation_id',organisationId);if(error)redirectWithScheduleError(week,error.message);}
+ }
+ await writeScheduleAudit(supabase,{actorStaffId:profile.id,entityId:savedId,entityType:'staff_availability',eventType:'schedule.status.updated',metadata:{staffId,date,period,status},organisationId});revalidatePath('/schedule');redirectWithScheduleSuccess(week,'Roster status saved.');
 }

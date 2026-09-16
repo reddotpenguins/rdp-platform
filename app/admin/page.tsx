@@ -110,7 +110,7 @@ export default async function AdminPage() {
           href="/schedule"
           icon={CalendarCheck}
           title="Scheduling & payroll"
-          description="Plan shifts, review clock records, approve leave, and prepare payroll hours."
+          description="Manage schedules, coach availability, presets and centres. Preview attendance, leave and payroll tools."
         />
         <AdminCard
           href="/training"

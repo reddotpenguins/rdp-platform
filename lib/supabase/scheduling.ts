@@ -1,3 +1,5 @@
+import {blockMarker,type AvailabilityRow,type UnavailableRow,type SavedBlock} from "@/lib/schedule-workforce";
+import {addDaysToIsoDate} from "@/lib/scheduling";
 import { createClient } from "@/lib/supabase/server";
 import {
   detectScheduleConflicts,
@@ -88,6 +90,9 @@ type ScheduleTemplateRow = {
 };
 
 export type SchedulingDashboardData = {
+  availability: AvailabilityRow[];
+  unavailable: UnavailableRow[];
+  blocks: SavedBlock[];
   conflicts: ScheduleConflictWarning[];
   departments: ScheduleResourceOption[];
   error?: string;
@@ -217,7 +222,17 @@ export async function getSchedulingDashboardData(weekStartDate: string): Promise
       })
     : [];
 
+  const [availabilityResult, unavailableResult, blockResult] = await Promise.all([
+    supabase.from('staff_availability').select('id,staff_profile_id,weekday,start_time,end_time,availability_status,effective_from,effective_to,notes,updated_at').eq('organisation_id',organisationId),
+    supabase.from('staff_unavailable_periods').select('staff_profile_id,starts_at,ends_at,reason').eq('organisation_id',organisationId).eq('status','approved').lt('starts_at',`${addDaysToIsoDate(weekStartDate,7)}T00:00:00+08:00`).gt('ends_at',`${weekStartDate}T00:00:00+08:00`),
+    templates.filter(t=>t.description===blockMarker).length ? supabase.from('schedule_template_shifts').select('*').in('template_id',templates.filter(t=>t.description===blockMarker).map(t=>t.id)) : Promise.resolve({data:[],error:null})
+  ]);
+  const detailError=availabilityResult.error||unavailableResult.error||blockResult.error;
   return {
+    availability: (availabilityResult.data||[]) as AvailabilityRow[],
+    unavailable: (unavailableResult.data||[]) as UnavailableRow[],
+    blocks: (blockResult.data||[]) as SavedBlock[],
+    ...(detailError?{error:detailError.message}:{}),
     conflicts: detectScheduleConflicts(shifts),
     departments,
     locations,
@@ -232,6 +247,9 @@ export async function getSchedulingDashboardData(weekStartDate: string): Promise
 
 function getEmptyData(week: ScheduleWeek, error: string): SchedulingDashboardData {
   return {
+    availability: [],
+    unavailable: [],
+    blocks: [],
     conflicts: [],
     departments: [],
     error,
@@ -279,16 +297,16 @@ async function getWeekShifts({
     .eq("schedule_week_id", weekId)
     .order("starts_at", { ascending: true });
 
-  if (shiftError || !shiftRows?.length) {
-    return [];
-  }
+  if (shiftError) throw new Error(shiftError.message);
+  if (!shiftRows?.length) return [];
 
   const shiftIds = shiftRows.map((shift) => shift.id);
-  const { data: assignmentRows } = await supabase
+  const { data: assignmentRows, error: assignmentError } = await supabase
     .from("schedule_shift_assignments")
     .select("id, shift_id, staff_profile_id, status")
     .in("shift_id", shiftIds)
-    .neq("status", "removed");
+    .in("status", ["assigned","acknowledged"]);
+  if(assignmentError) throw new Error(assignmentError.message);
   const assignmentsByShift = new Map<string, RosterAssignment[]>();
   const staffById = new Map(staff.map((staffOption) => [staffOption.id, staffOption]));
 

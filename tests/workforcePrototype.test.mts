@@ -1,0 +1,13 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {seedShifts,seedLeave,shiftError,paidHours,payrollRows,addDays,type Shift} from '../modules/workforce-prototype/model.ts';
+const shifts=seedShifts();
+const base:Shift={id:'new',personId:'p1',date:'2026-09-15',start:'09:00',end:'13:00',breakMinutes:30,location:'Orchard',title:'Learn to Swim',team:'Coaching',published:false};
+test('seed roster has no leave, role or overlap conflicts',()=>{for(const s of shifts)assert.equal(shiftError(s,shifts,seedLeave),null);});
+test('overlap rejects partial, enclosing and identical time intervals',()=>{for(const [start,end] of [['08:00','10:00'],['08:00','14:00'],['09:00','13:00']])assert.match(shiftError({...base,id:'other',start,end},[base],[])!,/overlapping/);});
+test('back-to-back shifts are allowed and edits do not conflict with themselves',()=>{assert.equal(shiftError({...base,id:'other',start:'13:00',end:'17:00'},[base],[]),null);assert.equal(shiftError(base,[base],[]),null);});
+test('approved leave blocks assignment but pending leave does not',()=>{assert.match(shiftError({...base,personId:'p3',date:'2026-09-18'},[],seedLeave)!,/approved leave/);assert.equal(shiftError({...base,personId:'p5',date:'2026-09-17'},[],seedLeave),null);});
+test('hospitality cannot be assigned a coaching shift',()=>assert.match(shiftError({...base,personId:'p7'},[],[])!,/correct team/));
+test('invalid time ranges and breaks are rejected',()=>{assert.ok(shiftError({...base,end:'08:00'},[],[]));assert.ok(shiftError({...base,breakMinutes:240},[],[]));assert.ok(shiftError({...base,breakMinutes:-1},[],[]));assert.ok(shiftError({...base,start:'27:00'},[],[]));});
+test('payroll excludes unapproved hours and subtracts unpaid breaks',()=>{const approved={id:'t1',personId:'p1',date:base.date,start:base.start,end:base.end,breakMinutes:30,approved:true,location:'Orchard'};assert.equal(paidHours(approved),3.5);const p=payrollRows([approved,{...approved,id:'t2',approved:false}])[0];assert.equal(p.hours,3.5);assert.equal(p.gross,112);assert.equal(p.pending,1);});
+test('week navigation crosses month and year boundaries',()=>{assert.equal(addDays('2026-12-28',7),'2027-01-04');assert.equal(addDays('2026-03-02',-7),'2026-02-23');});

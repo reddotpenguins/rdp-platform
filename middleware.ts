@@ -3,6 +3,9 @@ import { createServerClient } from "@supabase/ssr";
 import { getSupabaseConfig } from "@/lib/supabase/config";
 
 export async function middleware(request: NextRequest) {
+  // Fictional, client-only demo; this route never reads protected staff records.
+  if (request.nextUrl.pathname === "/prototypes/workforce") return NextResponse.next();
+
   const { supabaseUrl, supabasePublishableKey } = getSupabaseConfig();
   let response = NextResponse.next({ request });
 
