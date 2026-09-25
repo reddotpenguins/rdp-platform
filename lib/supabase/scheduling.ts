@@ -1,3 +1,4 @@
+import type {StaffCertificate} from '@/lib/workforce-certificates';
 import {blockMarker,type AvailabilityRow,type UnavailableRow,type SavedBlock} from "@/lib/schedule-workforce";
 import {addDaysToIsoDate} from "@/lib/scheduling";
 import { createClient } from "@/lib/supabase/server";
@@ -93,6 +94,7 @@ export type SchedulingDashboardData = {
   availability: AvailabilityRow[];
   unavailable: UnavailableRow[];
   blocks: SavedBlock[];
+  certificates: StaffCertificate[];
   conflicts: ScheduleConflictWarning[];
   departments: ScheduleResourceOption[];
   error?: string;
@@ -163,7 +165,7 @@ export async function getSchedulingDashboardData(weekStartDate: string): Promise
       .order("name", { ascending: true }),
     supabase
       .from("staff_qualifications")
-      .select("staff_profile_id, qualification_id")
+      .select("id, staff_profile_id, qualification_id, awarded_at, expires_at, notes")
       .eq("organisation_id", organisationId),
     supabase
       .from("schedule_templates")
@@ -229,6 +231,7 @@ export async function getSchedulingDashboardData(weekStartDate: string): Promise
   ]);
   const detailError=availabilityResult.error||unavailableResult.error||blockResult.error;
   return {
+    certificates: (staffQualificationsResult.data||[]) as StaffCertificate[],
     availability: (availabilityResult.data||[]) as AvailabilityRow[],
     unavailable: (unavailableResult.data||[]) as UnavailableRow[],
     blocks: (blockResult.data||[]) as SavedBlock[],
@@ -247,6 +250,7 @@ export async function getSchedulingDashboardData(weekStartDate: string): Promise
 
 function getEmptyData(week: ScheduleWeek, error: string): SchedulingDashboardData {
   return {
+    certificates: [],
     availability: [],
     unavailable: [],
     blocks: [],

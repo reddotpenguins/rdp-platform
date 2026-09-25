@@ -1,4 +1,5 @@
 "use server";
+import {qualificationCoversShift,validDate} from "@/lib/workforce-certificates";
 
 import {availabilityIntersects,periodRange,statusPrefix,blockMarker,type AvailabilityRow} from "@/lib/schedule-workforce";
 import { revalidatePath } from "next/cache";
@@ -903,7 +904,7 @@ async function validateAssignment({
   const [overlapError, unavailableError, qualificationError] = await Promise.all([
     getStaffOverlapError(supabase, organisationId, staffProfileId, startsAt, endsAt, excludeShiftId),
     getStaffUnavailableError(supabase, organisationId, staffProfileId, startsAt, endsAt),
-    getStaffQualificationError(supabase, organisationId, staffProfileId, requiredQualificationId)
+    getStaffQualificationError(supabase, organisationId, staffProfileId, requiredQualificationId, startsAt, endsAt)
   ]);
 
   return overlapError ?? unavailableError ?? qualificationError;
@@ -989,7 +990,9 @@ async function getStaffQualificationError(
   supabase: SupabaseClient,
   organisationId: string,
   staffProfileId: string,
-  requiredQualificationId: string | null
+  requiredQualificationId: string | null,
+  startsAt: string,
+  endsAt: string
 ) {
   if (!requiredQualificationId) {
     return null;
@@ -997,7 +1000,7 @@ async function getStaffQualificationError(
 
   const { data, error } = await supabase
     .from("staff_qualifications")
-    .select("id")
+    .select("id,awarded_at,expires_at")
     .eq("organisation_id", organisationId)
     .eq("staff_profile_id", staffProfileId)
     .eq("qualification_id", requiredQualificationId)
@@ -1007,7 +1010,8 @@ async function getStaffQualificationError(
     return error.message;
   }
 
-  return data?.length ? null : "This staff member does not have the required qualification.";
+  if(!data?.length)return "This staff member does not have the required qualification.";
+  return qualificationCoversShift(data[0],startsAt,endsAt)?null:"The required qualification is expired or not valid for the whole shift.";
 }
 
 async function duplicateShiftsToDate({
@@ -1260,4 +1264,26 @@ export async function saveRosterStatusAction(formData:FormData){
   if(ids.length>1){const {error}=await supabase.from('staff_availability').delete().in('id',ids.slice(1)).eq('organisation_id',organisationId);if(error)redirectWithScheduleError(week,error.message);}
  }
  await writeScheduleAudit(supabase,{actorStaffId:profile.id,entityId:savedId,entityType:'staff_availability',eventType:'schedule.status.updated',metadata:{staffId,date,period,status},organisationId});revalidatePath('/schedule');redirectWithScheduleSuccess(week,'Roster status saved.');
+}
+
+export async function saveStaffCertificateAction(formData:FormData){
+ const {profile}=await requireSchedulingAdmin();const supabase=createClient();const organisationId=await getOrganisationId(supabase);const week=getWeekStartDate(getRequiredDate(formData,'weekStartDate'));
+ const staffId=getRequiredText(formData,'staffProfileId'),qualificationId=getRequiredText(formData,'qualificationId'),awarded=getOptionalText(formData,'awardedAt')||null,expires=getOptionalText(formData,'expiresAt')||null,notes=getRequiredText(formData,'notes');
+ if(formData.get('verified')!=='on'||notes.length<3||notes.length>500||(awarded&&!validDate(awarded))||(expires&&!validDate(expires))||(awarded&&expires&&expires<awarded))redirectWithScheduleError(week,'Verify the certificate, check its dates and add a note (3–500 characters).');
+ const [person,qualification]=await Promise.all([supabase.from('staff_profiles').select('id').eq('id',staffId).eq('organisation_id',organisationId).eq('active',true).maybeSingle(),supabase.from('qualifications').select('id').eq('id',qualificationId).eq('organisation_id',organisationId).eq('active',true).maybeSingle()]);
+ if(person.error||qualification.error||!person.data||!qualification.data)redirectWithScheduleError(week,'Choose active staff and a qualification from this organisation.');
+ const {data:existing,error:readError}=await supabase.from('staff_qualifications').select('id,awarded_at,expires_at').eq('organisation_id',organisationId).eq('staff_profile_id',staffId).eq('qualification_id',qualificationId).maybeSingle();
+ if(readError)redirectWithScheduleError(week,'Could not read the existing certificate.');
+ const payload={organisation_id:organisationId,staff_profile_id:staffId,qualification_id:qualificationId,awarded_at:awarded,expires_at:expires,notes,updated_at:new Date().toISOString()};
+ const result=existing?await supabase.from('staff_qualifications').update(payload).eq('id',existing.id).eq('organisation_id',organisationId).select('id').single():await supabase.from('staff_qualifications').insert(payload).select('id').single();
+ if(result.error||!result.data)redirectWithScheduleError(week,'Certificate could not be saved. Refresh before retrying.');
+ await writeScheduleAudit(supabase,{actorStaffId:profile.id,entityId:result.data.id,entityType:'staff_qualification',eventType:'staff.qualification.verified',metadata:{staffId,qualificationId,previousAwarded:existing?.awarded_at,previousExpiry:existing?.expires_at,awarded,expires},organisationId});
+ revalidatePath('/schedule');redirect(`/schedule?week=${week}&view=qualifications&saved=${encodeURIComponent('Verified certificate saved.')}`);
+}
+export async function saveQualificationTypeAction(formData:FormData){
+ const {profile}=await requireSchedulingAdmin();const supabase=createClient();const organisationId=await getOrganisationId(supabase);const week=getWeekStartDate(getRequiredDate(formData,'weekStartDate'));const name=getRequiredText(formData,'name');
+ if(name.length>80)redirectWithScheduleError(week,'Qualification name must be 80 characters or fewer.');
+ const {data,error}=await supabase.from('qualifications').insert({organisation_id:organisationId,name,active:true}).select('id').single();if(error||!data)redirectWithScheduleError(week,'Qualification could not be saved. It may already exist.');
+ await writeScheduleAudit(supabase,{actorStaffId:profile.id,entityId:data.id,entityType:'qualification',eventType:'qualification.created',metadata:{name},organisationId});
+ revalidatePath('/schedule');redirect(`/schedule?week=${week}&view=qualifications&saved=${encodeURIComponent('Qualification type added.')}`);
 }

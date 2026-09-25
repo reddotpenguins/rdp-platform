@@ -19,7 +19,7 @@ export default async function SchedulePage({
   const { profile } = await requireActiveStaffSession();
 
   if (!canManageScheduling(profile)) {
-    redirect("/dashboard");
+    redirect("/attendance");
   }
 
   const weekStartDate = getWeekStartDate(searchParams?.week);

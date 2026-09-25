@@ -69,11 +69,12 @@ export type ClaimPermissions = {
 const rolePermissionMap: Record<StaffRole, readonly StaffPermission[]> = {
   admin: staffPermissions,
   lead_coach: [
+    "schedule.viewOwn", "schedule.clock",
     "assessments.viewOwn",
     "assessments.viewTeam",
     "training.resources.view"
   ],
-  coach: ["assessments.viewOwn", "training.resources.view"]
+  coach: ["schedule.viewOwn", "schedule.clock", "assessments.viewOwn", "training.resources.view"]
 };
 
 export function hasRolePermission(role: StaffRole, permission: StaffPermission) {

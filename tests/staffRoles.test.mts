@@ -58,7 +58,7 @@ describe("staff permission model", () => {
 
     assert.equal(canManageStaffAccess(leadCoach), false);
     assert.equal(canAccessClaims(leadCoach), false);
-    assert.equal(canAccessScheduling(leadCoach), false);
+    assert.equal(canAccessScheduling(leadCoach), true);
     assert.equal(canManageScheduling(leadCoach), false);
     assert.equal(canViewTeamAssessments(leadCoach), true);
     assert.equal(canViewTrainingDepartment(leadCoach), false);
@@ -73,15 +73,17 @@ describe("staff permission model", () => {
     });
   });
 
-  it("keeps coaches to the coach assessment dashboard only", () => {
+  it("allows coaches personal attendance without manager permissions", () => {
     const coach = buildProfile({ role: "coach" });
 
     assert.equal(hasStaffPermission(coach, "assessments.viewOwn"), true);
     assert.equal(hasStaffPermission(coach, "claims.create"), false);
     assert.equal(hasStaffPermission(coach, "claims.approve"), false);
     assert.equal(canAccessClaims(coach), false);
-    assert.equal(canAccessScheduling(coach), false);
+    assert.equal(canAccessScheduling(coach), true);
     assert.equal(canManageScheduling(coach), false);
+    assert.equal(hasStaffPermission(coach, "schedule.clock"), true);
+    assert.equal(hasStaffPermission(coach, "schedule.payroll"), false);
     assert.equal(canViewAllAssessments(coach), false);
     assert.equal(canViewQuarterAssessmentDashboard(coach), false);
     assert.equal(canViewTrainingDepartment(coach), false);

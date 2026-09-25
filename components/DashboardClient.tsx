@@ -155,6 +155,7 @@ export function DashboardClient({
               canViewTrainingResources={canViewTrainingResources}
             />
           ) : null}
+          <HeaderLink href="/attendance" icon={CalendarCheck} label="My time clock" />
           {canAccessScheduling ? (
             <HeaderLink href="/schedule" icon={CalendarCheck} label="Schedule" />
           ) : null}

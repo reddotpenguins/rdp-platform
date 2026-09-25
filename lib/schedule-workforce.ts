@@ -21,7 +21,10 @@ export function rosterDayStatus(staffId:string,date:string,period:'AM'|'PM',shif
  const {startsAt,endsAt}=periodRange(date,period);const overlap=(a:string,b:string)=>Date.parse(a)<Date.parse(endsAt)&&Date.parse(b)>Date.parse(startsAt);
  const away=unavailable.find(r=>r.staff_profile_id===staffId&&overlap(r.starts_at,r.ends_at));if(away)return /sick|medical/i.test(away.reason||'')?'Sick leave':'On Leave';
  const rows=availability.filter(r=>r.staff_profile_id===staffId&&availabilityIntersects(r,startsAt,endsAt)).sort((a,b)=>b.updated_at.localeCompare(a.updated_at));
- const blocked=rows.find(r=>r.availability_status==='unavailable');if(blocked)return blocked.notes===`${statusPrefix}Sick leave`?'Sick leave':'On Leave';
+ const blocked=rows.filter(r=>r.availability_status==='unavailable');
+ if(blocked.some(r=>r.notes===`${statusPrefix}Sick leave`))return 'Sick leave';
+ if(blocked.some(r=>r.notes===`${statusPrefix}On Leave`))return 'On Leave';
+ if(blocked.length)return 'Not On Shift';
  if(shifts.some(s=>s.status!=='cancelled'&&overlap(s.startsAt,s.endsAt)&&s.assignments.some(a=>a.staffProfileId===staffId&&a.status!=='removed'&&a.status!=='declined')))return 'On Shift';
  if(rows.some(r=>r.availability_status==='available'||r.availability_status==='preferred'))return 'Available for work';
  return 'Not On Shift';
