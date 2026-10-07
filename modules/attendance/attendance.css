@@ -1,1 +1,24 @@
 .wf-shift-feedback{border:1px solid #e1e7f0;border-radius:10px;padding:18px;display:grid;gap:14px;min-width:0}.wf-shift-feedback legend{font-size:16px;font-weight:650;padding:0 5px}.wf-shift-feedback p,.wf-shift-feedback small{font-size:12px;color:#63748b}.wf-shift-feedback label{display:grid;gap:7px}.wf-shift-feedback textarea{width:100%;min-height:88px;border:1px solid #dce3ed;border-radius:7px;padding:10px;font:inherit;resize:vertical}.wf-shift-feedback label:has(input[type=checkbox]){display:flex;align-items:center;gap:10px}.wf-shift-feedback input[type=checkbox]{width:16px;height:16px;flex-shrink:0}
+
+/* Keep clocking controls usable on narrow phone screens. */
+.wf-attendance .wf-panel{min-width:0}
+.wf-attendance .wf-form select,.wf-attendance .wf-form input,.wf-attendance .wf-form textarea{max-width:100%;min-width:0}
+.wf-attendance .wf-clock-layout .wf-button{min-height:48px}
+@media(max-width:700px){
+ .wf-attendance .wf-content{padding:16px 12px;padding-bottom:calc(24px + env(safe-area-inset-bottom))}
+ .wf-attendance .wf-page-heading,.wf-attendance .wf-panel-heading{flex-direction:column;align-items:stretch;gap:12px}
+ .wf-attendance .wf-page-heading h1{font-size:25px;line-height:1.2}
+ .wf-attendance .wf-clock-layout{grid-template-columns:minmax(0,1fr);gap:16px}
+ .wf-attendance .wf-panel{padding:16px!important}
+ .wf-attendance .wf-form-row{grid-template-columns:minmax(0,1fr);flex-direction:column}
+ .wf-attendance .wf-form input:not([type=checkbox]),.wf-attendance .wf-form select,.wf-attendance .wf-form textarea{font-size:16px;min-height:44px;width:100%}
+ .wf-attendance .wf-button{min-height:44px;white-space:normal}
+ .wf-attendance .wf-shift-feedback{padding:12px}
+ .wf-attendance .wf-panel-heading>div:last-child{display:flex;flex-wrap:wrap;gap:8px}
+ .wf-attendance .wf-table-scroll{max-width:100%;overflow-x:auto}
+ .wf-attendance .wf-table-scroll:has(td[data-label]) table,.wf-attendance .wf-table-scroll:has(td[data-label]) tbody{display:block;min-width:0;width:100%}
+ .wf-attendance .wf-table-scroll:has(td[data-label]) thead{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+ .wf-attendance .wf-table-scroll:has(td[data-label]) tr{display:block;border:1px solid #dce3ed;border-radius:10px;margin:12px 0;overflow:hidden}
+ .wf-attendance td[data-label]{display:block;white-space:normal;padding:12px;overflow-wrap:anywhere}
+ .wf-attendance td[data-label]::before{content:attr(data-label);display:block;color:#63748b;font-size:12px;font-weight:600;margin-bottom:6px}
+}

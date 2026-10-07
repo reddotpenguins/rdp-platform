@@ -6,9 +6,11 @@ import {hasStaffPermission} from '@/lib/staffRoles';
 export async function clockAction(input:{shiftId:string;direction:'in'|'out';latitude:number;longitude:number;accuracy:number;capturedAt:string;mood?:string;feedback?:string;followUp?:boolean}){
  const {profile}=await requireActiveStaffSession();
  if(!hasStaffPermission(profile,'schedule.clock'))return {error:'Clock access is not enabled for your account.'};
- const {error}=await createClient().rpc('workforce_clock',{p_shift:input.shiftId,p_direction:input.direction,p_lat:input.latitude,p_lng:input.longitude,p_accuracy:input.accuracy,p_captured_at:input.capturedAt,p_mood:input.mood||null,p_feedback:input.feedback||null,p_follow_up:!!input.followUp});
+ const db=createClient();
+ const {data:recordId,error}=await db.rpc('workforce_clock',{p_shift:input.shiftId,p_direction:input.direction,p_lat:input.latitude,p_lng:input.longitude,p_accuracy:input.accuracy,p_captured_at:input.capturedAt,p_mood:input.mood||null,p_feedback:input.feedback||null,p_follow_up:!!input.followUp});
  if(error)return {error:error.code==='23505'?'You already have a clock-in. Refresh to view it.':error.code==='P0001'?error.message:'Clock could not be saved. Refresh before trying again.'};
- revalidatePath('/attendance');return {message:input.direction==='in'?'Clock-in saved.':'Clock-out saved for manager review.'};
+ const {data:record}=await db.from('workforce_attendance').select('*').eq('id',recordId).eq('staff_profile_id',profile.id).single();
+ revalidatePath('/attendance');return {record, saved:true, message:input.direction==='in'?'Clock-in saved.':'Clock-out saved for manager review.'};
 }
 export async function reviewAttendance(input:{id:string;approve:boolean;breakMinutes:number;note:string}){
  const {profile}=await requireActiveStaffSession();
