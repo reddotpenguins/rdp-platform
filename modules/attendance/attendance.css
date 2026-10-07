@@ -22,3 +22,8 @@
  .wf-attendance td[data-label]{display:block;white-space:normal;padding:12px;overflow-wrap:anywhere}
  .wf-attendance td[data-label]::before{content:attr(data-label);display:block;color:#63748b;font-size:12px;font-weight:600;margin-bottom:6px}
 }
+
+.wf-attendance .wf-location-button{display:flex;margin-top:8px;min-height:44px;color:#1854ba;border-color:#9fbdec;background:#eff5ff;white-space:normal}
+.wf-attendance .wf-location-panel{scroll-margin-top:20px}
+.wf-attendance .wf-location-panel:focus{outline:2px solid #2563eb;outline-offset:3px}
+.wf-attendance .wf-location-details{padding:12px 0;overflow-wrap:anywhere;line-height:1.6}
