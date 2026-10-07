@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { loadEnquiryPages } from "@/lib/enquiryPages";
 import type { CustomerEnquiry, EnquiryStatus, EnquiryType } from "@/types/enquiry";
 
 export type CustomerEnquiryRow = {
@@ -47,19 +48,24 @@ export const enquiryColumns = "*";
 
 export async function getCustomerEnquiries(exactId?: string): Promise<CustomerEnquiriesResult> {
   const supabase = createClient();
-  let query = supabase
-    .from("customer_enquiries")
-    .select(enquiryColumns)
-    .is("merged_into", null)
-    .order("enquiry_received_at", { ascending: false, nullsFirst: false })
-    .order("created_at", { ascending: false })
-    .limit(500);
-  // Direct links from the skip queue must also find records older than the latest 500.
+  let resolvedId: string | undefined;
   if (exactId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(exactId)) {
     const lookup = await supabase.from("customer_enquiries").select("*").eq("id", exactId).maybeSingle<CustomerEnquiryRow>();
-    query = query.eq("id", lookup.data?.merged_into || exactId);
+    if (lookup.error) return { enquiries: [], error: lookup.error.message };
+    resolvedId = lookup.data?.merged_into || exactId;
   }
-  const { data, error } = await query;
+  const { data, error } = await loadEnquiryPages<CustomerEnquiryRow>((from, to) => {
+    let query = supabase
+      .from("customer_enquiries")
+      .select(enquiryColumns)
+      .is("merged_into", null)
+      .order("enquiry_received_at", { ascending: false, nullsFirst: false })
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: true })
+      .range(from, to);
+    if (resolvedId) query = query.eq("id", resolvedId);
+    return query.returns<CustomerEnquiryRow[]>();
+  });
 
   if (error) {
     return {
