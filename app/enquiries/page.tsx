@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { EnquiriesClient } from "@/components/EnquiriesClient";
+import { isTicketId } from "@/lib/enquiryMerge";
 import { canManageCustomerEnquiries } from "@/lib/staffRoles";
 import { getCustomerEnquiries } from "@/lib/supabase/enquiries";
 import { requireActiveStaffSession } from "@/lib/supabase/staffProfile";
@@ -17,7 +18,11 @@ export default async function EnquiriesPage({ searchParams }: EnquiriesPageProps
     redirect("/dashboard");
   }
 
-  const enquiriesResult = await getCustomerEnquiries();
+  const search = getSearchParam(searchParams, "search");
+  const enquiriesResult = await getCustomerEnquiries(search);
+  if (search && isTicketId(search) && enquiriesResult.enquiries[0] && enquiriesResult.enquiries[0].id !== search) {
+    redirect(`/enquiries?tab=all&search=${encodeURIComponent(enquiriesResult.enquiries[0].id)}&saved=${encodeURIComponent("This ticket was merged. Showing the main ticket.")}`);
+  }
 
   return (
     <EnquiriesClient

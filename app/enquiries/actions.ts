@@ -52,6 +52,9 @@ export async function updateEnquiryTicketAction(
 
   const isClosed = status === "closed";
   const supabase = createClient();
+  const existing = await supabase.from("customer_enquiries").select("*").eq("id", enquiryId).maybeSingle<CustomerEnquiryRow>();
+  if (existing.error || !existing.data) return { error: "Ticket could not be loaded. Refresh and try again.", ok: false };
+  if (existing.data.merged_into) return { error: "This ticket has been merged. Open the main ticket to make changes.", ok: false };
   const { data, error } = await supabase
     .from("customer_enquiries")
     .update({

@@ -224,6 +224,9 @@ export function EnquiriesClient({
         </div>
 
         <div className="flex flex-wrap items-center gap-2 sm:w-auto">
+          <Link href="/enquiries/skipped" className="inline-flex h-10 items-center justify-center rounded-md border border-line bg-paper px-3 text-sm font-semibold text-slate-700 hover:border-teal hover:text-teal">
+            Skipped imports
+          </Link>
           <Link
             href="/admin"
             className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-md border border-line bg-paper px-3 text-sm font-semibold text-slate-700 transition hover:border-teal hover:text-teal sm:flex-none"
@@ -548,6 +551,11 @@ function EnquiryRow({
         </div>
       </div>
 
+      {isExpanded ? (
+        <div className="border-t border-line px-4 py-3">
+          <Link href={`/enquiries/merge?target=${enquiry.id}`} className="text-sm font-semibold text-teal hover:underline">Merge with another ticket / view merge history</Link>
+        </div>
+      ) : null}
       {isExpanded ? (
         <form
           className={`grid min-w-0 gap-5 border-t border-line ${expandedSurfaceClass} p-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)]`}
@@ -1144,6 +1152,9 @@ function filterEnquiries(
     const matchesSearch =
       !search ||
       [
+        enquiry.id,
+        enquiry.respondioConversationId,
+        enquiry.respondioContactId,
         enquiry.parentName,
         enquiry.phone,
         enquiry.email,

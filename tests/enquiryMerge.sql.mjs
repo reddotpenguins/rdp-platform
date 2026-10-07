@@ -1,0 +1,97 @@
+// Local PostgreSQL only. Set RDP_PGLITE_MODULE to a local @electric-sql/pglite module.
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import { mergeFields } from "../lib/enquiryMerge.ts";
+const { PGlite } = await import(process.env.RDP_PGLITE_MODULE);
+const db = new PGlite();
+const uuid = n => `00000000-0000-4000-8000-${String(n).padStart(12,"0")}`;
+const choices = Object.fromEntries(mergeFields.map(([key]) => [key, "target"]));
+choices.message = "combine"; choices.notes = "combine"; choices.email = "source";
+await db.exec(`
+create role anon; create role authenticated; create role service_role bypassrls;
+create schema auth;
+create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;
+grant usage on schema auth to authenticated,service_role;
+create table staff_profiles(id uuid primary key,role text,active boolean);
+insert into staff_profiles values('${uuid(1)}','admin',true),('${uuid(2)}','coach',true),('${uuid(3)}','admin',false);
+create function public.current_staff_role() returns text language sql security definer stable as $$select role from staff_profiles where id=auth.uid() and active=true$$;
+`);
+const foundation = await readFile(new URL("../supabase/auth-and-roles.sql",import.meta.url),"utf8");
+await db.exec(foundation.match(/create table if not exists public\.customer_enquiries \([\s\S]*?\n\);/)[0]);
+await db.exec(`
+create table student_profiles(id uuid primary key default gen_random_uuid(),source_enquiry_id uuid references customer_enquiries(id));
+create function fail_student_relink_for_test() returns trigger language plpgsql as $$begin
+  if current_setting('rdp.fail_relink',true)='yes' then raise exception 'Injected relink failure'; end if;
+  return new;
+end$$;
+create trigger fail_relink before update on student_profiles for each row execute function fail_student_relink_for_test();
+alter table customer_enquiries enable row level security;
+create policy admin_access on customer_enquiries to authenticated using (current_staff_role()='admin') with check(current_staff_role()='admin');
+grant select,insert,update,delete on customer_enquiries to authenticated,service_role;
+create unique index conversation_unique on customer_enquiries(respondio_conversation_id) where respondio_conversation_id is not null;
+insert into customer_enquiries(id,parent_name,phone,child_name,programme,enquiry_type,status,message,notes,respondio_conversation_id,external_ticket_id)
+values('${uuid(10)}','Tan','6500000000','Child A','Learn to Swim','trial','trial_booked','Trial message','Trial notes','c-main','web-main'),
+('${uuid(11)}','Tan','+6500000000','Child A','Learn to Swim','enquiry','new','First message','Enquiry notes','c-source','web-source'),
+('${uuid(12)}','Tan','+65 0000-0000','Child A','Learn to Swim','enquiry','new','Third','Third','c-third','web-third');
+update customer_enquiries set email='parent@example.test' where id='${uuid(11)}';
+insert into student_profiles(source_enquiry_id) values('${uuid(11)}');
+`);
+const migration = await readFile(new URL("../supabase/enquiry-ticket-merges.sql",import.meta.url),"utf8");
+await db.exec(migration); await db.exec(migration);
+const actor = async(n,role="authenticated") => { await db.exec("reset role"); await db.query("select set_config('request.jwt.claim.sub',$1,false)",[uuid(n)]); await db.exec(`set role ${role}`); };
+const versions = async(target,source) => (await db.query("select id,updated_at::text as version from customer_enquiries where id in ($1,$2)",[uuid(target),uuid(source)])).rows;
+const merge = async(target,source,custom=choices,stale=false) => {
+  const rows = await versions(target,source);
+  return db.query("select merge_enquiry_tickets($1,$2,$3,$4,$5,$6) as id",[uuid(target),uuid(source),stale ? "2000-01-01" : rows.find(r=>r.id===uuid(target))?.version,rows.find(r=>r.id===uuid(source))?.version,custom,"Same child and programme checked"]);
+};
+await actor(1);
+assert.equal((await db.query("select * from find_enquiry_merge_candidates($1)",[uuid(10)])).rows.length,2);
+await assert.rejects(()=>merge(10,11,choices,true),/changed while/);
+await assert.rejects(()=>merge(10,10),/two different/);
+await assert.rejects(()=>merge(10,11,{...choices,merged_into:"source"}),/Invalid field/);
+await assert.rejects(()=>merge(10,11,{...choices,phone:"combine"}),/Invalid choice/);
+await assert.rejects(()=>db.query("update customer_enquiries set merged_into=$1 where id=$2",[uuid(10),uuid(11)]),/permission denied/);
+await assert.rejects(()=>db.query("insert into customer_enquiries(parent_name,merged_into) values('Forged',$1)",[uuid(10)]),/New tickets/);
+assert.equal((await db.query("select count(*)::int as n from enquiry_ticket_merges")).rows[0].n,0);
+await actor(2);
+await assert.rejects(()=>db.query("select merge_enquiry_tickets($1,$2,now(),now(),$3,'unauthorised')",[uuid(10),uuid(11),choices]),/administrator access/);
+assert.equal((await db.query("select * from find_enquiry_merge_candidates($1)",[uuid(10)])).rows.length,0);
+await actor(3);
+await assert.rejects(()=>db.query("select merge_enquiry_tickets($1,$2,now(),now(),$3,'inactive')",[uuid(10),uuid(11),choices]),/administrator access/);
+await actor(1);
+await db.exec("select set_config('rdp.fail_relink','yes',false)");
+await assert.rejects(()=>merge(10,11),/Injected relink failure/);
+assert.equal((await db.query("select merged_into from customer_enquiries where id=$1",[uuid(11)])).rows[0].merged_into,null);
+assert.equal((await db.query("select message from customer_enquiries where id=$1",[uuid(10)])).rows[0].message,"Trial message");
+assert.equal((await db.query("select count(*)::int as n from enquiry_ticket_merges")).rows[0].n,0);
+await db.exec("select set_config('rdp.fail_relink','no',false)");
+assert.equal((await merge(10,11)).rows[0].id,uuid(10));
+const target = (await db.query("select * from customer_enquiries where id=$1",[uuid(10)])).rows[0];
+assert.equal(target.phone,"+6500000000"); assert.equal(target.status,"trial_booked"); assert.equal(target.email,"parent@example.test");
+assert.match(target.message,/Trial message/); assert.match(target.message,/First message/);
+assert.equal(target.respondio_conversation_id,"c-main");
+const source = (await db.query("select * from customer_enquiries where id=$1",[uuid(11)])).rows[0];
+assert.equal(source.merged_into,uuid(10)); assert.equal(source.message,"First message"); assert.equal(source.respondio_conversation_id,"c-source");
+await assert.rejects(()=>db.query("update customer_enquiries set notes='lost' where id=$1",[uuid(11)]),/has been merged/);
+await assert.rejects(()=>merge(10,11),/already been merged/);
+let history = (await db.query("select * from enquiry_ticket_merges")).rows;
+assert.equal(history.length,1); assert.equal(history[0].source_before.message,"First message"); assert.equal(history[0].target_before.phone,"6500000000");
+await assert.rejects(()=>db.query("delete from enquiry_ticket_merges"),/permission denied/);
+await actor(1,"service_role");
+assert.equal((await db.query("select resolve_enquiry_ticket('c-source') as id")).rows[0].id,uuid(10));
+assert.equal((await db.query("select resolve_enquiry_ticket(null,'web-source') as id")).rows[0].id,uuid(10));
+assert.equal((await db.query("select resolve_enquiry_ticket('new') as id")).rows[0].id,null);
+await assert.rejects(()=>db.query("select resolve_enquiry_ticket('c-main','web-third')"),/different tickets/);
+await assert.rejects(()=>db.query("update customer_enquiries set notes='overwrite' where id=$1",[uuid(11)]),/has been merged/);
+await actor(1);
+await merge(12,10);
+assert.equal((await db.query("select merged_into from customer_enquiries where id=$1",[uuid(11)])).rows[0].merged_into,uuid(12));
+assert.equal((await db.query("select * from enquiry_ticket_merge_history where current_ticket_id=$1",[uuid(12)])).rows.length,2);
+await db.exec("reset role");
+assert.equal((await db.query("select source_enquiry_id from student_profiles")).rows[0].source_enquiry_id,uuid(12));
+await assert.rejects(()=>db.query("update enquiry_ticket_merges set reason='tamper'"),/cannot be edited/);
+await actor(1,"anon");
+await assert.rejects(()=>db.query("select * from enquiry_ticket_merges"),/permission denied/);
+await assert.rejects(()=>db.query("select resolve_enquiry_ticket('c-source')"),/permission denied/);
+await db.close();
+console.log("Merge SQL passed: atomic validation, RLS, stale edits, preservation, normalisation, history, alias chains, linked students, protected source tickets, resolver conflicts.");

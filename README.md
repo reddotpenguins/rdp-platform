@@ -105,6 +105,14 @@ The `/enquiries` page reads from:
 public.customer_enquiries
 ```
 
+Skipped duplicate imports can be reviewed at `/enquiries/skipped`. Apply the separate
+`supabase/enquiry-import-skips.sql` migration and follow [the Make logging setup](docs/skipped-imports-setup.md).
+The queue preserves incoming evidence and review decisions without modifying client records.
+
+To enable reviewed ticket merging, apply `supabase/enquiry-ticket-merges.sql` before deploying
+the merge UI. See [ticket merging and Make routing](docs/enquiry-ticket-merges.md) for setup,
+preserved identifiers, and the log-and-skip integration after a merge.
+
 Use Make.com to send respond.io and website form enquiries directly into Supabase `customer_enquiries`.
 
 Recommended Make.com field mapping:
