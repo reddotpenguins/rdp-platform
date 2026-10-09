@@ -1,0 +1,9 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import {calculateLivePayroll,type PaySource} from '../lib/workforcePayroll.ts';
+const source:PaySource={profiles:[{staff_profile_id:'staff',hourly_cents:2000,other_ordinary_cents:300000,birth_month:'1990-01',residency:'citizen',pr_since:'',election:'GG'}],attendance:[{id:'a',staff_profile_id:'staff',clock_in:'2026-09-05T09:00:00+08:00',clock_out:'2026-09-05T12:30:00+08:00',unpaid_break_minutes:30,status:'approved'}]};
+test('live payroll uses approved hours and applies CPF once to combined monthly wages',()=>{const r=calculateLivePayroll('2026-09',source);assert.deepEqual(r.errors,[]);assert.equal(r.rows[0].hours,3);assert.equal(r.totals.grossCents,306000);assert.equal(r.totals.employeeCents,61200);assert.equal(r.totals.employerCents,52000);});
+test('pending attendance blocks finalization instead of silently reducing wages',()=>{const r=calculateLivePayroll('2026-09',{...source,attendance:[{...source.attendance[0],status:'pending'}]});assert.match(r.errors.join(' '),/review/);assert.equal(r.rows[0].recordedCents,0);});
+test('missing verified pay profile blocks payroll',()=>assert.match(calculateLivePayroll('2026-09',{profiles:[],attendance:source.attendance}).errors.join(' '),/missing/));
+test('month boundary attendance is flagged rather than guessing unpaid break allocation',()=>{const r=calculateLivePayroll('2026-09',{...source,attendance:[{...source.attendance[0],clock_in:'2026-08-31T23:30:00+08:00',clock_out:'2026-09-01T02:30:00+08:00'}]});assert.match(r.errors.join(' '),/boundary/);});
+test('rejected attendance does not add wages',()=>{const r=calculateLivePayroll('2026-09',{...source,attendance:[{...source.attendance[0],status:'rejected'}]});assert.equal(r.rows[0].recordedCents,0);assert.deepEqual(r.errors,[]);});
+test('unsupported CPF years are blocked',()=>assert.throws(()=>calculateLivePayroll('2027-01',source),/supported/));

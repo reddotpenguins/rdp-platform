@@ -6,7 +6,7 @@ import type {OwnAvailability} from '@/modules/attendance/AvailabilityPanel';
 import AttendanceClient from '@/modules/attendance/AttendanceClient';
 import type {AttendanceRow,PublishedShift} from '@/modules/attendance/types';
 export const dynamic='force-dynamic';
-export default async function AttendancePage(){
+export default async function AttendancePage({searchParams}:{searchParams?:{error?:string;saved?:string}}){
  const {profile}=await requireActiveStaffSession();
  if(!hasStaffPermission(profile,'schedule.viewOwn'))redirect('/dashboard');
  const manager=hasStaffPermission(profile,'schedule.manage');const db=createClient();
@@ -20,5 +20,5 @@ export default async function AttendancePage(){
  const staffIds=Array.from(new Set(attendance.map(r=>r.staff_profile_id)));
  const names=manager&&staffIds.length?await db.from('staff_profiles').select('id,full_name').in('id',staffIds):{data:[{id:profile.id,full_name:profile.fullName}],error:null};
  const error=!!(shifts.error||records.error||ownRecords.error||names.error);
- return <AttendanceClient availability={(availability.data||[]) as OwnAvailability[]} availabilityError={!!availability.error} profileId={profile.id} manager={manager} names={Object.fromEntries((names.data||[]).map(p=>[p.id,p.full_name]))} shifts={(shifts.data||[]) as PublishedShift[]} records={attendance as AttendanceRow[]} error={error}/>;
+ return <>{searchParams?.error&&<p role="alert">{searchParams.error}</p>}{searchParams?.saved&&<p role="status">{searchParams.saved}</p>}<AttendanceClient availability={(availability.data||[]) as OwnAvailability[]} availabilityError={!!availability.error} profileId={profile.id} manager={manager} names={Object.fromEntries((names.data||[]).map(p=>[p.id,p.full_name]))} shifts={(shifts.data||[]) as PublishedShift[]} records={attendance as AttendanceRow[]} error={error}/></>;
 }
