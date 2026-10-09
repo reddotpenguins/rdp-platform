@@ -43,7 +43,7 @@ create or replace function public.workforce_payroll_data(p_org uuid,p_month text
 returns jsonb language sql security definer set search_path=public as $$
  select jsonb_build_object(
  'profiles',coalesce((select jsonb_agg(to_jsonb(p) order by staff_profile_id) from public.workforce_pay_profiles p where organisation_id=p_org and month=p_month),'[]'),
- 'attendance',coalesce((select jsonb_agg(jsonb_build_object('id',a.id,'staff_profile_id',a.staff_profile_id,'clock_in',a.clock_in,'clock_out',a.clock_out,'status',a.status,'unpaid_break_minutes',a.unpaid_break_minutes) order by a.id) from public.workforce_attendance a where a.organisation_id=p_org and a.clock_in<((p_month||'-01')::date+interval '1 month') at time zone 'Asia/Singapore' and coalesce(a.clock_out,now())>(p_month||'-01')::date at time zone 'Asia/Singapore'),'[]'));
+ 'attendance',coalesce((select jsonb_agg(jsonb_build_object('id',a.id,'staff_profile_id',a.staff_profile_id,'clock_in',a.clock_in,'paid_start_at',a.paid_start_at,'clock_out',a.clock_out,'status',a.status,'unpaid_break_minutes',a.unpaid_break_minutes) order by a.id) from public.workforce_attendance a where a.organisation_id=p_org and coalesce(a.paid_start_at,a.clock_in)<((p_month||'-01')::date+interval '1 month') at time zone 'Asia/Singapore' and coalesce(a.clock_out,now())>(p_month||'-01')::date at time zone 'Asia/Singapore'),'[]'));
 $$;
 create or replace function public.workforce_payroll_source(p_month text)
 returns jsonb language plpgsql security definer set search_path=public as $$

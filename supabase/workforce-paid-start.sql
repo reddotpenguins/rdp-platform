@@ -1,48 +1,6 @@
--- Additive attendance pilot for scheduling-phase-1.sql. No seeded or demo records.
+-- Apply after workforce-payroll.sql. New clock-ins only; historical pay is unchanged.
 begin;
-create table if not exists public.workforce_attendance (
- id uuid primary key default gen_random_uuid(),
- organisation_id uuid not null references public.organisations(id),
- staff_profile_id uuid not null references public.staff_profiles(id),
- shift_id uuid not null references public.schedule_shifts(id) on delete restrict,
- location_id uuid not null references public.work_locations(id) on delete restrict,
- shift_title text not null, location_name text not null,
- scheduled_start timestamptz not null, scheduled_end timestamptz not null,
- centre_lat double precision not null, centre_lng double precision not null, radius integer not null,
- clock_in timestamptz not null default now(), clock_out timestamptz,
- in_lat double precision not null, in_lng double precision not null, in_accuracy double precision not null,
- out_lat double precision, out_lng double precision, out_accuracy double precision,
- in_distance double precision not null, out_distance double precision,
- out_fence text check(out_fence in ('inside','outside','uncertain')),
- status text not null default 'open' check(status in ('open','pending','approved','rejected')),
- unpaid_break_minutes integer not null default 0 check(unpaid_break_minutes>=0),
- review_note text, reviewed_by uuid references public.staff_profiles(id), reviewed_at timestamptz,
- unique(staff_profile_id,shift_id),
- check(clock_out is null or clock_out>clock_in),
- check((status='open' and clock_out is null) or (status<>'open' and clock_out is not null))
-);
--- Null preserves the pay basis of records made before this policy was enabled.
 alter table public.workforce_attendance add column if not exists paid_start_at timestamptz;
-alter table public.workforce_attendance add column if not exists shift_mood text check(shift_mood in ('good','okay','difficult','prefer-not-to-say'));
-alter table public.workforce_attendance add column if not exists shift_feedback text check(length(shift_feedback)<=1000);
-alter table public.workforce_attendance add column if not exists follow_up_requested boolean not null default false;
-create unique index if not exists workforce_one_open_clock on public.workforce_attendance(staff_profile_id) where clock_out is null;
-create index if not exists workforce_attendance_org_time on public.workforce_attendance(organisation_id,clock_in desc);
-alter table public.workforce_attendance enable row level security;
-revoke all on public.workforce_attendance from anon,authenticated;
-grant select on public.workforce_attendance to authenticated;
-drop policy if exists workforce_attendance_read on public.workforce_attendance;
-create policy workforce_attendance_read on public.workforce_attendance for select to authenticated using (
- organisation_id=public.current_staff_organisation_id() and
- (staff_profile_id=auth.uid() or public.current_staff_can_manage_schedules())
-);
-
-create or replace function public.workforce_distance(lat1 double precision,lng1 double precision,lat2 double precision,lng2 double precision)
-returns double precision language sql immutable set search_path=public as $$
- select 6371000*2*asin(sqrt(least(1.0,power(sin(radians(lat2-lat1)/2),2)+cos(radians(lat1))*cos(radians(lat2))*power(sin(radians(lng2-lng1)/2),2))));
-$$;
-
-drop function if exists public.workforce_clock(uuid,text,double precision,double precision,double precision,timestamptz);
 create or replace function public.workforce_clock(p_shift uuid,p_direction text,p_lat double precision,p_lng double precision,p_accuracy double precision,p_captured_at timestamptz,p_mood text default null,p_feedback text default null,p_follow_up boolean default false)
 returns uuid language plpgsql security definer set search_path=public as $$
 declare actor public.staff_profiles; s public.schedule_shifts; loc public.work_locations; r public.workforce_attendance; metres double precision; result uuid;
@@ -78,7 +36,6 @@ begin
  insert into public.audit_events(organisation_id,actor_staff_id,event_type,entity_type,entity_id) values(actor.organisation_id,actor.id,'attendance.clock_'||p_direction,'workforce_attendance',result);
  return result;
 end $$;
-
 create or replace function public.workforce_review(p_id uuid,p_approve boolean,p_break integer,p_note text)
 returns void language plpgsql security definer set search_path=public as $$
 declare actor public.staff_profiles; r public.workforce_attendance;
@@ -92,28 +49,11 @@ begin
  update public.workforce_attendance set status=case when p_approve then 'approved' else 'rejected' end,unpaid_break_minutes=p_break,review_note=trim(p_note),reviewed_by=actor.id,reviewed_at=now() where id=r.id;
  insert into public.audit_events(organisation_id,actor_staff_id,event_type,entity_type,entity_id,metadata) values(actor.organisation_id,actor.id,'attendance.review','workforce_attendance',r.id,jsonb_build_object('approved',p_approve,'unpaid_break_minutes',p_break));
 end $$;
-
--- Narrow RPC avoids granting staff visibility of the complete manager roster.
-create or replace function public.workforce_my_shifts()
-returns jsonb language plpgsql security definer set search_path=public as $$
-declare actor public.staff_profiles; result jsonb;
-begin
- select * into actor from public.staff_profiles where id=auth.uid() and active=true and role in ('admin','coach','lead_coach');
- if actor.id is null then raise exception 'Active staff access required'; end if;
- select coalesce(jsonb_agg(row_to_json(t) order by t.starts_at),'[]'::jsonb) into result from (
-  select s.id,s.title,s.starts_at,s.ends_at,l.name as location_name,l.latitude,l.longitude,l.geofence_radius_meters as radius
-  from public.schedule_shifts s join public.schedule_shift_assignments a on a.shift_id=s.id and a.organisation_id=actor.organisation_id
-  left join public.work_locations l on l.id=s.work_location_id and l.organisation_id=actor.organisation_id
-  where s.organisation_id=actor.organisation_id and a.staff_profile_id=actor.id and a.status in ('assigned','acknowledged') and s.status='published'
-  and s.ends_at>now()-interval '1 day' and s.starts_at<now()+interval '14 days'
- )t;
- return result;
-end $$;
-revoke all on function public.workforce_clock(uuid,text,double precision,double precision,double precision,timestamptz,text,text,boolean) from public;
-revoke all on function public.workforce_review(uuid,boolean,integer,text) from public;
-revoke all on function public.workforce_my_shifts() from public;
-revoke all on function public.workforce_distance(double precision,double precision,double precision,double precision) from public;
-grant execute on function public.workforce_clock(uuid,text,double precision,double precision,double precision,timestamptz,text,text,boolean) to authenticated;
-grant execute on function public.workforce_review(uuid,boolean,integer,text) to authenticated;
-grant execute on function public.workforce_my_shifts() to authenticated;
+create or replace function public.workforce_payroll_data(p_org uuid,p_month text)
+returns jsonb language sql security definer set search_path=public as $$
+ select jsonb_build_object(
+ 'profiles',coalesce((select jsonb_agg(to_jsonb(p) order by staff_profile_id) from public.workforce_pay_profiles p where organisation_id=p_org and month=p_month),'[]'),
+ 'attendance',coalesce((select jsonb_agg(jsonb_build_object('id',a.id,'staff_profile_id',a.staff_profile_id,'clock_in',a.clock_in,'paid_start_at',a.paid_start_at,'clock_out',a.clock_out,'status',a.status,'unpaid_break_minutes',a.unpaid_break_minutes) order by a.id) from public.workforce_attendance a where a.organisation_id=p_org and coalesce(a.paid_start_at,a.clock_in)<((p_month||'-01')::date+interval '1 month') at time zone 'Asia/Singapore' and coalesce(a.clock_out,now())>(p_month||'-01')::date at time zone 'Asia/Singapore'),'[]'));
+$$;
+notify pgrst,'reload schema';
 commit;

@@ -1,6 +1,6 @@
 import {calculateCpf,type CpfProfile} from '../modules/workforce-prototype/cpf.ts';
 export type PayProfile={staff_profile_id:string;hourly_cents:number;other_ordinary_cents:number;birth_month:string;residency:CpfProfile['residency'];pr_since:string;election:CpfProfile['election']};
-export type PayAttendance={id:string;staff_profile_id:string;clock_in:string;clock_out:string|null;status:string;unpaid_break_minutes:number};
+export type PayAttendance={id:string;staff_profile_id:string;clock_in:string;paid_start_at?:string|null;clock_out:string|null;status:string;unpaid_break_minutes:number};
 export type PaySource={profiles:PayProfile[];attendance:PayAttendance[]};
 export function calculateLivePayroll(month:string,source:PaySource){
  if(!/^2026-(0[1-9]|1[0-2])$/.test(month))throw new Error('Select a supported 2026 month.');
@@ -13,10 +13,10 @@ export function calculateLivePayroll(month:string,source:PaySource){
  if(entries.some(a=>a.status!=='approved'||!a.clock_out))errors.push(`Attendance needs review for staff ${id}`);
  let milliseconds=0;
  for(const a of entries.filter(a=>a.status==='approved'&&a.clock_out)){
- const start=Date.parse(a.clock_in),end=Date.parse(a.clock_out!);
+ const start=Date.parse(a.paid_start_at||a.clock_in),end=Date.parse(a.clock_out!);
  // Do not guess how unpaid breaks are distributed across calendar months.
  if(start<monthStart||end>monthEnd){errors.push(`Attendance ${a.id} crosses a month boundary; reconcile it before payroll.`);continue;}
- const paid=end-start-a.unpaid_break_minutes*60000;
+ const paid=Math.max(0,end-start)-a.unpaid_break_minutes*60000;
  if(!Number.isFinite(paid)||paid<0){errors.push(`Invalid paid hours for attendance ${a.id}`);continue;}milliseconds+=paid;
  }
  const hours=milliseconds/3600000;const recordedCents=p?Math.round(milliseconds*p.hourly_cents/3600000):0;

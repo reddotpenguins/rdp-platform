@@ -7,7 +7,7 @@ create function auth.uid() returns uuid language sql stable as $$select nullif(c
 grant usage on schema auth to authenticated,service_role;
 create table staff_profiles(id uuid primary key,full_name text,role text,active boolean);
 create function current_staff_role() returns text language sql security definer as $$select role from staff_profiles where id=auth.uid() and active$$;`);
-for(const name of ['scheduling-phase-1.sql','workforce-attendance.sql','workforce-availability.sql','workforce-operations.sql','workforce-payroll.sql'])await db.exec((await readFile(new URL('../supabase/'+name,import.meta.url),'utf8')).replace('create extension if not exists pgcrypto;',''));
+for(const name of ['scheduling-phase-1.sql','workforce-attendance.sql','workforce-availability.sql','workforce-operations.sql','workforce-payroll.sql','workforce-paid-start.sql'])await db.exec((await readFile(new URL('../supabase/'+name,import.meta.url),'utf8')).replace('create extension if not exists pgcrypto;',''));
 // Reapplication must be safe.
 await db.exec(await readFile(new URL('../supabase/workforce-operations.sql',import.meta.url),'utf8'));
 const org=(await db.query('select id from organisations limit 1')).rows[0].id;

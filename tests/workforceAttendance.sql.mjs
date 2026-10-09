@@ -74,4 +74,17 @@ await rejects(()=>db.query("select workforce_set_availability((now() at time zon
 await rejects(()=>db.query("select workforce_set_availability((now() at time zone 'Asia/Singapore')::date,case when extract(hour from now() at time zone 'Asia/Singapore')<12 then 'AM' else 'PM' end,'unavailable')"),/already have a shift/);
 await actor(13);assert.equal((await db.query('select workforce_my_availability() as rows')).rows[0].rows.length,0);checks++;
 await actor(11);await db.query("select workforce_set_availability((now() at time zone 'Asia/Singapore')::date+1,'AM','clear')");assert.equal((await db.query('select workforce_my_availability() as rows')).rows[0].rows.length,0);checks++;
+// The server accepts exactly 30 minutes early, rejects earlier arrivals, and snapshots paid start.
+await db.exec(`reset role;insert into schedule_shifts select '00000000-0000-4000-8000-000000000032',organisation_id,work_location_id,'Early policy',now()+interval '31 minutes',now()+interval '2 hours',status,null from schedule_shifts limit 1;insert into schedule_shift_assignments select '00000000-0000-4000-8000-000000000032',staff_profile_id,organisation_id,status from schedule_shift_assignments limit 1;`);
+const early=direction=>db.query("select workforce_clock('00000000-0000-4000-8000-000000000032',$1,1.3,103.8,5,now()) id",[direction]);
+await actor(11);await rejects(()=>early('in'),/30 minutes/);
+await db.exec("reset role;begin;update schedule_shifts set starts_at=now()+interval '30 minutes' where id='00000000-0000-4000-8000-000000000032'");
+await actor(11);const boundary=(await early('in')).rows[0].id;
+const paid=(await db.query('select clock_in,paid_start_at,scheduled_start from workforce_attendance where id=$1',[boundary])).rows[0];
+assert.equal(+paid.paid_start_at,+paid.scheduled_start);assert.equal(+paid.paid_start_at-+paid.clock_in,30*60000);checks+=2;
+await db.exec("rollback;reset role;update schedule_shifts set starts_at=now()+interval '20 minutes' where id='00000000-0000-4000-8000-000000000032'");
+await actor(11);const earlyId=(await early('in')).rows[0].id;await early('out');
+await actor(12);await rejects(()=>db.query('select workforce_review($1,true,1,$2)',[earlyId,'Invalid break before paid start']),/valid unpaid break/);
+await db.query('select workforce_review($1,true,0,$2)',[earlyId,'Left before shift start']);checks++;
+const late=(await db.query('select clock_in,paid_start_at from workforce_attendance where id=$1',[id])).rows[0];assert.equal(+late.clock_in,+late.paid_start_at);checks++;
 await db.close();console.log(`${checks} PostgreSQL attendance checks passed.`);
